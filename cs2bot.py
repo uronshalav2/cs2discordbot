@@ -48,28 +48,6 @@ async def cs2status_auto_update():
     if embed:
         await channel.send(embed=embed)
 
-    try:
-        info = a2s.info((SERVER_IP, SERVER_PORT))
-        players = a2s.players((SERVER_IP, SERVER_PORT))
-
-        # ✅ Detect if the server restarted
-        current_uptime = info.duration  # Get current uptime
-        if previous_uptime is not None and current_uptime < previous_uptime:
-            await channel.send("🔄 **The CS2 server has restarted!** ⏳")
-
-        previous_uptime = current_uptime  # Update last known uptime
-
-        # ✅ Welcome new players who joined
-        current_players = {p.name for p in players}
-        new_players = current_players - previous_players  # Detect new players
-        previous_players = current_players  # Update last known player list
-
-        for player in new_players:
-            await channel.send(f"👋 Welcome **{player}** to the CS2 server!")
-
-    except Exception as e:
-        print(f"⚠️ Error retrieving CS2 data: {e}")
-
 @tree.command(name="status", description="Get the current CS2 server status")
 async def status(interaction: discord.Interaction):
     """Slash command to get live CS2 server status"""
@@ -82,49 +60,25 @@ async def status(interaction: discord.Interaction):
     # ✅ Send the status response
     await interaction.followup.send(embed=embed)
 
-@tree.command(name="leaderboard", description="Show the top 5 players in the CS2 server")
-async def leaderboard(interaction: discord.Interaction):
-    """Show the top 5 players based on kills"""
-    try:
-        players = a2s.players((SERVER_IP, SERVER_PORT))
-
-        if not players:
-            await interaction.response.send_message("⚠️ No players online right now.")
-            return
-
-        # ✅ Sort players by kills and get top 5
-        top_players = sorted(players, key=lambda x: x.score, reverse=True)[:5]
-        leaderboard_text = "\n".join(
-            [f"🥇 **{p.name}** | 🏆 **{p.score}** kills | ⏳ **{p.duration:.1f} mins**"
-             for p in top_players]
-        )
-
-        embed = discord.Embed(title="🏆 CS2 Leaderboard (Top 5)", color=0xFFD700)
-        embed.add_field(name="🔹 Players", value=leaderboard_text, inline=False)
-        embed.set_footer(text="Data updates every 6 hours.")
-
-        await interaction.response.send_message(embed=embed)
-
-    except Exception:
-        await interaction.response.send_message("⚠️ Could not retrieve player stats. Try again later.")
-
 async def get_server_status_embed():
     """Fetch CS2 server status, show live player stats, and return an embed message."""
     server_address = (SERVER_IP, SERVER_PORT)
 
     try:
-        # ✅ Try querying the server. If it fails, the server is offline.
+        # ✅ Add logging to debug
         print(f"🔍 Checking CS2 server: {SERVER_IP}:{SERVER_PORT}")
 
-        try:
-            info = a2s.info(server_address)  # ✅ Get server info
-            players = a2s.players(server_address)  # ✅ Get player list
-            print(f"✅ Server is ONLINE! {info.server_name} | {info.map_name}")
-        except Exception as e:
-            print(f"⚠️ Server unreachable: {e}")
+        # ✅ Query server info
+        info = a2s.info(server_address)
+        players = a2s.players(server_address)
+
+        if not info:
+            print("❌ a2s.info() returned None, marking server as offline.")
             return get_offline_embed()
 
-        # ✅ Server is online
+        print(f"✅ Server is ONLINE! {info.server_name} | {info.map_name}")
+
+        # ✅ Server uptime
         server_uptime = str(timedelta(seconds=info.duration))
         embed_color = 0x00ff00  # Green for online
 
@@ -150,7 +104,8 @@ async def get_server_status_embed():
 
         return embed
 
-    except Exception:
+    except Exception as e:
+        print(f"⚠️ Error retrieving CS2 server status: {e}")
         return get_offline_embed()
 
 def get_offline_embed():
