@@ -80,8 +80,14 @@ async def cs2status_auto_update():
 @tree.command(name="status", description="Get the current CS2 server status")
 async def status(interaction: discord.Interaction):
     """Slash command to get live CS2 server status"""
+
+    # ✅ Defer the response to prevent timeout issues
+    await interaction.response.defer()
+
     embed = await get_server_status_embed()
-    await interaction.response.send_message(embed=embed, view=ConnectButton())  # ✅ Added "Connect to Server" button
+
+    # ✅ Follow-up response after data is fetched
+    await interaction.followup.send(embed=embed, view=ConnectButton())
 
 @tree.command(name="leaderboard", description="Show the top 5 players in the CS2 server")
 async def leaderboard(interaction: discord.Interaction):
