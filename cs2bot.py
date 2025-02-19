@@ -113,15 +113,17 @@ async def get_server_status_embed():
     server_address = (SERVER_IP, SERVER_PORT)
 
     try:
-        # ✅ Try to get server info. If it fails, assume the server is offline.
+        # ✅ Properly check if the server is online
+        info = None
+        players = []
+
         try:
             info = a2s.info(server_address)
             players = a2s.players(server_address)
-        except Exception:
-            info = None
-            players = []
+        except Exception as e:
+            print(f"⚠️ Server unreachable: {e}")
 
-        if not info:
+        if info is None:
             raise Exception("Server is unreachable")
 
         # ✅ Server uptime
