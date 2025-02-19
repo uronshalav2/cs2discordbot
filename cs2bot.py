@@ -3,7 +3,7 @@ import discord
 from discord import app_commands
 from discord.ext import tasks
 import a2s  # Source Server Query Protocol
-from datetime import datetime, timedelta
+from datetime import datetime
 import pytz  # Timezone support for Germany
 
 # ✅ Load environment variables from Railway
@@ -50,6 +50,32 @@ async def status(interaction: discord.Interaction):
     embed = await get_server_status_embed()
     await interaction.followup.send(embed=embed)
 
+@tree.command(name="leaderboard", description="Show the top 5 players in the CS2 server")
+async def leaderboard(interaction: discord.Interaction):
+    """Show the top 5 players based on kills"""
+    try:
+        players = a2s.players((SERVER_IP, SERVER_PORT))
+
+        if not players:
+            await interaction.response.send_message("⚠️ No players online right now.")
+            return
+
+        # ✅ Sort players by kills and get top 5
+        top_players = sorted(players, key=lambda x: x.score, reverse=True)[:5]
+        leaderboard_text = "\n".join(
+            [f"🥇 **{p.name}** | 🏆 **{p.score}** kills | ⏳ **{p.duration / 60:.1f} mins**"
+             for p in top_players]
+        )
+
+        embed = discord.Embed(title="🏆 CS2 Leaderboard (Top 5)", color=0xFFD700)
+        embed.add_field(name="🔹 Players", value=leaderboard_text, inline=False)
+        embed.set_footer(text="Data updates every 6 hours.")
+
+        await interaction.response.send_message(embed=embed)
+
+    except Exception:
+        await interaction.response.send_message("⚠️ Could not retrieve player stats. Try again later.")
+
 async def get_server_status_embed():
     """Fetch CS2 server status, show live player stats, and return an embed."""
     server_address = (SERVER_IP, SERVER_PORT)
@@ -80,7 +106,7 @@ async def get_server_status_embed():
         player_stats = "No players online."
         if players:
             player_stats = "\n".join(
-                [f"🎮 **{p.name}** | 🏆 **{p.score}** kills | ⏳ **{p.duration:.1f} mins**"
+                [f"🎮 **{p.name}** | 🏆 **{p.score}** kills | ⏳ **{p.duration / 60:.1f} mins**"
                  for p in sorted(players, key=lambda x: x.score, reverse=True)]
             )
 
