@@ -1,1 +1,1 @@
-worker: python cs2.py
+worker: python cs2bot.py
