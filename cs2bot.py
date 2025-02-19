@@ -50,7 +50,7 @@ async def get_server_status_embed():
     try:
         server_address = (SERVER_IP, SERVER_PORT)
         info = a2s.info(server_address)
-        players = a2s.get_players(server_address)
+        players = a2s.players(server_address)
 
         player_list = "\n".join([f"{p.name} - {p.score} kills" for p in players]) if players else "No players online."
 
