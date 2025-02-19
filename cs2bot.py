@@ -20,10 +20,6 @@ intents.message_content = True  # Required for handling slash commands
 bot = discord.Client(intents=intents)
 tree = app_commands.CommandTree(bot)
 
-# ✅ Track previous players & server uptime
-previous_players = set()
-previous_uptime = None
-
 @bot.event
 async def on_ready():
     await tree.sync()  # Sync slash commands
@@ -32,14 +28,13 @@ async def on_ready():
 
 @tasks.loop(hours=6)  # ✅ Auto-updates every 6 hours
 async def cs2status_auto_update():
-    """Automatically sends CS2 server updates, detects restarts, and welcomes new players."""
-    global previous_players, previous_uptime
+    """Automatically sends CS2 server updates."""
     channel = bot.get_channel(CHANNEL_ID)
     if not channel:
-        print(f"⚠️ Channel ID {CHANNEL_ID} not found! Make sure it's set correctly.")
+        print(f"⚠️ Channel ID {CHANNEL_ID} not found!")
         return
 
-    # ✅ Delete old bot messages before sending a new one
+    # ✅ Delete old messages before sending a new one
     async for message in channel.history(limit=5):
         if message.author == bot.user:
             await message.delete()
@@ -51,35 +46,26 @@ async def cs2status_auto_update():
 @tree.command(name="status", description="Get the current CS2 server status")
 async def status(interaction: discord.Interaction):
     """Slash command to get live CS2 server status"""
-
-    # ✅ Defer the response to prevent timeout issues
     await interaction.response.defer()
-
     embed = await get_server_status_embed()
-
-    # ✅ Send the status response
     await interaction.followup.send(embed=embed)
 
 async def get_server_status_embed():
-    """Fetch CS2 server status, show live player stats, and return an embed message."""
+    """Fetch CS2 server status, show live player stats, and return an embed."""
     server_address = (SERVER_IP, SERVER_PORT)
 
     try:
-        # ✅ Add logging to debug
         print(f"🔍 Checking CS2 server: {SERVER_IP}:{SERVER_PORT}")
 
-        # ✅ Query server info
-        info = a2s.info(server_address)
-        players = a2s.players(server_address)
-
-        if not info:
-            print("❌ a2s.info() returned None, marking server as offline.")
+        try:
+            info = a2s.info(server_address)  # ✅ Get server info
+            players = a2s.players(server_address)  # ✅ Get player list
+            print(f"✅ Server is ONLINE! {info.server_name} | {info.map_name}")
+        except Exception as e:
+            print(f"⚠️ Server unreachable: {e}")
             return get_offline_embed()
 
-        print(f"✅ Server is ONLINE! {info.server_name} | {info.map_name}")
-
-        # ✅ Server uptime
-        server_uptime = str(timedelta(seconds=info.duration))
+        # ✅ Server is online
         embed_color = 0x00ff00  # Green for online
 
         berlin_tz = pytz.timezone("Europe/Berlin")
@@ -88,7 +74,6 @@ async def get_server_status_embed():
         embed = discord.Embed(title="🎮 CS2 Server Status - 🟢 Online", color=embed_color)
         embed.add_field(name="🖥️ Server Name", value=info.server_name, inline=False)
         embed.add_field(name="🗺️ Map", value=info.map_name, inline=True)
-        embed.add_field(name="⏳ Server Uptime", value=f"{server_uptime}", inline=True)
         embed.add_field(name="👥 Players", value=f"{info.player_count}/{info.max_players}", inline=True)
 
         # ✅ Show player list (even if empty)
