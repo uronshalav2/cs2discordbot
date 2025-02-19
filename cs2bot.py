@@ -24,10 +24,6 @@ tree = app_commands.CommandTree(bot)
 previous_players = set()
 previous_uptime = None
 
-def get_connect_link():
-    """Generate a clickable Steam connect link."""
-    return f"🎮 **Join the CS2 Server:** [Click here](steam://connect/{SERVER_IP}:{SERVER_PORT})"
-
 @bot.event
 async def on_ready():
     await tree.sync()  # Sync slash commands
@@ -50,7 +46,6 @@ async def cs2status_auto_update():
 
     embed = await get_server_status_embed()
     if embed:
-        await channel.send(get_connect_link())
         await channel.send(embed=embed)
 
     try:
@@ -84,8 +79,7 @@ async def status(interaction: discord.Interaction):
 
     embed = await get_server_status_embed()
 
-    # ✅ Send connect link first, then the embed
-    await interaction.followup.send(get_connect_link())
+    # ✅ Send the status response
     await interaction.followup.send(embed=embed)
 
 @tree.command(name="leaderboard", description="Show the top 5 players in the CS2 server")
@@ -119,12 +113,16 @@ async def get_server_status_embed():
     server_address = (SERVER_IP, SERVER_PORT)
 
     try:
-        info = a2s.info(server_address)  # ✅ Query server info
-        players = a2s.players(server_address)  # ✅ Get live player stats
+        # ✅ Try to get server info. If it fails, assume the server is offline.
+        try:
+            info = a2s.info(server_address)
+            players = a2s.players(server_address)
+        except Exception:
+            info = None
+            players = []
 
-        # ✅ Check if the server is online correctly
         if not info:
-            raise Exception("Server data could not be retrieved")
+            raise Exception("Server is unreachable")
 
         # ✅ Server uptime
         server_uptime = str(timedelta(seconds=info.duration))
