@@ -24,12 +24,9 @@ tree = app_commands.CommandTree(bot)
 previous_players = set()
 previous_uptime = None
 
-class ConnectButton(discord.ui.View):
-    """A Discord button that lets players join the CS2 server."""
-    def __init__(self):
-        super().__init__()
-        connect_url = f"steam://connect/{SERVER_IP}:{SERVER_PORT}"
-        self.add_item(discord.ui.Button(label="🎮 Connect to CS2 Server", url=connect_url, style=discord.ButtonStyle.link))
+def get_connect_link():
+    """Generate a clickable Steam connect link."""
+    return f"[🎮 Click here to join CS2 Server](steam://connect/{SERVER_IP}:{SERVER_PORT})"
 
 @bot.event
 async def on_ready():
@@ -53,7 +50,7 @@ async def cs2status_auto_update():
 
     embed = await get_server_status_embed()
     if embed:
-        await channel.send(embed=embed, view=ConnectButton())  # ✅ Added "Connect to Server" button
+        await channel.send(content=get_connect_link(), embed=embed)  # ✅ Send connect link as a message
 
     try:
         info = a2s.info((SERVER_IP, SERVER_PORT))
@@ -86,8 +83,8 @@ async def status(interaction: discord.Interaction):
 
     embed = await get_server_status_embed()
 
-    # ✅ Follow-up response after data is fetched
-    await interaction.followup.send(embed=embed, view=ConnectButton())
+    # ✅ Send connect link as part of the response
+    await interaction.followup.send(content=get_connect_link(), embed=embed)
 
 @tree.command(name="leaderboard", description="Show the top 5 players in the CS2 server")
 async def leaderboard(interaction: discord.Interaction):
