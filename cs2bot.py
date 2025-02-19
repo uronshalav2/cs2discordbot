@@ -49,7 +49,7 @@ async def get_server_status_embed():
     """Fetch CS2 server status and return an embed message"""
     try:
         server_address = (SERVER_IP, SERVER_PORT)
-        info = a2s.get_info(server_address)
+        info = a2s.info(server_address)
         players = a2s.get_players(server_address)
 
         player_list = "\n".join([f"{p.name} - {p.score} kills" for p in players]) if players else "No players online."
