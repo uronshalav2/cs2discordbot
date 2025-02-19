@@ -113,23 +113,19 @@ async def get_server_status_embed():
     server_address = (SERVER_IP, SERVER_PORT)
 
     try:
-        # ✅ Properly check if the server is online
-        info = None
-        players = []
+        # ✅ Try querying the server. If it fails, the server is offline.
+        print(f"🔍 Checking CS2 server: {SERVER_IP}:{SERVER_PORT}")
 
         try:
-            info = a2s.info(server_address)
-            players = a2s.players(server_address)
+            info = a2s.info(server_address)  # ✅ Get server info
+            players = a2s.players(server_address)  # ✅ Get player list
+            print(f"✅ Server is ONLINE! {info.server_name} | {info.map_name}")
         except Exception as e:
             print(f"⚠️ Server unreachable: {e}")
+            return get_offline_embed()
 
-        if info is None:
-            raise Exception("Server is unreachable")
-
-        # ✅ Server uptime
+        # ✅ Server is online
         server_uptime = str(timedelta(seconds=info.duration))
-
-        # ✅ Server is online: Use GREEN color
         embed_color = 0x00ff00  # Green for online
 
         berlin_tz = pytz.timezone("Europe/Berlin")
@@ -141,14 +137,13 @@ async def get_server_status_embed():
         embed.add_field(name="⏳ Server Uptime", value=f"{server_uptime}", inline=True)
         embed.add_field(name="👥 Players", value=f"{info.player_count}/{info.max_players}", inline=True)
 
-        # ✅ Show live player stats
+        # ✅ Show player list (even if empty)
+        player_stats = "No players online."
         if players:
             player_stats = "\n".join(
                 [f"🎮 **{p.name}** | 🏆 **{p.score}** kills | ⏳ **{p.duration:.1f} mins**"
                  for p in sorted(players, key=lambda x: x.score, reverse=True)]
             )
-        else:
-            player_stats = "No players online."
 
         embed.add_field(name="📊 Live Player Stats", value=player_stats, inline=False)
         embed.set_footer(text=f"Last updated: {last_updated}")
@@ -156,15 +151,19 @@ async def get_server_status_embed():
         return embed
 
     except Exception:
-        embed_color = 0xff0000  # Red for offline
-        berlin_tz = pytz.timezone("Europe/Berlin")
-        last_updated = datetime.now(berlin_tz).strftime("%Y-%m-%d %H:%M:%S %Z")
+        return get_offline_embed()
 
-        embed = discord.Embed(title="⚠️ CS2 Server Status - 🔴 Offline", color=embed_color)
-        embed.add_field(name="❌ Server Unreachable", value="The server is currently **offline** or experiencing issues.\n\
+def get_offline_embed():
+    """Returns an embed for when the server is offline."""
+    embed_color = 0xff0000  # Red for offline
+    berlin_tz = pytz.timezone("Europe/Berlin")
+    last_updated = datetime.now(berlin_tz).strftime("%Y-%m-%d %H:%M:%S %Z")
+
+    embed = discord.Embed(title="⚠️ CS2 Server Status - 🔴 Offline", color=embed_color)
+    embed.add_field(name="❌ Server Unreachable", value="The server is currently **offline** or experiencing issues.\n\
 🔄 Try again later or contact support.", inline=False)
-        embed.set_footer(text=f"Last checked: {last_updated}")
+    embed.set_footer(text=f"Last checked: {last_updated}")
 
-        return embed
+    return embed
 
 bot.run(TOKEN)
