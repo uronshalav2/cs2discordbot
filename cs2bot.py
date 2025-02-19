@@ -10,6 +10,8 @@ SERVER_PORT = int(os.getenv("SERVER_PORT", 27015))
 CHANNEL_ID = int(os.getenv("CHANNEL_ID", 0))  # Ensure this is set correctly
 
 intents = discord.Intents.default()
+intents.message_content = True  # ✅ Enables message content intent
+
 bot = commands.Bot(command_prefix="!", intents=intents)
 
 @bot.event
