@@ -1,3 +1,4 @@
 discord.py
 python-a2s
 python-dotenv
+pytz
