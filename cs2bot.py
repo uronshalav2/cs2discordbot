@@ -24,6 +24,13 @@ tree = app_commands.CommandTree(bot)
 previous_players = set()
 previous_uptime = None
 
+class ConnectButton(discord.ui.View):
+    """A Discord button that lets players join the CS2 server."""
+    def __init__(self):
+        super().__init__()
+        connect_url = f"steam://connect/{SERVER_IP}:{SERVER_PORT}"
+        self.add_item(discord.ui.Button(label="🎮 Connect to CS2 Server", url=connect_url, style=discord.ButtonStyle.link))
+
 @bot.event
 async def on_ready():
     await tree.sync()  # Sync slash commands
@@ -46,7 +53,7 @@ async def cs2status_auto_update():
 
     embed = await get_server_status_embed()
     if embed:
-        await channel.send(embed=embed)
+        await channel.send(embed=embed, view=ConnectButton())  # ✅ Added "Connect to Server" button
 
     try:
         info = a2s.info((SERVER_IP, SERVER_PORT))
@@ -74,7 +81,7 @@ async def cs2status_auto_update():
 async def status(interaction: discord.Interaction):
     """Slash command to get live CS2 server status"""
     embed = await get_server_status_embed()
-    await interaction.response.send_message(embed=embed)
+    await interaction.response.send_message(embed=embed, view=ConnectButton())  # ✅ Added "Connect to Server" button
 
 @tree.command(name="leaderboard", description="Show the top 5 players in the CS2 server")
 async def leaderboard(interaction: discord.Interaction):
