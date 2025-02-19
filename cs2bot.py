@@ -26,7 +26,7 @@ previous_uptime = None
 
 def get_connect_link():
     """Generate a clickable Steam connect link."""
-    return f"[🎮 Click here to join CS2 Server](steam://connect/{SERVER_IP}:{SERVER_PORT})"
+    return f"🎮 **Join the CS2 Server:** [Click here](steam://connect/{SERVER_IP}:{SERVER_PORT})"
 
 @bot.event
 async def on_ready():
@@ -44,13 +44,14 @@ async def cs2status_auto_update():
         return
 
     # ✅ Delete old bot messages before sending a new one
-    async for message in channel.history(limit=10):
+    async for message in channel.history(limit=5):
         if message.author == bot.user:
             await message.delete()
 
     embed = await get_server_status_embed()
     if embed:
-        await channel.send(content=get_connect_link(), embed=embed)  # ✅ Send connect link as a message
+        await channel.send(get_connect_link())
+        await channel.send(embed=embed)
 
     try:
         info = a2s.info((SERVER_IP, SERVER_PORT))
@@ -83,8 +84,9 @@ async def status(interaction: discord.Interaction):
 
     embed = await get_server_status_embed()
 
-    # ✅ Send connect link as part of the response
-    await interaction.followup.send(content=get_connect_link(), embed=embed)
+    # ✅ Send connect link first, then the embed
+    await interaction.followup.send(get_connect_link())
+    await interaction.followup.send(embed=embed)
 
 @tree.command(name="leaderboard", description="Show the top 5 players in the CS2 server")
 async def leaderboard(interaction: discord.Interaction):
@@ -120,6 +122,10 @@ async def get_server_status_embed():
         info = a2s.info(server_address)  # ✅ Query server info
         players = a2s.players(server_address)  # ✅ Get live player stats
 
+        # ✅ Check if the server is online correctly
+        if not info:
+            raise Exception("Server data could not be retrieved")
+
         # ✅ Server uptime
         server_uptime = str(timedelta(seconds=info.duration))
 
@@ -154,8 +160,9 @@ async def get_server_status_embed():
         berlin_tz = pytz.timezone("Europe/Berlin")
         last_updated = datetime.now(berlin_tz).strftime("%Y-%m-%d %H:%M:%S %Z")
 
-        embed = discord.Embed(title="🎮 CS2 Server Status - 🔴 Offline", color=embed_color)
-        embed.add_field(name="⚠️ Server Status", value="The server is currently **offline** or unreachable.", inline=False)
+        embed = discord.Embed(title="⚠️ CS2 Server Status - 🔴 Offline", color=embed_color)
+        embed.add_field(name="❌ Server Unreachable", value="The server is currently **offline** or experiencing issues.\n\
+🔄 Try again later or contact support.", inline=False)
         embed.set_footer(text=f"Last checked: {last_updated}")
 
         return embed
