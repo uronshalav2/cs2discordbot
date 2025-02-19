@@ -34,8 +34,8 @@ async def cs2status_auto_update():
         await channel.send(embed=embed)
 
 @bot.command()
-async def server(ctx):
-    """Manually fetches and sends CS2 server status when users type !server"""
+async def status(ctx):
+    """Manually fetches and sends CS2 server status when users type !status"""
     embed = await get_server_status_embed()
     if embed:
         await ctx.send(embed=embed)
