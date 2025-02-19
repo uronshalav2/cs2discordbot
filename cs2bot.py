@@ -1,34 +1,33 @@
+import os
 import discord
 from discord.ext import commands, tasks
 import a2s  # Source Server Query Protocol
-import asyncio
 
-TOKEN = "YOUR_DISCORD_BOT_TOKEN"
-SERVER_IP = "YOUR_SERVER_IP"  # Example: "127.0.0.1"
-SERVER_PORT = 27015  # Default CS2 server port
-CHANNEL_ID = 123456789012345678  # Replace with your Discord channel ID
+# Load Environment Variables from Railway
+TOKEN = os.getenv("TOKEN")
+SERVER_IP = os.getenv("SERVER_IP")
+SERVER_PORT = int(os.getenv("SERVER_PORT", 27015))  # Default CS2 port
+CHANNEL_ID = int(os.getenv("CHANNEL_ID", 0))  # Discord channel for updates
 
-bot = commands.Bot(command_prefix="!", intents=discord.Intents.default())
+intents = discord.Intents.default()
+bot = commands.Bot(command_prefix="!", intents=intents)
 
 @bot.event
 async def on_ready():
-    print(f'Bot is ready! Logged in as {bot.user}')
-    
-    # Start the server status update task
-    cs2status_auto_update.start()
+    print(f'✅ Bot is online! Logged in as {bot.user}')
+    cs2status_auto_update.start()  # Start auto-updating CS2 status
 
 @tasks.loop(seconds=60)  # Updates every 60 seconds
 async def cs2status_auto_update():
-    """Automatically fetches and sends CS2 server status to a specific channel."""
     try:
         server_address = (SERVER_IP, SERVER_PORT)
         info = a2s.info(server_address)
         players = a2s.players(server_address)
 
-        # Create player list
+        # Player List
         player_list = "\n".join([f"{p.name} - {p.score} kills" for p in players]) if players else "No players online."
 
-        # Create the embed message
+        # Embed Message
         embed = discord.Embed(title="CS2 Server Status", color=0x00ff00)
         embed.add_field(name="Server Name", value=info.server_name, inline=False)
         embed.add_field(name="Map", value=info.map_name, inline=True)
@@ -36,19 +35,19 @@ async def cs2status_auto_update():
         embed.add_field(name="Player List", value=player_list, inline=False)
         embed.set_footer(text="Last updated")
 
-        # Get the Discord channel and send the message
+        # Send Update to Discord Channel
         channel = bot.get_channel(CHANNEL_ID)
         if channel:
             await channel.send(embed=embed)
         else:
-            print(f"Error: Channel ID {CHANNEL_ID} not found!")
+            print(f"⚠️ Channel ID {CHANNEL_ID} not found!")
 
     except Exception as e:
-        print(f"Error retrieving CS2 server status: {e}")
+        print(f"⚠️ Error retrieving CS2 server status: {e}")
 
 @bot.command()
 async def set_channel(ctx):
-    """Command to set the bot's update channel dynamically."""
+    """Command to set the update channel dynamically."""
     global CHANNEL_ID
     CHANNEL_ID = ctx.channel.id
     await ctx.send(f"✅ This channel (`{ctx.channel.name}`) is now set for CS2 updates.")
