@@ -1,6 +1,5 @@
 import os
 import discord
-from discord import app_commands
 from discord.ext import tasks
 import a2s  # Source Server Query Protocol
 from mcrcon import MCRcon  # ✅ Uses mcrcon for RCON commands
@@ -11,18 +10,14 @@ import pytz  # Timezone support for Germany
 TOKEN = os.getenv("TOKEN")
 SERVER_IP = os.getenv("SERVER_IP")
 SERVER_PORT = int(os.getenv("SERVER_PORT", 27015))
-CHANNEL_ID = int(os.getenv("CHANNEL_ID", 0))
 RCON_IP = os.getenv("RCON_IP")
 RCON_PORT = int(os.getenv("RCON_PORT", 27015))
 RCON_PASSWORD = os.getenv("RCON_PASSWORD")
 
 # ✅ Enable privileged intents
 intents = discord.Intents.default()
-intents.message_content = True
-
-# ✅ Initialize bot with command tree
 bot = discord.Client(intents=intents)
-tree = app_commands.CommandTree(bot)
+tree = discord.app_commands.CommandTree(bot)
 
 def send_rcon_command(command):
     """Send an RCON command to the CS2 server and return the response."""
@@ -66,23 +61,17 @@ async def get_server_status_embed():
         embed.add_field(name="❌ Server Unreachable", value="The server is currently offline.", inline=False)
         return embed
 
+@tasks.loop(minutes=15)
+async def auto_say():
+    """Automatically sends a chat message to CS2 every 15 minutes."""
+    send_rcon_command("sm_say Server is owned by Reshtan Gaming Center")
+    print("✅ Auto message sent: Server is owned by Reshtan Gaming Center")
+
 @bot.event
 async def on_ready():
     await tree.sync()
     print(f'✅ Bot is online! Logged in as {bot.user}')
-
-@tree.command(name="admin", description="Open the CS2 Admin menu")
-async def admin(interaction: discord.Interaction):
-    """Displays an admin menu with buttons for quick actions."""
-    if not interaction.user.guild_permissions.administrator:
-        await interaction.response.send_message("❌ You don't have permission to use this.", ephemeral=True)
-        return
-
-    embed = discord.Embed(title="⚙️ CS2 Admin Menu", color=0x5865F2)
-    embed.add_field(name="🚀 Available Actions", value="Use `/kick`, `/ban`, `/mute`, `/say`, or `/map`.")
-    embed.set_footer(text="Only admins can use these commands.")
-
-    await interaction.response.send_message(embed=embed)
+    auto_say.start()  # ✅ Start automatic message loop
 
 @tree.command(name="status", description="Get the current CS2 server status")
 async def status(interaction: discord.Interaction):
@@ -116,28 +105,12 @@ async def leaderboard(interaction: discord.Interaction):
     except Exception:
         await interaction.response.send_message("⚠️ Could not retrieve player stats. Try again later.")
 
-@tree.command(name="rcon", description="Send any RCON command to the CS2 server")
-@app_commands.describe(command="The RCON command to execute")
-async def rcon(interaction: discord.Interaction, command: str):
-    """Executes an RCON command on the CS2 server."""
-    if not interaction.user.guild_permissions.administrator:
-        await interaction.response.send_message("❌ You don't have permission to use this command.", ephemeral=True)
-        return
+@tree.command(name="say", description="Send a message to CS2 chat")
+@discord.app_commands.describe(message="The message to send")
+async def say(interaction: discord.Interaction, message: str):
+    """Sends a message to CS2 chat using `sm_say`."""
+    response = send_rcon_command(f"sm_say {message}")
 
-    response = send_rcon_command(command)
-
-    await interaction.response.send_message(f"✅ Executed RCON command: `{command}`\n📝 **RCON Response:** {response}")
-
-@tree.command(name="map", description="Change the current CS2 map")
-@app_commands.describe(map_name="The name of the map to switch to")
-async def map(interaction: discord.Interaction, map_name: str):
-    """Changes the map on the CS2 server using RCON."""
-    if not interaction.user.guild_permissions.administrator:
-        await interaction.response.send_message("❌ You don't have permission to use this command.", ephemeral=True)
-        return
-
-    response = send_rcon_command(f"changelevel {map_name}")
-
-    await interaction.response.send_message(f"✅ Map changed to **{map_name}**.\n📝 **RCON Response:** {response}")
+    await interaction.response.send_message(f"✅ Message sent to CS2 chat.\n📝 **RCON Response:** {response}")
 
 bot.run(TOKEN)
