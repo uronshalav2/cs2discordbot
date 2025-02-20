@@ -72,6 +72,39 @@ async def admin(interaction: discord.Interaction):
 
     await interaction.response.send_message(embed=embed, view=AdminMenu())
 
+@tree.command(name="status", description="Get the current CS2 server status")
+async def status(interaction: discord.Interaction):
+    """Slash command to get live CS2 server status"""
+    await interaction.response.defer()
+    embed = await get_server_status_embed()
+    await interaction.followup.send(embed=embed)
+
+@tree.command(name="leaderboard", description="Show the top 5 players in the CS2 server")
+async def leaderboard(interaction: discord.Interaction):
+    """Show the top 5 players based on kills"""
+    try:
+        players = a2s.players((SERVER_IP, SERVER_PORT))
+
+        if not players:
+            await interaction.response.send_message("⚠️ No players online right now.")
+            return
+
+        # ✅ Sort players by kills and get top 5
+        top_players = sorted(players, key=lambda x: x.score, reverse=True)[:5]
+        leaderboard_text = "\n".join(
+            [f"🥇 **{p.name}** | 🏆 **{p.score}** kills | ⏳ **{p.duration / 60:.1f} mins**"
+             for p in top_players]
+        )
+
+        embed = discord.Embed(title="🏆 CS2 Leaderboard (Top 5)", color=0xFFD700)
+        embed.add_field(name="🔹 Players", value=leaderboard_text, inline=False)
+        embed.set_footer(text="Data updates every 6 hours.")
+
+        await interaction.response.send_message(embed=embed)
+
+    except Exception:
+        await interaction.response.send_message("⚠️ Could not retrieve player stats. Try again later.")
+
 @tree.command(name="say", description="Send a chat message to all players in the CS2 server")
 @app_commands.describe(message="The message to send in chat")
 async def say(interaction: discord.Interaction, message: str):
@@ -91,7 +124,7 @@ async def kick(interaction: discord.Interaction, player: str):
         await interaction.response.send_message("❌ You don't have permission to use this command.", ephemeral=True)
         return
 
-    response = send_rcon_command(f"sm_kick \"{player}\" \"Kicked by admin.\"")
+    response = send_rcon_command(f"kick {player}")
     await interaction.response.send_message(f"✅ **{player}** has been kicked.\n📝 **RCON Response:** {response}")
 
 @tree.command(name="ban", description="Ban a player from the CS2 server")
@@ -102,7 +135,7 @@ async def ban(interaction: discord.Interaction, player: str):
         await interaction.response.send_message("❌ You don't have permission to use this command.", ephemeral=True)
         return
 
-    response = send_rcon_command(f"sm_ban \"{player}\" 0 \"Banned by admin.\"")
+    response = send_rcon_command(f"banid 0 {player}; writeid")
     await interaction.response.send_message(f"🚫 **{player}** has been banned permanently.\n📝 **RCON Response:** {response}")
 
 @tree.command(name="mute", description="Mute a player in CS2 chat")
