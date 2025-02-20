@@ -33,26 +33,27 @@ def send_rcon_command(command):
     except Exception as e:
         return f"⚠️ Error: {e}"
 
-def fetch_demos():
-    """Scrapes the CS2 demos from the web directory."""
-    try:
-        response = requests.get(DEMOS_URL)
-        if response.status_code != 200:
-            return ["⚠️ Could not fetch demos. Check the URL."]
+SERVER_DEMOS_CHANNEL_ID = int(os.getenv("SERVER_DEMOS_CHANNEL_ID", 0))  # ✅ Set the correct channel ID
 
-        soup = BeautifulSoup(response.text, "html.parser")
-        links = [a["href"] for a in soup.find_all("a", href=True) if a["href"].endswith(".dem")]
+@tree.command(name="demos", description="Get the latest CS2 demos")
+async def demos(interaction: discord.Interaction):
+    """Fetches and displays the latest 5 CS2 demos from the web directory."""
+    
+    # ✅ Check if command is used in the correct channel
+    if interaction.channel_id != SERVER_DEMOS_CHANNEL_ID:
+        await interaction.response.send_message(
+            f"❌ This command can only be used in <#{SERVER_DEMOS_CHANNEL_ID}>.", ephemeral=True
+        )
+        return
+    
+    await interaction.response.defer()
+    demo_list = fetch_demos()
+    demo_text = "\n".join(demo_list)
 
-        if not links:
-            return ["⚠️ No demos found."]
+    embed = discord.Embed(title="🎥 Latest CS2 Demos", color=0x00ff00)
+    embed.description = demo_text
 
-        # ✅ Get the latest 5 demos
-        latest_demos = links[-5:]  
-
-        return [f"[{demo}](<{DEMOS_URL}{demo}>)" for demo in latest_demos]
-
-    except Exception as e:
-        return [f"⚠️ Error fetching demos: {e}"]
+    await interaction.followup.send(embed=embed)
 
 async def get_server_status_embed():
     """Fetch CS2 server status and return an embed."""
