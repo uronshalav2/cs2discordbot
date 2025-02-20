@@ -13,9 +13,11 @@ SERVER_PORT = int(os.getenv("SERVER_PORT", 27015))
 RCON_IP = os.getenv("RCON_IP")
 RCON_PORT = int(os.getenv("RCON_PORT", 27015))
 RCON_PASSWORD = os.getenv("RCON_PASSWORD")
+CHANNEL_ID = int(os.getenv("CHANNEL_ID", 0))  # ✅ Add your bot's channel ID
 
 # ✅ Enable privileged intents
 intents = discord.Intents.default()
+intents.messages = True  # ✅ Needed for deleting messages
 bot = discord.Client(intents=intents)
 tree = discord.app_commands.CommandTree(bot)
 
@@ -63,9 +65,19 @@ async def get_server_status_embed():
 
 @tasks.loop(minutes=15)
 async def auto_say():
-    """Automatically sends a chat message to CS2 every 15 minutes."""
-    send_rcon_command("say Server is owned by Reshtan Gaming Center")
-    print("✅ Auto message sent: Server is owned by Reshtan Gaming Center")
+    """Automatically sends a chat message to CS2 every 15 minutes and clears old messages."""
+    channel = bot.get_channel(CHANNEL_ID)
+    
+    if channel:
+        # ✅ Delete bot messages before sending a new one
+        async for message in channel.history(limit=20):
+            if message.author == bot.user:
+                await message.delete()
+
+        # ✅ Send the CS2 chat message
+        send_rcon_command("say Server is owned by Reshtan Gaming Center")
+        print("✅ Auto message sent: Server is owned by Reshtan Gaming Center")
+        await channel.send("✅ **Server is owned by Reshtan Gaming Center** (Auto Message)")
 
 @bot.event
 async def on_ready():
@@ -110,6 +122,12 @@ async def leaderboard(interaction: discord.Interaction):
 async def say(interaction: discord.Interaction, message: str):
     """Sends a message to CS2 chat using `say`."""
     response = send_rcon_command(f"say {message}")
+
+    # ✅ Delete older bot messages in the channel
+    channel = interaction.channel
+    async for msg in channel.history(limit=10):
+        if msg.author == bot.user:
+            await msg.delete()
 
     await interaction.response.send_message(f"✅ Message sent to CS2 chat.\n📝 **RCON Response:** {response}")
 
