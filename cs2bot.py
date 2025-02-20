@@ -79,7 +79,7 @@ async def admin(interaction: discord.Interaction):
         return
 
     embed = discord.Embed(title="⚙️ CS2 Admin Menu", color=0x5865F2)
-    embed.add_field(name="🚀 Available Actions", value="Use `/kick`, `/ban`, `/mute`, or `/say`.")
+    embed.add_field(name="🚀 Available Actions", value="Use `/kick`, `/ban`, `/mute`, `/say`, or `/map`.")
     embed.set_footer(text="Only admins can use these commands.")
 
     await interaction.response.send_message(embed=embed)
@@ -116,48 +116,28 @@ async def leaderboard(interaction: discord.Interaction):
     except Exception:
         await interaction.response.send_message("⚠️ Could not retrieve player stats. Try again later.")
 
-@tree.command(name="say", description="Send a chat message to all players in the CS2 server")
-@app_commands.describe(message="The message to send in chat")
-async def say(interaction: discord.Interaction, message: str):
-    """Sends a chat message to all players in CS2 (only the text)."""
+@tree.command(name="rcon", description="Send any RCON command to the CS2 server")
+@app_commands.describe(command="The RCON command to execute")
+async def rcon(interaction: discord.Interaction, command: str):
+    """Executes an RCON command on the CS2 server."""
     if not interaction.user.guild_permissions.administrator:
         await interaction.response.send_message("❌ You don't have permission to use this command.", ephemeral=True)
         return
 
-    response = send_rcon_command(f"say {message}")
-    await interaction.response.send_message(f"✅ Message sent to CS2 chat.\n📝 **RCON Response:** {response}")
+    response = send_rcon_command(command)
 
-@tree.command(name="kick", description="Kick a player from the CS2 server")
-@app_commands.describe(player="The player's name to kick")
-async def kick(interaction: discord.Interaction, player: str):
-    """Kick a player using RCON"""
+    await interaction.response.send_message(f"✅ Executed RCON command: `{command}`\n📝 **RCON Response:** {response}")
+
+@tree.command(name="map", description="Change the current CS2 map")
+@app_commands.describe(map_name="The name of the map to switch to")
+async def map(interaction: discord.Interaction, map_name: str):
+    """Changes the map on the CS2 server using RCON."""
     if not interaction.user.guild_permissions.administrator:
         await interaction.response.send_message("❌ You don't have permission to use this command.", ephemeral=True)
         return
 
-    response = send_rcon_command(f"kick {player}")
-    await interaction.response.send_message(f"✅ **{player}** has been kicked.\n📝 **RCON Response:** {response}")
+    response = send_rcon_command(f"changelevel {map_name}")
 
-@tree.command(name="ban", description="Ban a player from the CS2 server")
-@app_commands.describe(player="The player's SteamID to ban")
-async def ban(interaction: discord.Interaction, player: str):
-    """Ban a player using RCON"""
-    if not interaction.user.guild_permissions.administrator:
-        await interaction.response.send_message("❌ You don't have permission to use this command.", ephemeral=True)
-        return
-
-    response = send_rcon_command(f"banid 0 {player}; writeid")
-    await interaction.response.send_message(f"🚫 **{player}** has been banned permanently.\n📝 **RCON Response:** {response}")
-
-@tree.command(name="mute", description="Mute a player in CS2 chat")
-@app_commands.describe(player="The player's name to mute")
-async def mute(interaction: discord.Interaction, player: str):
-    """Mute a player using RCON"""
-    if not interaction.user.guild_permissions.administrator:
-        await interaction.response.send_message("❌ You don't have permission to use this command.", ephemeral=True)
-        return
-
-    response = send_rcon_command(f"sm_mute \"{player}\"")
-    await interaction.response.send_message(f"🔇 **{player}** has been muted.\n📝 **RCON Response:** {response}")
+    await interaction.response.send_message(f"✅ Map changed to **{map_name}**.\n📝 **RCON Response:** {response}")
 
 bot.run(TOKEN)
