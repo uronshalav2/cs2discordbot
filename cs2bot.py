@@ -118,14 +118,18 @@ async def status(interaction: discord.Interaction):
 
 @tree.command(name="leaderboard", description="Show the top 5 players in the CS2 server")
 async def leaderboard(interaction: discord.Interaction):
-    """Show the top 5 players based on kills"""
+    """Fetches and displays the top 5 players by kills."""
+    await interaction.response.defer()
+
     try:
-        players = a2s.players((SERVER_IP, SERVER_PORT))
+        # ✅ Increased timeout to 5 seconds
+        players = a2s.players((SERVER_IP, SERVER_PORT), timeout=5)
 
         if not players:
-            await interaction.response.send_message("⚠️ No players online right now.")
+            await interaction.followup.send("⚠️ No players online right now.")
             return
 
+        # ✅ Get the top 5 players sorted by score
         top_players = sorted(players, key=lambda x: x.score, reverse=True)[:5]
         leaderboard_text = "\n".join(
             [f"🥇 **{p.name}** | 🏆 **{p.score}** kills | ⏳ **{p.duration / 60:.1f} mins**"
@@ -136,11 +140,13 @@ async def leaderboard(interaction: discord.Interaction):
         embed.add_field(name="🔹 Players", value=leaderboard_text, inline=False)
         embed.set_footer(text="Data updates every 6 hours.")
 
-        await interaction.response.send_message(embed=embed)
+        await interaction.followup.send(embed=embed)
 
-    except Exception:
-        await interaction.response.send_message("⚠️ Could not retrieve player stats. Try again later.")
+    except TimeoutError:
+        await interaction.followup.send("⚠️ CS2 server is not responding. Try again later.")
 
+    except Exception as e:
+        await interaction.followup.send(f"⚠️ Error retrieving leaderboard: {e}")
 @tree.command(name="say", description="Send a message to CS2 chat")
 @discord.app_commands.describe(message="The message to send")
 async def say(interaction: discord.Interaction, message: str):
