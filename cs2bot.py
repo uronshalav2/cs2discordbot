@@ -64,7 +64,7 @@ async def get_server_status_embed():
 @tasks.loop(minutes=15)
 async def auto_say():
     """Automatically sends a chat message to CS2 every 15 minutes."""
-    send_rcon_command("sm_say Server is owned by Reshtan Gaming Center")
+    send_rcon_command("say Server is owned by Reshtan Gaming Center")
     print("✅ Auto message sent: Server is owned by Reshtan Gaming Center")
 
 @bot.event
@@ -108,8 +108,8 @@ async def leaderboard(interaction: discord.Interaction):
 @tree.command(name="say", description="Send a message to CS2 chat")
 @discord.app_commands.describe(message="The message to send")
 async def say(interaction: discord.Interaction, message: str):
-    """Sends a message to CS2 chat using `sm_say`."""
-    response = send_rcon_command(f"sm_say {message}")
+    """Sends a message to CS2 chat using `say`."""
+    response = send_rcon_command(f"say {message}")
 
     await interaction.response.send_message(f"✅ Message sent to CS2 chat.\n📝 **RCON Response:** {response}")
 
