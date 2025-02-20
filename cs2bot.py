@@ -3,6 +3,7 @@ import discord
 from discord import app_commands
 from discord.ext import tasks
 import a2s  # Source Server Query Protocol
+import valve.rcon  # RCON for admin commands
 from datetime import datetime
 import pytz  # Timezone support for Germany
 
@@ -10,126 +11,115 @@ import pytz  # Timezone support for Germany
 TOKEN = os.getenv("TOKEN")
 SERVER_IP = os.getenv("SERVER_IP")
 SERVER_PORT = int(os.getenv("SERVER_PORT", 27015))
-CHANNEL_ID = int(os.getenv("CHANNEL_ID", 0))  # Set this in Railway variables
+CHANNEL_ID = int(os.getenv("CHANNEL_ID", 0))
+RCON_IP = os.getenv("SERVER_IP")
+RCON_PORT = int(os.getenv("SERVER_PORT", 27015))
+RCON_PASSWORD = os.getenv("RCON_PASSWORD")
 
 # ✅ Enable privileged intents
 intents = discord.Intents.default()
-intents.message_content = True  # Required for handling slash commands
+intents.message_content = True
 
 # ✅ Initialize bot with command tree
 bot = discord.Client(intents=intents)
 tree = app_commands.CommandTree(bot)
 
-@bot.event
-async def on_ready():
-    await tree.sync()  # Sync slash commands
-    print(f'✅ Bot is online! Logged in as {bot.user}')
-    cs2status_auto_update.start()  # Start automatic updates every 6 hours
+def send_rcon_command(command):
+    """Send an RCON command to the CS2 server and return the response."""
+    try:
+        with valve.rcon.RCON((RCON_IP, RCON_PORT), RCON_PASSWORD) as rcon:
+            response = rcon.execute(command)
+            return response
+    except Exception as e:
+        return f"⚠️ Error: {e}"
 
-@tasks.loop(hours=6)  # ✅ Auto-updates every 6 hours
-async def cs2status_auto_update():
-    """Automatically sends CS2 server updates."""
-    channel = bot.get_channel(CHANNEL_ID)
-    if not channel:
-        print(f"⚠️ Channel ID {CHANNEL_ID} not found!")
+class AdminMenu(discord.ui.View):
+    """Interactive Admin Menu for CS2 Management"""
+    def __init__(self):
+        super().__init__()
+
+    @discord.ui.button(label="Kick Player", style=discord.ButtonStyle.danger)
+    async def kick_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_message("🔹 Use `/kick <player>` to remove a player.", ephemeral=True)
+
+    @discord.ui.button(label="Ban Player", style=discord.ButtonStyle.danger)
+    async def ban_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_message("🔹 Use `/ban <player>` to permanently ban a player.", ephemeral=True)
+
+    @discord.ui.button(label="Mute Player", style=discord.ButtonStyle.secondary)
+    async def mute_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_message("🔹 Use `/mute <player>` to mute a player in chat.", ephemeral=True)
+
+    @discord.ui.button(label="Send Chat Message", style=discord.ButtonStyle.success)
+    async def say_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_message("🔹 Use `/say <message>` to send a message to CS2 chat.", ephemeral=True)
+
+@tree.command(name="admin", description="Open the CS2 Admin menu")
+async def admin(interaction: discord.Interaction):
+    """Displays an admin menu with buttons for quick actions."""
+    if not interaction.user.guild_permissions.administrator:
+        await interaction.response.send_message("❌ You don't have permission to use this.", ephemeral=True)
         return
 
-    # ✅ Delete old messages before sending a new one
-    async for message in channel.history(limit=5):
-        if message.author == bot.user:
-            await message.delete()
+    embed = discord.Embed(title="⚙️ CS2 Admin Menu", color=0x5865F2)
+    embed.add_field(name="🚀 Available Actions", value="Click a button below to execute a command.")
+    embed.set_footer(text="Use /kick, /ban, /mute, or /say for manual commands.")
 
-    embed = await get_server_status_embed()
-    if embed:
-        await channel.send(embed=embed)
+    await interaction.response.send_message(embed=embed, view=AdminMenu())
 
-@tree.command(name="status", description="Get the current CS2 server status")
-async def status(interaction: discord.Interaction):
-    """Slash command to get live CS2 server status"""
-    await interaction.response.defer()
-    embed = await get_server_status_embed()
-    await interaction.followup.send(embed=embed)
+@tree.command(name="say", description="Send a chat message to all players in the CS2 server")
+@app_commands.describe(message="The message to send in chat")
+async def say(interaction: discord.Interaction, message: str):
+    """Sends a chat message to all players in CS2."""
+    if not interaction.user.guild_permissions.administrator:
+        await interaction.response.send_message("❌ You don't have permission to use this command.", ephemeral=True)
+        return
 
-@tree.command(name="leaderboard", description="Show the top 5 players in the CS2 server")
-async def leaderboard(interaction: discord.Interaction):
-    """Show the top 5 players based on kills"""
-    try:
-        players = a2s.players((SERVER_IP, SERVER_PORT))
+    response = send_rcon_command(f"sm_say [Discord] {message}")
+    await interaction.response.send_message(f"✅ Message sent to CS2 chat:\n📝 **{message}**\n📝 **RCON Response:** {response}")
 
-        if not players:
-            await interaction.response.send_message("⚠️ No players online right now.")
-            return
+@tree.command(name="csay", description="Send a center message to all players in CS2")
+@app_commands.describe(message="The message to display in the center")
+async def csay(interaction: discord.Interaction, message: str):
+    """Sends a center screen message in CS2."""
+    if not interaction.user.guild_permissions.administrator:
+        await interaction.response.send_message("❌ You don't have permission to use this command.", ephemeral=True)
+        return
 
-        # ✅ Sort players by kills and get top 5
-        top_players = sorted(players, key=lambda x: x.score, reverse=True)[:5]
-        leaderboard_text = "\n".join(
-            [f"🥇 **{p.name}** | 🏆 **{p.score}** kills | ⏳ **{p.duration / 60:.1f} mins**"
-             for p in top_players]
-        )
+    response = send_rcon_command(f"sm_csay {message}")
+    await interaction.response.send_message(f"✅ Center message sent:\n📝 **{message}**\n📝 **RCON Response:** {response}")
 
-        embed = discord.Embed(title="🏆 CS2 Leaderboard (Top 5)", color=0xFFD700)
-        embed.add_field(name="🔹 Players", value=leaderboard_text, inline=False)
-        embed.set_footer(text="Data updates every 6 hours.")
+@tree.command(name="kick", description="Kick a player from the CS2 server using CS2-Simple Admin")
+@app_commands.describe(player="The player's name to kick")
+async def kick(interaction: discord.Interaction, player: str):
+    """Kick a player using CS2-Simple Admin"""
+    if not interaction.user.guild_permissions.administrator:
+        await interaction.response.send_message("❌ You don't have permission to use this command.", ephemeral=True)
+        return
 
-        await interaction.response.send_message(embed=embed)
+    response = send_rcon_command(f"sm_kick \"{player}\" \"Kicked by admin.\"")
+    await interaction.response.send_message(f"✅ **{player}** has been kicked.\n📝 **RCON Response:** {response}")
 
-    except Exception:
-        await interaction.response.send_message("⚠️ Could not retrieve player stats. Try again later.")
+@tree.command(name="ban", description="Ban a player from the CS2 server using CS2-Simple Admin")
+@app_commands.describe(player="The player's name to ban")
+async def ban(interaction: discord.Interaction, player: str):
+    """Ban a player using CS2-Simple Admin"""
+    if not interaction.user.guild_permissions.administrator:
+        await interaction.response.send_message("❌ You don't have permission to use this command.", ephemeral=True)
+        return
 
-async def get_server_status_embed():
-    """Fetch CS2 server status, show live player stats, and return an embed."""
-    server_address = (SERVER_IP, SERVER_PORT)
+    response = send_rcon_command(f"sm_ban \"{player}\" 0 \"Banned by admin.\"")
+    await interaction.response.send_message(f"🚫 **{player}** has been banned permanently.\n📝 **RCON Response:** {response}")
 
-    try:
-        print(f"🔍 Checking CS2 server: {SERVER_IP}:{SERVER_PORT}")
+@tree.command(name="mute", description="Mute a player in CS2 chat using CS2-Simple Admin")
+@app_commands.describe(player="The player's name to mute")
+async def mute(interaction: discord.Interaction, player: str):
+    """Mute a player using CS2-Simple Admin"""
+    if not interaction.user.guild_permissions.administrator:
+        await interaction.response.send_message("❌ You don't have permission to use this command.", ephemeral=True)
+        return
 
-        try:
-            info = a2s.info(server_address)  # ✅ Get server info
-            players = a2s.players(server_address)  # ✅ Get player list
-            print(f"✅ Server is ONLINE! {info.server_name} | {info.map_name}")
-        except Exception as e:
-            print(f"⚠️ Server unreachable: {e}")
-            return get_offline_embed()
-
-        # ✅ Server is online
-        embed_color = 0x00ff00  # Green for online
-
-        berlin_tz = pytz.timezone("Europe/Berlin")
-        last_updated = datetime.now(berlin_tz).strftime("%Y-%m-%d %H:%M:%S %Z")
-
-        embed = discord.Embed(title="🎮 CS2 Server Status - 🟢 Online", color=embed_color)
-        embed.add_field(name="🖥️ Server Name", value=info.server_name, inline=False)
-        embed.add_field(name="🗺️ Map", value=info.map_name, inline=True)
-        embed.add_field(name="👥 Players", value=f"{info.player_count}/{info.max_players}", inline=True)
-
-        # ✅ Show player list (even if empty)
-        player_stats = "No players online."
-        if players:
-            player_stats = "\n".join(
-                [f"🎮 **{p.name}** | 🏆 **{p.score}** kills | ⏳ **{p.duration / 60:.1f} mins**"
-                 for p in sorted(players, key=lambda x: x.score, reverse=True)]
-            )
-
-        embed.add_field(name="📊 Live Player Stats", value=player_stats, inline=False)
-        embed.set_footer(text=f"Last updated: {last_updated}")
-
-        return embed
-
-    except Exception as e:
-        print(f"⚠️ Error retrieving CS2 server status: {e}")
-        return get_offline_embed()
-
-def get_offline_embed():
-    """Returns an embed for when the server is offline."""
-    embed_color = 0xff0000  # Red for offline
-    berlin_tz = pytz.timezone("Europe/Berlin")
-    last_updated = datetime.now(berlin_tz).strftime("%Y-%m-%d %H:%M:%S %Z")
-
-    embed = discord.Embed(title="⚠️ CS2 Server Status - 🔴 Offline", color=embed_color)
-    embed.add_field(name="❌ Server Unreachable", value="The server is currently **offline** or experiencing issues.\n\
-🔄 Try again later or contact support.", inline=False)
-    embed.set_footer(text=f"Last checked: {last_updated}")
-
-    return embed
+    response = send_rcon_command(f"sm_mute \"{player}\"")
+    await interaction.response.send_message(f"🔇 **{player}** has been muted.\n📝 **RCON Response:** {response}")
 
 bot.run(TOKEN)
