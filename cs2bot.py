@@ -16,6 +16,7 @@ RCON_IP = os.getenv("RCON_IP")
 RCON_PORT = int(os.getenv("RCON_PORT", 27015))
 RCON_PASSWORD = os.getenv("RCON_PASSWORD")
 CHANNEL_ID = int(os.getenv("CHANNEL_ID", 0))
+SERVER_DEMOS_CHANNEL_ID = int(os.getenv("SERVER_DEMOS_CHANNEL_ID", 0))  # ✅ Restrict /demos to this channel
 DEMOS_URL = "http://de34.fshost.me/demos/cs2/1842/"  # ✅ Your demo directory URL
 
 # ✅ Enable privileged intents
@@ -33,27 +34,26 @@ def send_rcon_command(command):
     except Exception as e:
         return f"⚠️ Error: {e}"
 
-SERVER_DEMOS_CHANNEL_ID = int(os.getenv("SERVER_DEMOS_CHANNEL_ID", 0))  # ✅ Set the correct channel ID
+def fetch_demos():
+    """Scrapes the CS2 demos from the web directory."""
+    try:
+        response = requests.get(DEMOS_URL)
+        if response.status_code != 200:
+            return ["⚠️ Could not fetch demos. Check the URL."]
 
-@tree.command(name="demos", description="Get the latest CS2 demos")
-async def demos(interaction: discord.Interaction):
-    """Fetches and displays the latest 5 CS2 demos from the web directory."""
-    
-    # ✅ Check if command is used in the correct channel
-    if interaction.channel_id != SERVER_DEMOS_CHANNEL_ID:
-        await interaction.response.send_message(
-            f"❌ This command can only be used in <#{SERVER_DEMOS_CHANNEL_ID}>.", ephemeral=True
-        )
-        return
-    
-    await interaction.response.defer()
-    demo_list = fetch_demos()
-    demo_text = "\n".join(demo_list)
+        soup = BeautifulSoup(response.text, "html.parser")
+        links = [a["href"] for a in soup.find_all("a", href=True) if a["href"].endswith(".dem")]
 
-    embed = discord.Embed(title="🎥 Latest CS2 Demos", color=0x00ff00)
-    embed.description = demo_text
+        if not links:
+            return ["⚠️ No demos found."]
 
-    await interaction.followup.send(embed=embed)
+        # ✅ Get the latest 5 demos
+        latest_demos = links[-5:]  
+
+        return [f"[{demo}](<{DEMOS_URL}{demo}>)" for demo in latest_demos]
+
+    except Exception as e:
+        return [f"⚠️ Error fetching demos: {e}"]
 
 async def get_server_status_embed():
     """Fetch CS2 server status and return an embed."""
@@ -119,18 +119,16 @@ async def status(interaction: discord.Interaction):
 
 @tree.command(name="leaderboard", description="Show the top 5 players in the CS2 server")
 async def leaderboard(interaction: discord.Interaction):
-    """Fetches and displays the top 5 players by kills."""
+    """Show the top 5 players based on kills"""
     await interaction.response.defer()
-
+    
     try:
-        # ✅ Increased timeout to 5 seconds
         players = a2s.players((SERVER_IP, SERVER_PORT), timeout=5)
 
         if not players:
             await interaction.followup.send("⚠️ No players online right now.")
             return
 
-        # ✅ Get the top 5 players sorted by score
         top_players = sorted(players, key=lambda x: x.score, reverse=True)[:5]
         leaderboard_text = "\n".join(
             [f"🥇 **{p.name}** | 🏆 **{p.score}** kills | ⏳ **{p.duration / 60:.1f} mins**"
@@ -146,8 +144,6 @@ async def leaderboard(interaction: discord.Interaction):
     except TimeoutError:
         await interaction.followup.send("⚠️ CS2 server is not responding. Try again later.")
 
-    except Exception as e:
-        await interaction.followup.send(f"⚠️ Error retrieving leaderboard: {e}")
 @tree.command(name="say", description="Send a message to CS2 chat")
 @discord.app_commands.describe(message="The message to send")
 async def say(interaction: discord.Interaction, message: str):
@@ -158,6 +154,13 @@ async def say(interaction: discord.Interaction, message: str):
 @tree.command(name="demos", description="Get the latest CS2 demos")
 async def demos(interaction: discord.Interaction):
     """Fetches and displays the latest 5 CS2 demos from the web directory."""
+    
+    if interaction.channel_id != SERVER_DEMOS_CHANNEL_ID:
+        await interaction.response.send_message(
+            f"❌ This command can only be used in <#{SERVER_DEMOS_CHANNEL_ID}>.", ephemeral=True
+        )
+        return
+
     await interaction.response.defer()
     demo_list = fetch_demos()
     demo_text = "\n".join(demo_list)
