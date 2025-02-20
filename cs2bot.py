@@ -1,10 +1,12 @@
 import os
 import discord
+import requests
+from bs4 import BeautifulSoup  # ✅ Used for scraping demo list
 from discord.ext import tasks
 import a2s  # Source Server Query Protocol
-from mcrcon import MCRcon  # ✅ Uses mcrcon for RCON commands
+from mcrcon import MCRcon
 from datetime import datetime
-import pytz  # Timezone support for Germany
+import pytz  
 
 # ✅ Load environment variables from Railway
 TOKEN = os.getenv("TOKEN")
@@ -13,7 +15,8 @@ SERVER_PORT = int(os.getenv("SERVER_PORT", 27015))
 RCON_IP = os.getenv("RCON_IP")
 RCON_PORT = int(os.getenv("RCON_PORT", 27015))
 RCON_PASSWORD = os.getenv("RCON_PASSWORD")
-CHANNEL_ID = int(os.getenv("CHANNEL_ID", 0))  # ✅ Add your bot's channel ID
+CHANNEL_ID = int(os.getenv("CHANNEL_ID", 0))
+DEMOS_URL = "http://de34.fshost.me/demos/cs2/1842/"  # ✅ Your demo directory URL
 
 # ✅ Enable privileged intents
 intents = discord.Intents.default()
@@ -29,6 +32,27 @@ def send_rcon_command(command):
             return response if len(response) <= 1000 else response[:1000] + "... (truncated)"
     except Exception as e:
         return f"⚠️ Error: {e}"
+
+def fetch_demos():
+    """Scrapes the CS2 demos from the web directory."""
+    try:
+        response = requests.get(DEMOS_URL)
+        if response.status_code != 200:
+            return ["⚠️ Could not fetch demos. Check the URL."]
+
+        soup = BeautifulSoup(response.text, "html.parser")
+        links = [a["href"] for a in soup.find_all("a", href=True) if a["href"].endswith(".dem")]
+
+        if not links:
+            return ["⚠️ No demos found."]
+
+        # ✅ Get the latest 5 demos
+        latest_demos = links[-5:]  
+
+        return [f"[{demo}](<{DEMOS_URL}{demo}>)" for demo in latest_demos]
+
+    except Exception as e:
+        return [f"⚠️ Error fetching demos: {e}"]
 
 async def get_server_status_embed():
     """Fetch CS2 server status and return an embed."""
@@ -122,8 +146,18 @@ async def leaderboard(interaction: discord.Interaction):
 async def say(interaction: discord.Interaction, message: str):
     """Sends a message to CS2 chat using `say`."""
     response = send_rcon_command(f"say {message}")
-
-
     await interaction.response.send_message(f"✅ Message sent to CS2 chat.\n📝 **RCON Response:** {response}")
+
+@tree.command(name="demos", description="Get the latest CS2 demos")
+async def demos(interaction: discord.Interaction):
+    """Fetches and displays the latest 5 CS2 demos from the web directory."""
+    await interaction.response.defer()
+    demo_list = fetch_demos()
+    demo_text = "\n".join(demo_list)
+
+    embed = discord.Embed(title="🎥 Latest CS2 Demos", color=0x00ff00)
+    embed.description = demo_text
+
+    await interaction.followup.send(embed=embed)
 
 bot.run(TOKEN)
