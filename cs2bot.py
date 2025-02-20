@@ -3,7 +3,7 @@ import discord
 from discord import app_commands
 from discord.ext import tasks
 import a2s  # Source Server Query Protocol
-import valve.rcon  # RCON for admin commands
+from mcrcon import MCRcon  # ✅ Uses mcrcon for RCON commands
 from datetime import datetime
 import pytz  # Timezone support for Germany
 
@@ -12,8 +12,8 @@ TOKEN = os.getenv("TOKEN")
 SERVER_IP = os.getenv("SERVER_IP")
 SERVER_PORT = int(os.getenv("SERVER_PORT", 27015))
 CHANNEL_ID = int(os.getenv("CHANNEL_ID", 0))
-RCON_IP = os.getenv("SERVER_IP")
-RCON_PORT = int(os.getenv("SERVER_PORT", 27015))
+RCON_IP = os.getenv("RCON_IP")
+RCON_PORT = int(os.getenv("RCON_PORT", 27015))
 RCON_PASSWORD = os.getenv("RCON_PASSWORD")
 
 # ✅ Enable privileged intents
@@ -27,8 +27,8 @@ tree = app_commands.CommandTree(bot)
 def send_rcon_command(command):
     """Send an RCON command to the CS2 server and return the response."""
     try:
-        with valve.rcon.RCON((RCON_IP, RCON_PORT), RCON_PASSWORD) as rcon:
-            response = rcon.execute(command)
+        with MCRcon(RCON_IP, RCON_PASSWORD, port=RCON_PORT) as rcon:
+            response = rcon.command(command)
             return response
     except Exception as e:
         return f"⚠️ Error: {e}"
@@ -54,6 +54,11 @@ class AdminMenu(discord.ui.View):
     async def say_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.send_message("🔹 Use `/say <message>` to send a message to CS2 chat.", ephemeral=True)
 
+@bot.event
+async def on_ready():
+    await tree.sync()
+    print(f'✅ Bot is online! Logged in as {bot.user}')
+
 @tree.command(name="admin", description="Open the CS2 Admin menu")
 async def admin(interaction: discord.Interaction):
     """Displays an admin menu with buttons for quick actions."""
@@ -75,24 +80,13 @@ async def say(interaction: discord.Interaction, message: str):
         await interaction.response.send_message("❌ You don't have permission to use this command.", ephemeral=True)
         return
 
-    response = send_rcon_command(f"sm_say [Discord] {message}")
+    response = send_rcon_command(f"say [Discord] {message}")
     await interaction.response.send_message(f"✅ Message sent to CS2 chat:\n📝 **{message}**\n📝 **RCON Response:** {response}")
 
-@tree.command(name="csay", description="Send a center message to all players in CS2")
-@app_commands.describe(message="The message to display in the center")
-async def csay(interaction: discord.Interaction, message: str):
-    """Sends a center screen message in CS2."""
-    if not interaction.user.guild_permissions.administrator:
-        await interaction.response.send_message("❌ You don't have permission to use this command.", ephemeral=True)
-        return
-
-    response = send_rcon_command(f"sm_csay {message}")
-    await interaction.response.send_message(f"✅ Center message sent:\n📝 **{message}**\n📝 **RCON Response:** {response}")
-
-@tree.command(name="kick", description="Kick a player from the CS2 server using CS2-Simple Admin")
+@tree.command(name="kick", description="Kick a player from the CS2 server")
 @app_commands.describe(player="The player's name to kick")
 async def kick(interaction: discord.Interaction, player: str):
-    """Kick a player using CS2-Simple Admin"""
+    """Kick a player using RCON"""
     if not interaction.user.guild_permissions.administrator:
         await interaction.response.send_message("❌ You don't have permission to use this command.", ephemeral=True)
         return
@@ -100,10 +94,10 @@ async def kick(interaction: discord.Interaction, player: str):
     response = send_rcon_command(f"sm_kick \"{player}\" \"Kicked by admin.\"")
     await interaction.response.send_message(f"✅ **{player}** has been kicked.\n📝 **RCON Response:** {response}")
 
-@tree.command(name="ban", description="Ban a player from the CS2 server using CS2-Simple Admin")
+@tree.command(name="ban", description="Ban a player from the CS2 server")
 @app_commands.describe(player="The player's name to ban")
 async def ban(interaction: discord.Interaction, player: str):
-    """Ban a player using CS2-Simple Admin"""
+    """Ban a player using RCON"""
     if not interaction.user.guild_permissions.administrator:
         await interaction.response.send_message("❌ You don't have permission to use this command.", ephemeral=True)
         return
@@ -111,10 +105,10 @@ async def ban(interaction: discord.Interaction, player: str):
     response = send_rcon_command(f"sm_ban \"{player}\" 0 \"Banned by admin.\"")
     await interaction.response.send_message(f"🚫 **{player}** has been banned permanently.\n📝 **RCON Response:** {response}")
 
-@tree.command(name="mute", description="Mute a player in CS2 chat using CS2-Simple Admin")
+@tree.command(name="mute", description="Mute a player in CS2 chat")
 @app_commands.describe(player="The player's name to mute")
 async def mute(interaction: discord.Interaction, player: str):
-    """Mute a player using CS2-Simple Admin"""
+    """Mute a player using RCON"""
     if not interaction.user.guild_permissions.administrator:
         await interaction.response.send_message("❌ You don't have permission to use this command.", ephemeral=True)
         return
