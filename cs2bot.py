@@ -123,11 +123,6 @@ async def say(interaction: discord.Interaction, message: str):
     """Sends a message to CS2 chat using `say`."""
     response = send_rcon_command(f"say {message}")
 
-    # ✅ Delete older bot messages in the channel
-    channel = interaction.channel
-    async for msg in channel.history(limit=10):
-        if msg.author == bot.user:
-            await msg.delete()
 
     await interaction.response.send_message(f"✅ Message sent to CS2 chat.\n📝 **RCON Response:** {response}")
 
