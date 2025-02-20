@@ -29,7 +29,7 @@ def send_rcon_command(command):
     try:
         with MCRcon(RCON_IP, RCON_PASSWORD, port=RCON_PORT) as rcon:
             response = rcon.command(command)
-            return response
+            return response if len(response) <= 1000 else response[:1000] + "... (truncated)"
     except Exception as e:
         return f"⚠️ Error: {e}"
 
@@ -71,6 +71,19 @@ async def on_ready():
     await tree.sync()
     print(f'✅ Bot is online! Logged in as {bot.user}')
 
+@tree.command(name="admin", description="Open the CS2 Admin menu")
+async def admin(interaction: discord.Interaction):
+    """Displays an admin menu with buttons for quick actions."""
+    if not interaction.user.guild_permissions.administrator:
+        await interaction.response.send_message("❌ You don't have permission to use this.", ephemeral=True)
+        return
+
+    embed = discord.Embed(title="⚙️ CS2 Admin Menu", color=0x5865F2)
+    embed.add_field(name="🚀 Available Actions", value="Use `/kick`, `/ban`, `/mute`, or `/say`.")
+    embed.set_footer(text="Only admins can use these commands.")
+
+    await interaction.response.send_message(embed=embed)
+
 @tree.command(name="status", description="Get the current CS2 server status")
 async def status(interaction: discord.Interaction):
     """Slash command to get live CS2 server status"""
@@ -106,13 +119,13 @@ async def leaderboard(interaction: discord.Interaction):
 @tree.command(name="say", description="Send a chat message to all players in the CS2 server")
 @app_commands.describe(message="The message to send in chat")
 async def say(interaction: discord.Interaction, message: str):
-    """Sends a chat message to all players in CS2."""
+    """Sends a chat message to all players in CS2 (only the text)."""
     if not interaction.user.guild_permissions.administrator:
         await interaction.response.send_message("❌ You don't have permission to use this command.", ephemeral=True)
         return
 
-    response = send_rcon_command(f"say [Discord] {message}")
-    await interaction.response.send_message(f"✅ Message sent to CS2 chat:\n📝 **{message}**\n📝 **RCON Response:** {response}")
+    response = send_rcon_command(f"say {message}")
+    await interaction.response.send_message(f"✅ Message sent to CS2 chat.\n📝 **RCON Response:** {response}")
 
 @tree.command(name="kick", description="Kick a player from the CS2 server")
 @app_commands.describe(player="The player's name to kick")
