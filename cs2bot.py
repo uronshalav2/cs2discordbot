@@ -33,44 +33,43 @@ def send_rcon_command(command):
     except Exception as e:
         return f"⚠️ Error: {e}"
 
-class AdminMenu(discord.ui.View):
-    """Interactive Admin Menu for CS2 Management"""
-    def __init__(self):
-        super().__init__()
+async def get_server_status_embed():
+    """Fetch CS2 server status and return an embed."""
+    server_address = (SERVER_IP, SERVER_PORT)
 
-    @discord.ui.button(label="Kick Player", style=discord.ButtonStyle.danger)
-    async def kick_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.send_message("🔹 Use `/kick <player>` to remove a player.", ephemeral=True)
+    try:
+        info = a2s.info(server_address)
+        players = a2s.players(server_address)
 
-    @discord.ui.button(label="Ban Player", style=discord.ButtonStyle.danger)
-    async def ban_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.send_message("🔹 Use `/ban <player>` to permanently ban a player.", ephemeral=True)
+        berlin_tz = pytz.timezone("Europe/Berlin")
+        last_updated = datetime.now(berlin_tz).strftime("%Y-%m-%d %H:%M:%S %Z")
 
-    @discord.ui.button(label="Mute Player", style=discord.ButtonStyle.secondary)
-    async def mute_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.send_message("🔹 Use `/mute <player>` to mute a player in chat.", ephemeral=True)
+        embed = discord.Embed(title="🎮 CS2 Server Status - 🟢 Online", color=0x00ff00)
+        embed.add_field(name="🖥️ Server Name", value=info.server_name, inline=False)
+        embed.add_field(name="🗺️ Map", value=info.map_name, inline=True)
+        embed.add_field(name="👥 Players", value=f"{info.player_count}/{info.max_players}", inline=True)
 
-    @discord.ui.button(label="Send Chat Message", style=discord.ButtonStyle.success)
-    async def say_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.send_message("🔹 Use `/say <message>` to send a message to CS2 chat.", ephemeral=True)
+        player_stats = "No players online."
+        if players:
+            player_stats = "\n".join(
+                [f"🎮 **{p.name}** | 🏆 **{p.score}** kills | ⏳ **{p.duration / 60:.1f} mins**"
+                 for p in sorted(players, key=lambda x: x.score, reverse=True)]
+            )
+
+        embed.add_field(name="📊 Live Player Stats", value=player_stats, inline=False)
+        embed.set_footer(text=f"Last updated: {last_updated}")
+
+        return embed
+
+    except Exception:
+        embed = discord.Embed(title="⚠️ CS2 Server Status - 🔴 Offline", color=0xff0000)
+        embed.add_field(name="❌ Server Unreachable", value="The server is currently offline.", inline=False)
+        return embed
 
 @bot.event
 async def on_ready():
     await tree.sync()
     print(f'✅ Bot is online! Logged in as {bot.user}')
-
-@tree.command(name="admin", description="Open the CS2 Admin menu")
-async def admin(interaction: discord.Interaction):
-    """Displays an admin menu with buttons for quick actions."""
-    if not interaction.user.guild_permissions.administrator:
-        await interaction.response.send_message("❌ You don't have permission to use this.", ephemeral=True)
-        return
-
-    embed = discord.Embed(title="⚙️ CS2 Admin Menu", color=0x5865F2)
-    embed.add_field(name="🚀 Available Actions", value="Click a button below to execute a command.")
-    embed.set_footer(text="Use /kick, /ban, /mute, or /say for manual commands.")
-
-    await interaction.response.send_message(embed=embed, view=AdminMenu())
 
 @tree.command(name="status", description="Get the current CS2 server status")
 async def status(interaction: discord.Interaction):
@@ -89,7 +88,6 @@ async def leaderboard(interaction: discord.Interaction):
             await interaction.response.send_message("⚠️ No players online right now.")
             return
 
-        # ✅ Sort players by kills and get top 5
         top_players = sorted(players, key=lambda x: x.score, reverse=True)[:5]
         leaderboard_text = "\n".join(
             [f"🥇 **{p.name}** | 🏆 **{p.score}** kills | ⏳ **{p.duration / 60:.1f} mins**"
@@ -128,7 +126,7 @@ async def kick(interaction: discord.Interaction, player: str):
     await interaction.response.send_message(f"✅ **{player}** has been kicked.\n📝 **RCON Response:** {response}")
 
 @tree.command(name="ban", description="Ban a player from the CS2 server")
-@app_commands.describe(player="The player's name to ban")
+@app_commands.describe(player="The player's SteamID to ban")
 async def ban(interaction: discord.Interaction, player: str):
     """Ban a player using RCON"""
     if not interaction.user.guild_permissions.administrator:
