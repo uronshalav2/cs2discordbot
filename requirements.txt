@@ -3,3 +3,5 @@ python-a2s
 python-dotenv
 pytz
 mcrcon
+requests
+beautifulsoup4
