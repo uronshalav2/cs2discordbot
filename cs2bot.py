@@ -1,14 +1,18 @@
 import os
 import discord
 import requests
-from bs4 import BeautifulSoup  # ✅ Used for scraping demo list
+from bs4 import BeautifulSoup
 from discord.ext import tasks
-import a2s  # Source Server Query Protocol
+import a2s
 from mcrcon import MCRcon
 from datetime import datetime
-import pytz  
+import pytz
+import logging
 
-# ✅ Load environment variables from Railway
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+
+# Load environment variables from Railway
 TOKEN = os.getenv("TOKEN")
 SERVER_IP = os.getenv("SERVER_IP")
 SERVER_PORT = int(os.getenv("SERVER_PORT", 27015))
@@ -16,12 +20,12 @@ RCON_IP = os.getenv("RCON_IP")
 RCON_PORT = int(os.getenv("RCON_PORT", 27015))
 RCON_PASSWORD = os.getenv("RCON_PASSWORD")
 CHANNEL_ID = int(os.getenv("CHANNEL_ID", 0))
-SERVER_DEMOS_CHANNEL_ID = int(os.getenv("SERVER_DEMOS_CHANNEL_ID", 0))  # ✅ Restrict /demos to this channel
-DEMOS_URL = "http://de34.fshost.me/demos/cs2/1842/"  # ✅ Your demo directory URL
+SERVER_DEMOS_CHANNEL_ID = int(os.getenv("SERVER_DEMOS_CHANNEL_ID", 0))
+DEMOS_URL = "http://de34.fshost.me/demos/cs2/1842/"
 
-# ✅ Enable privileged intents
+# Enable privileged intents
 intents = discord.Intents.default()
-intents.messages = True  # ✅ Needed for deleting messages
+intents.messages = True
 bot = discord.Client(intents=intents)
 tree = discord.app_commands.CommandTree(bot)
 
@@ -32,6 +36,7 @@ def send_rcon_command(command):
             response = rcon.command(command)
             return response if len(response) <= 1000 else response[:1000] + "... (truncated)"
     except Exception as e:
+        logging.error(f"Error sending RCON command: {e}")
         return f"⚠️ Error: {e}"
 
 def fetch_demos():
@@ -39,20 +44,21 @@ def fetch_demos():
     try:
         response = requests.get(DEMOS_URL)
         if response.status_code != 200:
+            logging.error(f"Failed to fetch demos, status code: {response.status_code}")
             return ["⚠️ Could not fetch demos. Check the URL."]
 
         soup = BeautifulSoup(response.text, "html.parser")
         links = [a["href"] for a in soup.find_all("a", href=True) if a["href"].endswith(".dem")]
 
         if not links:
+            logging.info("No demos found.")
             return ["⚠️ No demos found."]
 
-        # ✅ Get the latest 5 demos
-        latest_demos = links[-5:]  
-
+        latest_demos = links[-5:]
         return [f"[{demo}](<{DEMOS_URL}{demo}>)" for demo in latest_demos]
 
     except Exception as e:
+        logging.error(f"Error fetching demos: {e}")
         return [f"⚠️ Error fetching demos: {e}"]
 
 async def get_server_status_embed():
@@ -83,7 +89,8 @@ async def get_server_status_embed():
 
         return embed
 
-    except Exception:
+    except Exception as e:
+        logging.error(f"Error fetching server status: {e}")
         embed = discord.Embed(title="⚠️ CS2 Server Status - 🔴 Offline", color=0xff0000)
         embed.add_field(name="❌ Server Unreachable", value="The server is currently offline.", inline=False)
         return embed
@@ -94,21 +101,19 @@ async def auto_say():
     channel = bot.get_channel(CHANNEL_ID)
     
     if channel:
-        # ✅ Delete bot messages before sending a new one
         async for message in channel.history(limit=20):
             if message.author == bot.user:
                 await message.delete()
 
-        # ✅ Send the CS2 chat message
         send_rcon_command("say Server is owned by Reshtan Gaming Center")
-        print("✅ Auto message sent: Server is owned by Reshtan Gaming Center")
+        logging.info("Auto message sent: Server is owned by Reshtan Gaming Center")
         await channel.send("✅ **Server is owned by Reshtan Gaming Center** (Auto Message)")
 
 @bot.event
 async def on_ready():
     await tree.sync()
-    print(f'✅ Bot is online! Logged in as {bot.user}')
-    auto_say.start()  # ✅ Start automatic message loop
+    logging.info(f'Bot is online! Logged in as {bot.user}')
+    auto_say.start()
 
 @tree.command(name="status", description="Get the current CS2 server status")
 async def status(interaction: discord.Interaction):
