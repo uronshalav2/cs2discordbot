@@ -17,7 +17,7 @@ RCON_PORT = int(os.getenv("RCON_PORT", 27015))
 RCON_PASSWORD = os.getenv("RCON_PASSWORD")
 CHANNEL_ID = int(os.getenv("CHANNEL_ID", 0))
 SERVER_DEMOS_CHANNEL_ID = int(os.getenv("SERVER_DEMOS_CHANNEL_ID", 0))  # ✅ Restrict /demos to this channel
-DEMOS_URL = "http://de34.fshost.me/demos/cs2/1842/"  # ✅ Your demo directory URL
+DEMOS_URL = "https://de34.fsho.st/demos/cs2/1842/"  # ✅ Your demo directory URL
 
 # ✅ Enable privileged intents
 intents = discord.Intents.default()
