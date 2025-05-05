@@ -170,4 +170,58 @@ async def demos(interaction: discord.Interaction):
 
     await interaction.followup.send(embed=embed)
 
+@tree.command(name="elo", description="Check Faceit ELO using nickname")
+@discord.app_commands.describe(nickname="The Faceit nickname")
+async def elo(interaction: discord.Interaction, nickname: str):
+    """Fetch Faceit ELO, level, and region based on nickname."""
+    await interaction.response.defer()
+
+    api_key = os.getenv("FACEIT_API_KEY")
+    if not api_key:
+        await interaction.followup.send("❌ FACEIT_API_KEY is missing in environment variables.")
+        return
+
+    headers = {
+        "Authorization": f"Bearer {api_key}"
+    }
+
+    try:
+        # 🔍 Get player info
+        url = f"https://open.faceit.com/data/v4/players?nickname={nickname}"
+        response = requests.get(url, headers=headers)
+        data = response.json()
+
+        if response.status_code != 200:
+            msg = data.get("message", "Unknown error occurred.")
+            raise Exception(msg)
+
+        # ✅ Extract CS2 or CSGO data
+        games = data.get("games", {})
+        cs_game = games.get("cs2") or games.get("csgo")
+
+        if not cs_game:
+            await interaction.followup.send("⚠️ No CS2 or CSGO data found for this player.")
+            return
+
+        elo = cs_game.get("faceit_elo", "N/A")
+        level = cs_game.get("skill_level", "N/A")
+        region = cs_game.get("region", "N/A")
+        profile_url = data.get("faceit_url", f"https://www.faceit.com/en/players/{nickname}")
+
+        embed = discord.Embed(
+            title=f"🎮 Faceit Profile: {nickname}",
+            description=f"[🌐 View on Faceit]({profile_url})",
+            color=0x0099ff
+        )
+        embed.add_field(name="📊 ELO", value=str(elo), inline=True)
+        embed.add_field(name="⭐ Level", value=str(level), inline=True)
+        embed.add_field(name="🌍 Region", value=region, inline=True)
+        embed.set_footer(text="Faceit stats via open.faceit.com API")
+
+        await interaction.followup.send(embed=embed)
+
+    except Exception as e:
+        await interaction.followup.send(f"❌ Error fetching Faceit data: `{e}`")
+
+
 bot.run(TOKEN)
