@@ -107,9 +107,12 @@ async def auto_say():
 
 @bot.event
 async def on_ready():
-    await tree.sync()
-    print(f'✅ Bot is online! Logged in as {bot.user}')
-    auto_say.start()  # ✅ Start automatic message loop
+    GUILD_ID = os.getenv("GUILD_ID") # 🔁 Replace this with your actual server ID
+    guild = discord.Object(id=GUILD_ID)
+    await tree.sync(guild=guild)  # 👈 Syncs slash commands immediately for that server only
+    print(f'✅ Bot is online and commands synced to guild {GUILD_ID} as {bot.user}')
+    auto_say.start()
+
 
 @tree.command(name="status", description="Get the current CS2 server status")
 async def status(interaction: discord.Interaction):
