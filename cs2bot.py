@@ -35,6 +35,13 @@ def send_rcon_command(command):
     except Exception as e:
         return f"⚠️ Error: {e}"
 
+def country_code_to_flag(code):
+    """Convert a 2-letter country code to a Discord-friendly emoji flag."""
+    if not code or len(code) != 2:
+        return "🏳️"
+    return chr(ord(code[0].upper()) + 127397) + chr(ord(code[1].upper()) + 127397)
+
+
 def fetch_demos():
     """Scrapes the CS2 demos from the web directory."""
     try:
@@ -210,7 +217,10 @@ async def elo(interaction: discord.Interaction, nickname: str):
         elo = cs_game.get("faceit_elo", "N/A")
         level = cs_game.get("skill_level", "N/A")
         region = cs_game.get("region", "N/A")
-        profile_url = data.get("faceit_url", f"https://www.faceit.com/en/players/{nickname}")
+        profile_url = f"https://www.faceit.com/en/players/{nickname}"
+        country_code = data.get("country", "N/A")
+        flag = country_code_to_flag(country_code)
+
 
         embed = discord.Embed(
             title=f"🎮 Faceit Profile: {nickname}",
@@ -221,6 +231,8 @@ async def elo(interaction: discord.Interaction, nickname: str):
         embed.add_field(name="⭐ Level", value=str(level), inline=True)
         embed.add_field(name="🌍 Region", value=region, inline=True)
         embed.set_footer(text="Faceit stats via open.faceit.com API")
+        embed.add_field(name="🌐 Country", value=f"{flag} {country_code}", inline=True)
+
 
         await interaction.followup.send(embed=embed)
 
