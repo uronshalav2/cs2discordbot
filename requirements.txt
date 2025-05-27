@@ -3,5 +3,6 @@ python-a2s
 python-dotenv
 pytz
 mcrcon
+valve
 requests
 beautifulsoup4
