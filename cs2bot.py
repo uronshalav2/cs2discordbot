@@ -159,7 +159,7 @@ async def leaderboard(interaction: discord.Interaction):
 @discord.app_commands.describe(message="The message to send")
 async def say(interaction: discord.Interaction, message: str):
     """Sends a message to CS2 chat using `say`."""
-    response = send_rcon_command(f"say {message}")
+    response = send_rcon_command(f"css_cssay {message}")
     await interaction.response.send_message(f"✅ Message sent to CS2 chat.\n📝 **RCON Response:** {response}")
 
 @tree.command(name="demos", description="Get the latest CS2 demos")
