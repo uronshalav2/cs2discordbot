@@ -112,6 +112,21 @@ async def auto_say():
         print("✅ Auto message sent: Server is owned by Reshtan Gaming Center")
         await channel.send("✅ **Server is owned by Reshtan Gaming Center** (Auto Message)")
 
+# 🔁 Automatic advertisement every 2 minutes
+@tasks.loop(minutes=2)
+async def auto_advertise():
+    """Automatically sends an advertisement to CS2 every 2 minutes."""
+    ads = [
+        "📢 Join our Discord: discord.gg/yourserver",
+        "🔥 Enjoying the server? Invite your friends!",
+        "💎 Server powered by Reshtan Gaming Center",
+        "🎮 Check /leaderboard for top players!",
+    ]
+
+    current_ad = ads[auto_advertise.current_loop % len(ads)]
+    response = send_rcon_command(f"css_cssay {current_ad}")
+    print(f"✅ Auto-advertise sent: {current_ad} | RCON: {response}")
+
 @bot.event
 async def on_ready():
     GUILD_ID = os.getenv("GUILD_ID") # 🔁 Replace this with your actual server ID
@@ -119,6 +134,7 @@ async def on_ready():
     await tree.sync(guild=guild)  # 👈 Syncs slash commands immediately for that server only
     print(f'✅ Bot is online and commands synced to guild {GUILD_ID} as {bot.user}')
     auto_say.start()
+    auto_advertise.start()   # ✅ start the 2-minute advertisement loop
 
 
 @tree.command(name="status", description="Get the current CS2 server status")
