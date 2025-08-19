@@ -117,10 +117,10 @@ async def auto_say():
 async def auto_advertise():
     """Automatically sends an advertisement to CS2 every 2 minutes."""
     ads = [
-        "📢 Join our Discord: discord.gg/yourserver",
+        "📢 Join our Discord: discord.gg/reshtangamingcenter",
         "🔥 Enjoying the server? Invite your friends!",
         "💎 Server powered by Reshtan Gaming Center",
-        "🎮 Check /leaderboard for top players!",
+        
     ]
 
     current_ad = ads[auto_advertise.current_loop % len(ads)]
