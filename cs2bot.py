@@ -118,8 +118,8 @@ async def auto_advertise():
     """Automatically sends an advertisement to CS2 every 2 minutes."""
     ads = [
         "📢 Join our Discord: discord.gg/reshtangamingcenter",
-        "🔥 Enjoying the server? Invite your friends!",
-        "💎 Server powered by Reshtan Gaming Center",
+        "<___Enjoying the server? Invite your friends!___>",
+        "<___Server powered by Reshtan Gaming Center___>",
         
     ]
 
