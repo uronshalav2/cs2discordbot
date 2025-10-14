@@ -13,10 +13,10 @@ import pytz
 # ===================== ENV =====================
 TOKEN = os.getenv("TOKEN")
 SERVER_IP = os.getenv("SERVER_IP", "127.0.0.1")
-SERVER_PORT = int(os.getenv("SERVER_PORT", 27015))
+SERVER_PORT = int(os.getenv("SERVER_PORT", "27015"))
 
 RCON_IP = os.getenv("RCON_IP", SERVER_IP)
-RCON_PORT = int(os.getenv("RCON_PORT", 27015))
+RCON_PORT = int(os.getenv("RCON_PORT", "27015"))
 RCON_PASSWORD = os.getenv("RCON_PASSWORD", "")
 
 FACEIT_API_KEY = os.getenv("FACEIT_API_KEY", "")
@@ -24,9 +24,6 @@ FACEIT_API_KEY = os.getenv("FACEIT_API_KEY", "")
 CHANNEL_ID = int(os.getenv("CHANNEL_ID", "0") or "0")
 SERVER_DEMOS_CHANNEL_ID = int(os.getenv("SERVER_DEMOS_CHANNEL_ID", "0") or "0")
 DEMOS_URL = os.getenv("DEMOS_URL", "https://de34.fsho.st/demos/cs2/1842/")
-
-GUILD_ID = int(os.getenv("GUILD_ID", "0") or "0")
-GUILD_OBJ = discord.Object(id=GUILD_ID) if GUILD_ID else None
 
 # ================= DISCORD BOOT =================
 intents = discord.Intents.default()
@@ -143,18 +140,11 @@ async def auto_advertise():
 @bot.event
 async def on_ready():
     try:
-        if GUILD_OBJ:
-            # Copy any global commands to guild and fast-sync
-            tree.copy_global_to(guild=GUILD_OBJ)
-            synced = await tree.sync(guild=GUILD_OBJ)
-            print(f"✅ Synced {len(synced)} commands to guild {GUILD_ID}")
-            cmds = await tree.fetch_commands(guild=GUILD_OBJ)
-        else:
-            synced = await tree.sync()
-            print(f"✅ Synced {len(synced)} GLOBAL commands")
-            cmds = await tree.fetch_commands()
-
+        synced = await tree.sync()  # GLOBAL sync to guarantee visibility
+        print(f"✅ Synced {len(synced)} GLOBAL commands")
+        cmds = await tree.fetch_commands()
         print("🧭 Commands:", ", ".join(f"/{c.name}" for c in cmds))
+        print("🛡️ In guilds:", ", ".join(g.name for g in bot.guilds))
     except Exception as e:
         print("❌ on_ready sync error:", e)
 
@@ -162,13 +152,22 @@ async def on_ready():
     auto_advertise.start()
 
 # =============== PUBLIC COMMANDS ===============
-@tree.command(name="status", description="Get the current CS2 server status", guild=GUILD_OBJ)
+@tree.command(name="sync", description="Force re-sync slash commands (temporary no-check)")
+async def sync_cmd(interaction: discord.Interaction):
+    await interaction.response.defer(ephemeral=True)
+    try:
+        cmds = await tree.sync()  # global
+        await interaction.followup.send(f"✅ Synced {len(cmds)} GLOBAL commands.", ephemeral=True)
+    except Exception as e:
+        await interaction.followup.send(f"❌ Sync error: {e}", ephemeral=True)
+
+@tree.command(name="status", description="Get the current CS2 server status")
 async def status(interaction: discord.Interaction):
     await interaction.response.defer()
     embed = await get_server_status_embed()
     await interaction.followup.send(embed=embed)
 
-@tree.command(name="leaderboard", description="Show the top 5 players in the CS2 server", guild=GUILD_OBJ)
+@tree.command(name="leaderboard", description="Show the top 5 players in the CS2 server")
 async def leaderboard(interaction: discord.Interaction):
     await interaction.response.defer()
     try:
@@ -188,7 +187,7 @@ async def leaderboard(interaction: discord.Interaction):
     except TimeoutError:
         await interaction.followup.send("⚠️ CS2 server is not responding. Try again later.")
 
-@tree.command(name="demos", description="Get the latest CS2 demos", guild=GUILD_OBJ)
+@tree.command(name="demos", description="Get the latest CS2 demos")
 async def demos(interaction: discord.Interaction):
     if SERVER_DEMOS_CHANNEL_ID and interaction.channel_id != SERVER_DEMOS_CHANNEL_ID:
         await interaction.response.send_message(
@@ -201,7 +200,7 @@ async def demos(interaction: discord.Interaction):
     embed.description = "\n".join(demo_list)
     await interaction.followup.send(embed=embed)
 
-@tree.command(name="elo", description="Check Faceit ELO using nickname", guild=GUILD_OBJ)
+@tree.command(name="elo", description="Check Faceit ELO using nickname")
 @app_commands.describe(nickname="The Faceit nickname")
 async def elo(interaction: discord.Interaction, nickname: str):
     await interaction.response.defer()
@@ -246,22 +245,9 @@ async def elo(interaction: discord.Interaction, nickname: str):
 def cooldown(rate: int, per: float):
     return app_commands.checks.cooldown(rate, per)
 
-@tree.command(name="sync", description="Force re-sync slash commands", guild=GUILD_OBJ)
-@is_admin()
-async def sync_cmd(interaction: discord.Interaction):
-    await interaction.response.defer(ephemeral=True)
-    if GUILD_OBJ:
-        tree.copy_global_to(guild=GUILD_OBJ)
-        cmds = await tree.sync(guild=GUILD_OBJ)
-        await interaction.followup.send(f"✅ Synced {len(cmds)} commands to this guild.", ephemeral=True)
-    else:
-        cmds = await tree.sync()
-        await interaction.followup.send(f"✅ Synced {len(cmds)} GLOBAL commands.", ephemeral=True)
-
 @tree.command(
     name="css",
-    description="Run a CounterStrikeSharp command (e.g. css_cssay \"hello\")",
-    guild=GUILD_OBJ
+    description="Run a CounterStrikeSharp command (e.g. css_cssay \"hello\")"
 )
 @app_commands.describe(command="The full command to run, starting with css_")
 @is_admin()
@@ -281,7 +267,7 @@ async def css_error(interaction: discord.Interaction, error):
             f"⏳ Cooldown—try again in {error.retry_after:.1f}s", ephemeral=True
         )
 
-@tree.command(name="csssay", description="Server chat via CSSSharp (css_cssay)", guild=GUILD_OBJ)
+@tree.command(name="csssay", description="Server chat via CSSSharp (css_cssay)")
 @app_commands.describe(message="Message to broadcast")
 @is_admin()
 @cooldown(1, 5.0)
@@ -290,7 +276,7 @@ async def csssay(interaction: discord.Interaction, message: str):
     resp = send_rcon_command(f'css_cssay {message}')
     await interaction.followup.send(f"💬 Sent to chat.\n🧩 {resp}", ephemeral=True)
 
-@tree.command(name="csshsay", description="Center/HUD message via CSSSharp (css_hsay)", guild=GUILD_OBJ)
+@tree.command(name="csshsay", description="Center/HUD message via CSSSharp (css_hsay)")
 @app_commands.describe(message="HUD message to display")
 @is_admin()
 @cooldown(1, 5.0)
@@ -299,7 +285,7 @@ async def csshsay(interaction: discord.Interaction, message: str):
     resp = send_rcon_command(f'css_hsay {message}')
     await interaction.followup.send(f"🖥️ HUD shown.\n🧩 {resp}", ephemeral=True)
 
-@tree.command(name="csskick", description="Kick a player (css_kick)", guild=GUILD_OBJ)
+@tree.command(name="csskick", description="Kick a player (css_kick)")
 @app_commands.describe(player="Exact player name")
 @is_admin()
 @cooldown(1, 5.0)
@@ -308,7 +294,7 @@ async def csskick(interaction: discord.Interaction, player: str):
     resp = send_rcon_command(f'css_kick "{player}"')
     await interaction.followup.send(f"👢 Kicked `{player}`.\n🧩 {resp}", ephemeral=True)
 
-@tree.command(name="cssban", description="Ban a player (css_ban)", guild=GUILD_OBJ)
+@tree.command(name="cssban", description="Ban a player (css_ban)")
 @app_commands.describe(player="Exact player name", minutes="Duration in minutes", reason="Optional reason")
 @is_admin()
 @cooldown(1, 5.0)
@@ -319,7 +305,7 @@ async def cssban(interaction: discord.Interaction, player: str, minutes: int, re
         f"🔨 Banned `{player}` for **{minutes}m**. Reason: {reason}\n🧩 {resp}", ephemeral=True
     )
 
-@tree.command(name="csschangemap", description="Change map (css_changemap) with whitelist", guild=GUILD_OBJ)
+@tree.command(name="csschangemap", description="Change map (css_changemap) with whitelist")
 @app_commands.describe(map="Map name (whitelisted)")
 @is_admin()
 @cooldown(1, 5.0)
@@ -337,7 +323,7 @@ async def map_autocomplete(interaction: discord.Interaction, current: str):
     choices = [m for m in MAP_WHITELIST if q in m.lower()]
     return [app_commands.Choice(name=m, value=m) for m in choices[:25]]
 
-@tree.command(name="cssreload", description="Reload CSSSharp plugins (css_reloadplugins)", guild=GUILD_OBJ)
+@tree.command(name="cssreload", description="Reload CSSSharp plugins (css_reloadplugins)")
 @is_admin()
 @cooldown(1, 10.0)
 async def cssreload(interaction: discord.Interaction):
@@ -345,7 +331,7 @@ async def cssreload(interaction: discord.Interaction):
     resp = send_rcon_command("css_reloadplugins")
     await interaction.followup.send(f"♻️ Reloaded plugins.\n🧩 {resp}", ephemeral=True)
 
-@tree.command(name="broadcast", description="Broadcast (tries css_cssay, fallback to say)", guild=GUILD_OBJ)
+@tree.command(name="broadcast", description="Broadcast (tries css_cssay, fallback to say)")
 @app_commands.describe(message="Message to broadcast")
 @is_admin()
 async def broadcast(interaction: discord.Interaction, message: str):
