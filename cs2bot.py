@@ -1,4 +1,5 @@
 import os
+import re
 import asyncio
 import discord
 import requests
@@ -25,7 +26,6 @@ GUILD_ID = int(os.getenv("GUILD_ID", "0") or "0")
 
 # ====== OWNER ID ======
 OWNER_ID = int(os.getenv("OWNER_ID", 0))
-
 
 # ====== DISCORD CLIENT ======
 intents = discord.Intents.default()
@@ -75,12 +75,59 @@ def fetch_demos():
     except Exception as e:
         return [f"⚠️ Error fetching demos: {e}"]
 
+# ---------- Blank-name fix: RCON parsing ----------
+# Example `status` line:
+# #  2 "PlayerName" [U:1:123456] 123 STEAM_... 10:32  45 123.45.67.89:27005
+NAME_RE = re.compile(r'^#\s+\d+\s+"(?P<name>.*?)"\s+(?:\[U:\d:\d+\]|\d{17}|BOT)\b')
+
+def sanitize_name(s: str) -> str:
+    """Strip control chars and escape markdown so names render cleanly in Discord."""
+    if not s:
+        return "—"
+    s = s.replace('\x00', '').replace('\u200b', '')
+    for ch in ['*', '_', '`', '~', '|', '>']:
+        s = s.replace(ch, f'\\{ch}')
+    return s.strip()
+
+def rcon_list_players():
+    """
+    Try CounterStrikeSharp list first; fall back to vanilla `status`.
+    Return: [{'name': 'Player', 'time': '03:12', 'ping': '54'} ...]
+    """
+    txt = send_rcon_command('css_listplayers')
+    if not txt or 'Unknown command' in txt:
+        txt = send_rcon_command('status')
+
+    players = []
+    for line in txt.splitlines():
+        line = line.strip()
+        m = NAME_RE.match(line)
+        if not m:
+            continue
+        name = sanitize_name(m.group('name'))
+
+        # Best-effort grab of time (mm:ss) and a ping integer from the line
+        parts = line.replace(name, 'NAME').split()
+        t = next((p for p in parts if re.fullmatch(r'\d{2}:\d{2}', p)), "—")
+        ping = next((p for p in parts if p.isdigit()), "—")
+
+        players.append({'name': name, 'time': t, 'ping': ping})
+    return players
+# ---------------------------------------------------
+
 async def get_server_status_embed() -> discord.Embed:
-    """Query A2S and build a status embed."""
+    """Query A2S; if player names are blank, use RCON parsing as fallback."""
     addr = (SERVER_IP, SERVER_PORT)
     try:
-        info = await asyncio.get_running_loop().run_in_executor(None, a2s.info, addr)
-        players = await asyncio.get_running_loop().run_in_executor(None, a2s.players, addr)
+        loop = asyncio.get_running_loop()
+        info = await loop.run_in_executor(None, a2s.info, addr)
+        a2s_players = await loop.run_in_executor(None, a2s.players, addr)
+
+        # Detect all-empty names from A2S
+        names_blank = (not a2s_players) or all(not getattr(p, 'name', '') for p in a2s_players)
+
+        # Fetch RCON names only when needed
+        rcon_players = rcon_list_players() if names_blank else None
 
         berlin_tz = pytz.timezone("Europe/Berlin")
         last_updated = datetime.now(berlin_tz).strftime("%Y-%m-%d %H:%M:%S %Z")
@@ -90,10 +137,15 @@ async def get_server_status_embed() -> discord.Embed:
         embed.add_field(name="🗺️ Map", value=info.map_name, inline=True)
         embed.add_field(name="👥 Players", value=f"{info.player_count}/{info.max_players}", inline=True)
 
-        if players:
+        if rcon_players:
             stats = "\n".join(
-                f"🎮 **{p.name}** | 🏆 **{p.score}** | ⏳ **{p.duration/60:.1f} mins**"
-                for p in sorted(players, key=lambda x: x.score, reverse=True)
+                f"🎮 **{p['name']}** | ⏳ {p['time']} | 📶 {p['ping']} ms"
+                for p in rcon_players
+            )
+        elif a2s_players:
+            stats = "\n".join(
+                f"🎮 **{sanitize_name(getattr(p, 'name', '') or '—')}** | 🏆 {getattr(p, 'score', 0)} | ⏳ {getattr(p, 'duration', 0)/60:.1f} mins"
+                for p in sorted(a2s_players, key=lambda x: getattr(x, 'score', 0), reverse=True)
             )
         else:
             stats = "No players online."
