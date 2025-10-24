@@ -50,18 +50,16 @@ def send_rcon_command(command: str) -> str:
     try:
         with MCRcon(RCON_IP, RCON_PASSWORD, port=RCON_PORT) as rcon:
             resp = rcon.command(command)
-            return resp if len(resp) <= 1000 else resp[:1000] + "... (truncated)"
+            return resp if len(resp) <= 2000 else resp[:2000] + "... (truncated)"
     except Exception as e:
         return f"⚠️ Error: {e}"
 
 def country_code_to_flag(code: str) -> str:
-    """Convert a 2-letter country code to emoji flag."""
     if not code or len(code) != 2:
         return "🏳️"
     return chr(ord(code[0].upper()) + 127397) + chr(ord(code[1].upper()) + 127397)
 
 def fetch_demos():
-    """Scrape .dem files from a simple index page."""
     try:
         r = requests.get(DEMOS_URL, timeout=10)
         if r.status_code != 200:
@@ -76,57 +74,77 @@ def fetch_demos():
         return [f"⚠️ Error fetching demos: {e}"]
 
 # ---------- Blank-name fix: RCON parsing ----------
-# Example `status` line:
-# #  2 "PlayerName" [U:1:123456] 123 STEAM_... 10:32  45 123.45.67.89:27005
-NAME_RE = re.compile(r'^#\s+\d+\s+"(?P<name>.*?)"\s+(?:\[U:\d:\d+\]|\d{17}|BOT)\b')
+# Accepts both CSSharp list and vanilla `status` lines.
+STATUS_NAME_RE = re.compile(r'^#\s*\d+\s+"(?P<name>.*?)"\s+')
+CSS_LIST_RE    = re.compile(r'^\s*\d+\.\s+(?P<name>.+?)\s+\(.*\)$')
 
 def sanitize_name(s: str) -> str:
-    """Strip control chars and escape markdown so names render cleanly in Discord."""
     if not s:
         return "—"
     s = s.replace('\x00', '').replace('\u200b', '')
-    for ch in ['*', '_', '`', '~', '|', '>']:
+    for ch in ['*', '_', '`', '~', '|', '>', '@']:
         s = s.replace(ch, f'\\{ch}')
     return s.strip()
 
 def rcon_list_players():
     """
-    Try CounterStrikeSharp list first; fall back to vanilla `status`.
-    Return: [{'name': 'Player', 'time': '03:12', 'ping': '54'} ...]
+    Try CounterStrikeSharp 'css_listplayers' first; fall back to 'status'.
+    Return: list of dicts: [{'name': 'Player', 'time': 'mm:ss'|'—', 'ping': 'xx'|'—'}]
     """
     txt = send_rcon_command('css_listplayers')
-    if not txt or 'Unknown command' in txt:
+    used_css = txt and 'Unknown command' not in txt and 'Error' not in txt
+
+    if not used_css:
         txt = send_rcon_command('status')
 
     players = []
-    for line in txt.splitlines():
-        line = line.strip()
-        m = NAME_RE.match(line)
-        if not m:
+
+    for raw in txt.splitlines():
+        line = raw.strip()
+
+        # CSSharp format: "1. Name (SteamID64) ..."
+        m_css = CSS_LIST_RE.match(line)
+        if m_css:
+            name = sanitize_name(m_css.group('name'))
+            players.append({'name': name, 'time': '—', 'ping': '—'})
             continue
-        name = sanitize_name(m.group('name'))
 
-        # Best-effort grab of time (mm:ss) and a ping integer from the line
-        parts = line.replace(name, 'NAME').split()
-        t = next((p for p in parts if re.fullmatch(r'\d{2}:\d{2}', p)), "—")
-        ping = next((p for p in parts if p.isdigit()), "—")
+        # Vanilla status format: '# 2 "Name" ...'
+        m_std = STATUS_NAME_RE.match(line)
+        if m_std:
+            name = sanitize_name(m_std.group('name'))
 
-        players.append({'name': name, 'time': t, 'ping': ping})
-    return players
+            # Try to guess time (mm:ss) and a ping number from the line
+            time_match = re.search(r'\b(\d{1,2}:\d{2})\b', line)
+            ping_match = re.search(r'\b(\d{1,3})\b(?!:)', line)  # crude, but avoids time
+            players.append({
+                'name': name,
+                'time': time_match.group(1) if time_match else '—',
+                'ping': ping_match.group(1) if ping_match else '—'
+            })
+
+    # De-dup + keep order
+    seen = set()
+    uniq = []
+    for p in players:
+        if p['name'] not in seen:
+            uniq.append(p)
+            seen.add(p['name'])
+    return uniq
 # ---------------------------------------------------
 
 async def get_server_status_embed() -> discord.Embed:
-    """Query A2S; if player names are blank, use RCON parsing as fallback."""
+    """Query A2S; if player names are blank/hidden, use RCON parsing as fallback."""
     addr = (SERVER_IP, SERVER_PORT)
     try:
         loop = asyncio.get_running_loop()
         info = await loop.run_in_executor(None, a2s.info, addr)
         a2s_players = await loop.run_in_executor(None, a2s.players, addr)
 
-        # Detect all-empty names from A2S
+        # Are A2S names all blank or missing?
         names_blank = (not a2s_players) or all(not getattr(p, 'name', '') for p in a2s_players)
 
-        # Fetch RCON names only when needed
+        # Pull names via RCON when A2S is useless
         rcon_players = rcon_list_players() if names_blank else None
 
         berlin_tz = pytz.timezone("Europe/Berlin")
@@ -141,12 +159,12 @@ async def get_server_status_embed() -> discord.Embed:
             stats = "\n".join(
                 f"🎮 **{p['name']}** | ⏳ {p['time']} | 📶 {p['ping']} ms"
                 for p in rcon_players
-            )
+            ) or "No players online."
         elif a2s_players:
             stats = "\n".join(
                 f"🎮 **{sanitize_name(getattr(p, 'name', '') or '—')}** | 🏆 {getattr(p, 'score', 0)} | ⏳ {getattr(p, 'duration', 0)/60:.1f} mins"
                 for p in sorted(a2s_players, key=lambda x: getattr(x, 'score', 0), reverse=True)
-            )
+            ) or "No players online."
         else:
             stats = "No players online."
 
@@ -160,6 +178,30 @@ async def get_server_status_embed() -> discord.Embed:
         return embed
 
 # ====== TASKS ======
+@tasks.loop(minutes=15)
+async def auto_say():
+    channel = bot.get_channel(CHANNEL_ID)
+    if not channel:
+        return
+    async for m in channel.history(limit=20):
+        if m.author == bot.user:
+            try:
+                await m.delete()
+            except:
+                pass
+    send_rcon_command('say Server is owned by Reshtan Gaming Center')
+    await channel.send("✅ **Server is owned by Reshtan Gaming Center** (Auto Message)")
+
+@tasks.loop(minutes=2)
+async def auto_advertise():
+    ads = [
+        "<___Join our Discord: discord.gg/reshtangamingcenter___>",
+        "<___Invite your friends!___>",
+        "<___Server powered by Reshtan Gaming Center___>",
+    ]
+    msg = ads[auto_advertise.current_loop % len(ads)]
+    resp = send_rcon_command(f"css_cssay {msg}")
+    print(f"✅ Auto-advertise: {msg} | RCON: {resp}")
 
 # ====== READY ======
 @bot.event
