@@ -1,259 +1,329 @@
 import os
+import re
+import asyncio
 import discord
 import requests
-from bs4 import BeautifulSoup  # ✅ Used for scraping demo list
+from bs4 import BeautifulSoup
 from discord.ext import tasks
-import a2s  # Source Server Query Protocol
+from discord import app_commands
+import a2s
 from mcrcon import MCRcon
 from datetime import datetime
-import pytz  
+import pytz
 
-# ✅ Load environment variables from Railway
+# ====== BOT CONFIG ======
 TOKEN = os.getenv("TOKEN")
-SERVER_IP = os.getenv("SERVER_IP")
+SERVER_IP = os.getenv("SERVER_IP", "127.0.0.1")
 SERVER_PORT = int(os.getenv("SERVER_PORT", 27015))
-RCON_IP = os.getenv("RCON_IP")
+RCON_IP = os.getenv("RCON_IP", SERVER_IP)
 RCON_PORT = int(os.getenv("RCON_PORT", 27015))
-RCON_PASSWORD = os.getenv("RCON_PASSWORD")
-FACEIT_API_KEY=os.getenv("FACEIT_API_KEY")
+RCON_PASSWORD = os.getenv("RCON_PASSWORD", "")
+FACEIT_API_KEY = os.getenv("FACEIT_API_KEY", "")
 CHANNEL_ID = int(os.getenv("CHANNEL_ID", 0))
-SERVER_DEMOS_CHANNEL_ID = int(os.getenv("SERVER_DEMOS_CHANNEL_ID", 0))  # ✅ Restrict /demos to this channel
-DEMOS_URL = "https://de34.fsho.st/demos/cs2/1842/"  # ✅ Your demo directory URL
+SERVER_DEMOS_CHANNEL_ID = int(os.getenv("SERVER_DEMOS_CHANNEL_ID", 0))
+DEMOS_URL = os.getenv("DEMOS_URL", "https://de34.fsho.st/demos/cs2/1842/")
+GUILD_ID = int(os.getenv("GUILD_ID", "0") or "0")
 
-# ✅ Enable privileged intents
+# ====== OWNER ID ======
+OWNER_ID = int(os.getenv("OWNER_ID", 0))
+
+# ====== DISCORD CLIENT ======
 intents = discord.Intents.default()
-intents.messages = True  # ✅ Needed for deleting messages
+intents.messages = True
 bot = discord.Client(intents=intents)
-tree = discord.app_commands.CommandTree(bot)
+tree = app_commands.CommandTree(bot)
 
-def send_rcon_command(command):
-    """Send an RCON command to the CS2 server and return the response."""
+# ====== MAP WHITELIST ======
+MAP_WHITELIST = [
+    "de_inferno", "de_mirage", "de_dust2", "de_overpass",
+    "de_nuke", "de_ancient", "de_vertigo", "de_anubis"
+]
+
+# ====== HELPERS ======
+def owner_only():
+    async def predicate(interaction: discord.Interaction):
+        return interaction.user.id == OWNER_ID
+    return app_commands.check(predicate)
+
+def send_rcon_command(command: str) -> str:
+    """Send an RCON command to the CS2 server and return response."""
     try:
         with MCRcon(RCON_IP, RCON_PASSWORD, port=RCON_PORT) as rcon:
-            response = rcon.command(command)
-            return response if len(response) <= 1000 else response[:1000] + "... (truncated)"
+            resp = rcon.command(command)
+            return resp if len(resp) <= 2000 else resp[:2000] + "... (truncated)"
     except Exception as e:
         return f"⚠️ Error: {e}"
 
-def country_code_to_flag(code):
-    """Convert a 2-letter country code to a Discord-friendly emoji flag."""
+def country_code_to_flag(code: str) -> str:
     if not code or len(code) != 2:
         return "🏳️"
     return chr(ord(code[0].upper()) + 127397) + chr(ord(code[1].upper()) + 127397)
 
-
 def fetch_demos():
-    """Scrapes the CS2 demos from the web directory."""
     try:
-        response = requests.get(DEMOS_URL)
-        if response.status_code != 200:
-            return ["⚠️ Could not fetch demos. Check the URL."]
-
-        soup = BeautifulSoup(response.text, "html.parser")
+        r = requests.get(DEMOS_URL, timeout=10)
+        if r.status_code != 200:
+            return ["⚠️ Could not fetch demos."]
+        soup = BeautifulSoup(r.text, "html.parser")
         links = [a["href"] for a in soup.find_all("a", href=True) if a["href"].endswith(".dem")]
-
         if not links:
             return ["⚠️ No demos found."]
-
-        # ✅ Get the latest 5 demos
-        latest_demos = links[-5:]  
-
-        return [f"[{demo}](<{DEMOS_URL}{demo}>)" for demo in latest_demos]
-
+        latest = links[-5:]
+        return [f"[{d}](<{DEMOS_URL}{d}>)" for d in latest]
     except Exception as e:
         return [f"⚠️ Error fetching demos: {e}"]
 
-async def get_server_status_embed():
-    """Fetch CS2 server status and return an embed."""
-    server_address = (SERVER_IP, SERVER_PORT)
+# ---------- Blank-name fix: RCON parsing ----------
+# Accepts both CSSharp list and vanilla `status` lines.
+STATUS_NAME_RE = re.compile(r'^#\s*\d+\s+"(?P<name>.*?)"\s+')
+CSS_LIST_RE    = re.compile(r'^\s*\d+\.\s+(?P<name>.+?)\s+\(.*\)$')
 
+def sanitize_name(s: str) -> str:
+    if not s:
+        return "—"
+    s = s.replace('\x00', '').replace('\u200b', '')
+    for ch in ['*', '_', '`', '~', '|', '>', '@']:
+        s = s.replace(ch, f'\\{ch}')
+    return s.strip()
+
+def rcon_list_players():
+    """
+    Try CounterStrikeSharp 'css_players' first; fall back to 'status'.
+    Return: list of dicts: [{'name': 'Player', 'time': 'mm:ss'|'—', 'ping': 'xx'|'—'}]
+    """
+    txt = send_rcon_command('css_players')
+    used_css = txt and 'Unknown command' not in txt and 'Error' not in txt
+
+    if not used_css:
+        txt = send_rcon_command('status')
+
+    players = []
+
+    for raw in txt.splitlines():
+        line = raw.strip()
+
+        # CSSharp format: "1. Name (SteamID64) ..."
+        m_css = CSS_LIST_RE.match(line)
+        if m_css:
+            name = sanitize_name(m_css.group('name'))
+            players.append({'name': name, 'time': '—', 'ping': '—'})
+            continue
+
+        # Vanilla status format: '# 2 "Name" ...'
+        m_std = STATUS_NAME_RE.match(line)
+        if m_std:
+            name = sanitize_name(m_std.group('name'))
+
+            # Try to guess time (mm:ss) and a ping number from the line
+            time_match = re.search(r'\b(\d{1,2}:\d{2})\b', line)
+            ping_match = re.search(r'\b(\d{1,3})\b(?!:)', line)  # crude, but avoids time
+            players.append({
+                'name': name,
+                'time': time_match.group(1) if time_match else '—',
+                'ping': ping_match.group(1) if ping_match else '—'
+            })
+
+    # De-dup + keep order
+    seen = set()
+    uniq = []
+    for p in players:
+        if p['name'] not in seen:
+            uniq.append(p)
+            seen.add(p['name'])
+    return uniq
+# ---------------------------------------------------
+
+async def get_server_status_embed() -> discord.Embed:
+    """Query A2S; if player names are blank/hidden, use RCON parsing as fallback."""
+    addr = (SERVER_IP, SERVER_PORT)
     try:
-        info = a2s.info(server_address)
-        players = a2s.players(server_address)
+        loop = asyncio.get_running_loop()
+        info = await loop.run_in_executor(None, a2s.info, addr)
+        a2s_players = await loop.run_in_executor(None, a2s.players, addr)
+
+        # Are A2S names all blank or missing?
+        names_blank = (not a2s_players) or all(not getattr(p, 'name', '') for p in a2s_players)
+
+        # Pull names via RCON when A2S is useless
+        rcon_players = rcon_list_players() if names_blank else None
 
         berlin_tz = pytz.timezone("Europe/Berlin")
         last_updated = datetime.now(berlin_tz).strftime("%Y-%m-%d %H:%M:%S %Z")
 
-        embed = discord.Embed(title="🎮 CS2 Server Status - 🟢 Online", color=0x00ff00)
+        embed = discord.Embed(title="🎮 CS2 Server Status - 🟢 Online", color=0x00FF00)
         embed.add_field(name="🖥️ Server Name", value=info.server_name, inline=False)
         embed.add_field(name="🗺️ Map", value=info.map_name, inline=True)
         embed.add_field(name="👥 Players", value=f"{info.player_count}/{info.max_players}", inline=True)
 
-        player_stats = "No players online."
-        if players:
-            player_stats = "\n".join(
-                [f"🎮 **{p.name}** | 🏆 **{p.score}** kills | ⏳ **{p.duration / 60:.1f} mins**"
-                 for p in sorted(players, key=lambda x: x.score, reverse=True)]
-            )
+        if rcon_players:
+            stats = "\n".join(
+                f"🎮 **{p['name']}** | ⏳ {p['time']} | 📶 {p['ping']} ms"
+                for p in rcon_players
+            ) or "No players online."
+        elif a2s_players:
+            stats = "\n".join(
+                f"🎮 **{sanitize_name(getattr(p, 'name', '') or '—')}** | 🏆 {getattr(p, 'score', 0)} | ⏳ {getattr(p, 'duration', 0)/60:.1f} mins"
+                for p in sorted(a2s_players, key=lambda x: getattr(x, 'score', 0), reverse=True)
+            ) or "No players online."
+        else:
+            stats = "No players online."
 
-        embed.add_field(name="📊 Live Player Stats", value=player_stats, inline=False)
+        embed.add_field(name="📊 Player Stats", value=stats, inline=False)
         embed.set_footer(text=f"Last updated: {last_updated}")
-
         return embed
 
     except Exception:
-        embed = discord.Embed(title="⚠️ CS2 Server Status - 🔴 Offline", color=0xff0000)
+        embed = discord.Embed(title="⚠️ CS2 Server Status - 🔴 Offline", color=0xFF0000)
         embed.add_field(name="❌ Server Unreachable", value="The server is currently offline.", inline=False)
         return embed
 
+# ====== TASKS ======
 @tasks.loop(minutes=15)
 async def auto_say():
-    """Automatically sends a chat message to CS2 every 15 minutes and clears old messages."""
     channel = bot.get_channel(CHANNEL_ID)
-    
-    if channel:
-        # ✅ Delete bot messages before sending a new one
-        async for message in channel.history(limit=20):
-            if message.author == bot.user:
-                await message.delete()
+    if not channel:
+        return
+    async for m in channel.history(limit=20):
+        if m.author == bot.user:
+            try:
+                await m.delete()
+            except:
+                pass
+    send_rcon_command('say Server is owned by Reshtan Gaming Center')
+    await channel.send("✅ **Server is owned by Reshtan Gaming Center** (Auto Message)")
 
-        # ✅ Send the CS2 chat message
-        send_rcon_command("say Server is owned by Reshtan Gaming Center")
-        print("✅ Auto message sent: Server is owned by Reshtan Gaming Center")
-        await channel.send("✅ **Server is owned by Reshtan Gaming Center** (Auto Message)")
-
-# 🔁 Automatic advertisement every 2 minutes
 @tasks.loop(minutes=2)
 async def auto_advertise():
-    """Automatically sends an advertisement to CS2 every 2 minutes."""
     ads = [
         "<___Join our Discord: discord.gg/reshtangamingcenter___>",
-        "<___Enjoying the server? Invite your friends!___>",
+        "<___Invite your friends!___>",
         "<___Server powered by Reshtan Gaming Center___>",
-        
     ]
+    msg = ads[auto_advertise.current_loop % len(ads)]
+    resp = send_rcon_command(f"css_cssay {msg}")
+    print(f"✅ Auto-advertise: {msg} | RCON: {resp}")
 
-    current_ad = ads[auto_advertise.current_loop % len(ads)]
-    response = send_rcon_command(f"css_cssay {current_ad}")
-    print(f"✅ Auto-advertise sent: {current_ad} | RCON: {response}")
-
+# ====== READY ======
 @bot.event
 async def on_ready():
-    GUILD_ID = os.getenv("GUILD_ID") # 🔁 Replace this with your actual server ID
-    guild = discord.Object(id=GUILD_ID)
-    await tree.sync(guild=guild)  # 👈 Syncs slash commands immediately for that server only
-    print(f'✅ Bot is online and commands synced to guild {GUILD_ID} as {bot.user}')
+    if GUILD_ID:
+        guild = discord.Object(id=GUILD_ID)
+        await tree.sync(guild=guild)
+        print(f"✅ Commands synced to guild {GUILD_ID} as {bot.user}")
+    else:
+        await tree.sync()
+        print(f"✅ Global commands synced as {bot.user}")
     auto_say.start()
-    auto_advertise.start()   # ✅ start the 2-minute advertisement loop
+    auto_advertise.start()
 
+# ====== COMMANDS ======
+@tree.command(name="whoami", description="Show your Discord user ID")
+async def whoami(interaction: discord.Interaction):
+    await interaction.response.send_message(f"👤 Your ID: `{interaction.user.id}`", ephemeral=True)
 
 @tree.command(name="status", description="Get the current CS2 server status")
 async def status(interaction: discord.Interaction):
-    """Slash command to get live CS2 server status"""
     await interaction.response.defer()
     embed = await get_server_status_embed()
     await interaction.followup.send(embed=embed)
 
-@tree.command(name="leaderboard", description="Show the top 5 players in the CS2 server")
-async def leaderboard(interaction: discord.Interaction):
-    """Show the top 5 players based on kills"""
-    await interaction.response.defer()
-    
-    try:
-        players = a2s.players((SERVER_IP, SERVER_PORT), timeout=5)
-
-        if not players:
-            await interaction.followup.send("⚠️ No players online right now.")
-            return
-
-        top_players = sorted(players, key=lambda x: x.score, reverse=True)[:5]
-        leaderboard_text = "\n".join(
-            [f"🥇 **{p.name}** | 🏆 **{p.score}** kills | ⏳ **{p.duration / 60:.1f} mins**"
-             for p in top_players]
-        )
-
-        embed = discord.Embed(title="🏆 CS2 Leaderboard (Top 5)", color=0xFFD700)
-        embed.add_field(name="🔹 Players", value=leaderboard_text, inline=False)
-        embed.set_footer(text="Data updates every 6 hours.")
-
-        await interaction.followup.send(embed=embed)
-
-    except TimeoutError:
-        await interaction.followup.send("⚠️ CS2 server is not responding. Try again later.")
-
-@tree.command(name="say", description="Send a message to CS2 chat")
-@discord.app_commands.describe(message="The message to send")
-async def say(interaction: discord.Interaction, message: str):
-    """Sends a message to CS2 chat using `say`."""
-    response = send_rcon_command(f"css_cssay {message}")
-    await interaction.response.send_message(f"✅ Message sent to CS2 chat.\n📝 **RCON Response:** {response}")
-
-@tree.command(name="demos", description="Get the latest CS2 demos")
-async def demos(interaction: discord.Interaction):
-    """Fetches and displays the latest 5 CS2 demos from the web directory."""
-    
-    if interaction.channel_id != SERVER_DEMOS_CHANNEL_ID:
-        await interaction.response.send_message(
-            f"❌ This command can only be used in <#{SERVER_DEMOS_CHANNEL_ID}>.", ephemeral=True
-        )
-        return
-
-    await interaction.response.defer()
-    demo_list = fetch_demos()
-    demo_text = "\n".join(demo_list)
-
-    embed = discord.Embed(title="🎥 Latest CS2 Demos", color=0x00ff00)
-    embed.description = demo_text
-
-    await interaction.followup.send(embed=embed)
-
-@tree.command(name="elo", description="Check Faceit ELO using nickname")
+@tree.command(name="elo", description="Check Faceit ELO")
 @discord.app_commands.describe(nickname="The Faceit nickname")
 async def elo(interaction: discord.Interaction, nickname: str):
-    """Fetch Faceit ELO, level, and region based on nickname."""
     await interaction.response.defer()
-
-    api_key = os.getenv("FACEIT_API_KEY")
-    if not api_key:
-        await interaction.followup.send("❌ FACEIT_API_KEY is missing in environment variables.")
+    if not FACEIT_API_KEY:
+        await interaction.followup.send("❌ FACEIT_API_KEY not set.")
         return
-
-    headers = {
-        "Authorization": f"Bearer {api_key}"
-    }
-
     try:
-        # 🔍 Get player info
         url = f"https://open.faceit.com/data/v4/players?nickname={nickname}"
-        response = requests.get(url, headers=headers)
-        data = response.json()
-
-        if response.status_code != 200:
-            msg = data.get("message", "Unknown error occurred.")
-            raise Exception(msg)
-
-        # ✅ Extract CS2 or CSGO data
+        r = requests.get(url, headers={"Authorization": f"Bearer {FACEIT_API_KEY}"}, timeout=10)
+        data = r.json()
+        if r.status_code != 200:
+            raise Exception(data.get("message", "Unknown error"))
         games = data.get("games", {})
         cs_game = games.get("cs2") or games.get("csgo")
-
         if not cs_game:
-            await interaction.followup.send("⚠️ No CS2 or CSGO data found for this player.")
+            await interaction.followup.send("⚠️ No CS2/CSGO data found.")
             return
-
-        elo = cs_game.get("faceit_elo", "N/A")
+        elo_val = cs_game.get("faceit_elo", "N/A")
         level = cs_game.get("skill_level", "N/A")
         region = cs_game.get("region", "N/A")
-        profile_url = f"https://www.faceit.com/en/players/{nickname}"
         country_code = data.get("country", "N/A")
         flag = country_code_to_flag(country_code)
-
-
+        profile_url = f"https://www.faceit.com/en/players/{nickname}"
         embed = discord.Embed(
             title=f"🎮 Faceit Profile: {nickname}",
             description=f"[🌐 View on Faceit]({profile_url})",
-            color=0x0099ff
+            color=0x0099FF
         )
-        embed.add_field(name="📊 ELO", value=str(elo), inline=True)
-        embed.add_field(name="⭐ Level", value=str(level), inline=True)
-        embed.add_field(name="🌍 Region", value=region, inline=True)
-        embed.set_footer(text="Faceit stats via open.faceit.com API")
-        embed.add_field(name="🌐 Country", value=f"{flag} {country_code}", inline=True)
-
-
+        embed.add_field(name="📊 ELO", value=str(elo_val))
+        embed.add_field(name="⭐ Level", value=str(level))
+        embed.add_field(name="🌍 Region", value=region)
+        embed.add_field(name="🌐 Country", value=f"{flag} {country_code}")
         await interaction.followup.send(embed=embed)
-
     except Exception as e:
-        await interaction.followup.send(f"❌ Error fetching Faceit data: `{e}`")
+        await interaction.followup.send(f"❌ Error: `{e}`")
 
+@tree.command(name="demos", description="Get latest CS2 demos")
+async def demos(interaction: discord.Interaction):
+    if SERVER_DEMOS_CHANNEL_ID and interaction.channel_id != SERVER_DEMOS_CHANNEL_ID:
+        await interaction.response.send_message(
+            f"❌ Only usable in <#{SERVER_DEMOS_CHANNEL_ID}>.", ephemeral=True
+        )
+        return
+    await interaction.response.defer()
+    demo_list = fetch_demos()
+    embed = discord.Embed(title="🎥 Latest CS2 Demos", color=0x00FF00)
+    embed.description = "\n".join(demo_list)
+    await interaction.followup.send(embed=embed)
 
+# ====== OWNER-ONLY CSS COMMANDS ======
+@tree.command(name="csssay", description="Send a chat message via CSSSharp")
+@owner_only()
+async def csssay(interaction: discord.Interaction, message: str):
+    resp = send_rcon_command(f'css_cssay {message}')
+    await interaction.response.send_message(f"💬 Sent: {resp}", ephemeral=True)
+
+@tree.command(name="csshsay", description="Display a HUD message via CSSSharp")
+@owner_only()
+async def csshsay(interaction: discord.Interaction, message: str):
+    resp = send_rcon_command(f'css_hsay {message}')
+    await interaction.response.send_message(f"🖥️ HUD: {resp}", ephemeral=True)
+
+@tree.command(name="csskick", description="Kick a player via CSSSharp")
+@owner_only()
+async def csskick(interaction: discord.Interaction, player: str):
+    resp = send_rcon_command(f'css_kick "{player}"')
+    await interaction.response.send_message(f"👢 Kicked `{player}`.\n{resp}", ephemeral=True)
+
+@tree.command(name="cssban", description="Ban a player via CSSSharp")
+@owner_only()
+async def cssban(interaction: discord.Interaction, player: str, minutes: int, reason: str = "No reason"):
+    resp = send_rcon_command(f'css_ban "{player}" {minutes} "{reason}"')
+    await interaction.response.send_message(f"🔨 Banned `{player}` for {minutes}m.\n{resp}", ephemeral=True)
+
+@tree.command(name="csschangemap", description="Change map (whitelisted)")
+@owner_only()
+async def csschangemap(interaction: discord.Interaction, map: str):
+    if map not in MAP_WHITELIST:
+        await interaction.response.send_message("❌ Map not allowed.", ephemeral=True)
+        return
+    resp = send_rcon_command(f'css_changemap {map}')
+    await interaction.response.send_message(f"🗺️ Changing to **{map}**\n{resp}", ephemeral=True)
+
+@csschangemap.autocomplete('map')
+async def map_autocomplete(interaction: discord.Interaction, current: str):
+    current_lower = (current or "").lower()
+    choices = [m for m in MAP_WHITELIST if current_lower in m.lower()]
+    return [app_commands.Choice(name=m, value=m) for m in choices[:25]]
+
+@tree.command(name="cssreload", description="Reload CounterStrikeSharp plugins")
+@owner_only()
+async def cssreload(interaction: discord.Interaction):
+    resp = send_rcon_command('css_reloadplugins')
+    await interaction.response.send_message(f"♻️ Reloaded plugins.\n{resp}", ephemeral=True)
+
+# ====== RUN ======
+if not TOKEN:
+    raise SystemExit("❌ TOKEN not set in environment.")
 bot.run(TOKEN)
