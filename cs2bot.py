@@ -18,7 +18,7 @@ SERVER_PORT = int(os.getenv("SERVER_PORT", 27015))
 RCON_IP = os.getenv("RCON_IP", SERVER_IP)
 RCON_PORT = int(os.getenv("RCON_PORT", 27015))
 RCON_PASSWORD = os.getenv("RCON_PASSWORD", "")
-FACEIT_API_KEY = os.getenv("FACEIT_API_KEY", "")
+# FACEIT_API_KEY removed as the ELO command is removed
 CHANNEL_ID = int(os.getenv("CHANNEL_ID", 0))
 SERVER_DEMOS_CHANNEL_ID = int(os.getenv("SERVER_DEMOS_CHANNEL_ID", 0))
 DEMOS_URL = os.getenv("DEMOS_URL", "https://de34.fsho.st/demos/cs2/1842/")
@@ -55,6 +55,7 @@ def send_rcon_command(command: str) -> str:
         return f"⚠️ Error: {e}"
 
 def country_code_to_flag(code: str) -> str:
+    # Function kept for completeness, though not strictly needed without ELO command
     if not code or len(code) != 2:
         return "🏳️"
     return chr(ord(code[0].upper()) + 127397) + chr(ord(code[1].upper()) + 127397)
@@ -89,13 +90,19 @@ def sanitize_name(s: str) -> str:
 def rcon_list_players():
     """
     Try CounterStrikeSharp 'css_players' first; fall back to 'status'.
-    Return: list of dicts: [{'name': 'Player', 'time': 'mm:ss'|'—', 'ping': 'xx'|'—'}]
+    Returns: list of dicts: [{'name': 'Player', 'time': 'mm:ss'|'—', 'ping': 'xx'|'—'}]
     """
     txt = send_rcon_command('css_players')
     used_css = txt and 'Unknown command' not in txt and 'Error' not in txt
 
     if not used_css:
         txt = send_rcon_command('status')
+    
+    # 💥 CRITICAL DEBUG LOGGING 💥
+    print("--- RCON RAW OUTPUT for Player Names ---")
+    print(f"Used CSS command: {used_css}")
+    print(txt)
+    print("----------------------------------------")
 
     players = []
 
@@ -116,7 +123,9 @@ def rcon_list_players():
 
             # Try to guess time (mm:ss) and a ping number from the line
             time_match = re.search(r'\b(\d{1,2}:\d{2})\b', line)
-            ping_match = re.search(r'\b(\d{1,3})\b(?!:)', line)  # crude, but avoids time
+            # crude, but avoids time - simplified for robustness
+            ping_match = re.search(r'([0-9]+)\s*$', line.split('"')[-1].strip()) 
+            
             players.append({
                 'name': name,
                 'time': time_match.group(1) if time_match else '—',
@@ -127,7 +136,7 @@ def rcon_list_players():
     seen = set()
     uniq = []
     for p in players:
-        if p['name'] not in seen:
+        if p['name'] not in seen and p['name'] != '—': # Exclude blank names from dedupe set
             uniq.append(p)
             seen.add(p['name'])
     return uniq
@@ -190,6 +199,7 @@ async def get_server_status_embed() -> discord.Embed:
         embed = discord.Embed(title="⚠️ CS2 Server Status - 🔴 Offline", color=0xFF0000)
         embed.add_field(name="❌ Server Unreachable", value="The server is currently offline.", inline=False)
         return embed
+
 # ====== TASKS ======
 @tasks.loop(minutes=15)
 async def auto_say():
@@ -216,16 +226,17 @@ async def auto_advertise():
     resp = send_rcon_command(f"css_cssay {msg}")
     print(f"✅ Auto-advertise: {msg} | RCON: {resp}")
 
-# ====== READY ======
+# ====== READY (Command syncing removed) ======
 @bot.event
 async def on_ready():
+    # Command sync calls removed as requested
     if GUILD_ID:
-        guild = discord.Object(id=GUILD_ID)
-        await tree.sync(guild=guild)
-        print(f"✅ Commands synced to guild {GUILD_ID} as {bot.user}")
+        # await tree.sync(guild=discord.Object(id=GUILD_ID)) # Sync removed
+        print(f"✅ Bot is running. Commands must be synced manually.")
     else:
-        await tree.sync()
-        print(f"✅ Global commands synced as {bot.user}")
+        # await tree.sync() # Sync removed
+        print(f"✅ Bot is running. Commands must be synced manually.")
+
     auto_say.start()
     auto_advertise.start()
 
@@ -240,42 +251,11 @@ async def status(interaction: discord.Interaction):
     embed = await get_server_status_embed()
     await interaction.followup.send(embed=embed)
 
-@tree.command(name="elo", description="Check Faceit ELO")
-@discord.app_commands.describe(nickname="The Faceit nickname")
-async def elo(interaction: discord.Interaction, nickname: str):
-    await interaction.response.defer()
-    if not FACEIT_API_KEY:
-        await interaction.followup.send("❌ FACEIT_API_KEY not set.")
-        return
-    try:
-        url = f"https://open.faceit.com/data/v4/players?nickname={nickname}"
-        r = requests.get(url, headers={"Authorization": f"Bearer {FACEIT_API_KEY}"}, timeout=10)
-        data = r.json()
-        if r.status_code != 200:
-            raise Exception(data.get("message", "Unknown error"))
-        games = data.get("games", {})
-        cs_game = games.get("cs2") or games.get("csgo")
-        if not cs_game:
-            await interaction.followup.send("⚠️ No CS2/CSGO data found.")
-            return
-        elo_val = cs_game.get("faceit_elo", "N/A")
-        level = cs_game.get("skill_level", "N/A")
-        region = cs_game.get("region", "N/A")
-        country_code = data.get("country", "N/A")
-        flag = country_code_to_flag(country_code)
-        profile_url = f"https://www.faceit.com/en/players/{nickname}"
-        embed = discord.Embed(
-            title=f"🎮 Faceit Profile: {nickname}",
-            description=f"[🌐 View on Faceit]({profile_url})",
-            color=0x0099FF
-        )
-        embed.add_field(name="📊 ELO", value=str(elo_val))
-        embed.add_field(name="⭐ Level", value=str(level))
-        embed.add_field(name="🌍 Region", value=region)
-        embed.add_field(name="🌐 Country", value=f"{flag} {country_code}")
-        await interaction.followup.send(embed=embed)
-    except Exception as e:
-        await interaction.followup.send(f"❌ Error: `{e}`")
+# ELO/Leaderboard command removed as requested
+# @tree.command(name="elo", description="Check Faceit ELO")
+# @discord.app_commands.describe(nickname="The Faceit nickname")
+# async def elo(interaction: discord.Interaction, nickname: str):
+#     ... (code removed) ...
 
 @tree.command(name="demos", description="Get latest CS2 demos")
 async def demos(interaction: discord.Interaction):
