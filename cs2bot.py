@@ -18,7 +18,6 @@ SERVER_PORT = int(os.getenv("SERVER_PORT", 27015))
 RCON_IP = os.getenv("RCON_IP", SERVER_IP)
 RCON_PORT = int(os.getenv("RCON_PORT", 27015))
 RCON_PASSWORD = os.getenv("RCON_PASSWORD", "")
-# FACEIT_API_KEY removed as the ELO command is removed
 CHANNEL_ID = int(os.getenv("CHANNEL_ID", 0))
 SERVER_DEMOS_CHANNEL_ID = int(os.getenv("SERVER_DEMOS_CHANNEL_ID", 0))
 DEMOS_URL = os.getenv("DEMOS_URL", "https://de34.fsho.st/demos/cs2/1842/")
@@ -52,10 +51,10 @@ def send_rcon_command(command: str) -> str:
             resp = rcon.command(command)
             return resp if len(resp) <= 2000 else resp[:2000] + "... (truncated)"
     except Exception as e:
+        # We don't print the error here to avoid console clutter during RCON fallback attempts
         return f"⚠️ Error: {e}"
 
 def country_code_to_flag(code: str) -> str:
-    # Function kept for completeness, though not strictly needed without ELO command
     if not code or len(code) != 2:
         return "🏳️"
     return chr(ord(code[0].upper()) + 127397) + chr(ord(code[1].upper()) + 127397)
@@ -75,9 +74,11 @@ def fetch_demos():
         return [f"⚠️ Error fetching demos: {e}"]
 
 # ---------- Blank-name fix: RCON parsing ----------
-# Accepts both CSSharp list and vanilla `status` lines.
+# Accepts vanilla `status` lines.
 STATUS_NAME_RE = re.compile(r'^#\s*\d+\s+"(?P<name>.*?)"\s+')
-CSS_LIST_RE    = re.compile(r'^\s*\d+\.\s+(?P<name>.+?)\s+\(.*\)$')
+
+# 🎯 NEW REGEX for the custom CSS format (e.g., • [#1] "Name")
+CSS_LIST_RE    = re.compile(r'^\s*•\s*\[#\d+\]\s*"(?P<name>[^"]*)"')
 
 def sanitize_name(s: str) -> str:
     if not s:
@@ -97,22 +98,19 @@ def rcon_list_players():
 
     if not used_css:
         txt = send_rcon_command('status')
-    
-    # 💥 CRITICAL DEBUG LOGGING 💥
-    print("--- RCON RAW OUTPUT for Player Names ---")
-    print(f"Used CSS command: {used_css}")
-    print(txt)
-    print("----------------------------------------")
+
+    # Removed debugging print statements
 
     players = []
 
     for raw in txt.splitlines():
         line = raw.strip()
 
-        # CSSharp format: "1. Name (SteamID64) ..."
+        # Custom CSS format: "• [#1] "Name" (IP Address: ...)"
         m_css = CSS_LIST_RE.match(line)
         if m_css:
             name = sanitize_name(m_css.group('name'))
+            # Custom CSS output doesn't give time/ping, so we use placeholders
             players.append({'name': name, 'time': '—', 'ping': '—'})
             continue
 
@@ -123,8 +121,8 @@ def rcon_list_players():
 
             # Try to guess time (mm:ss) and a ping number from the line
             time_match = re.search(r'\b(\d{1,2}:\d{2})\b', line)
-            # crude, but avoids time - simplified for robustness
-            ping_match = re.search(r'([0-9]+)\s*$', line.split('"')[-1].strip()) 
+            # Find a number at the end, which is typically the ping in the vanilla format
+            ping_match = re.search(r'(\d+)\s*$', line.split('"')[-1].strip()) 
             
             players.append({
                 'name': name,
@@ -136,7 +134,7 @@ def rcon_list_players():
     seen = set()
     uniq = []
     for p in players:
-        if p['name'] not in seen and p['name'] != '—': # Exclude blank names from dedupe set
+        if p['name'] not in seen and p['name'] != '—':
             uniq.append(p)
             seen.add(p['name'])
     return uniq
@@ -169,7 +167,7 @@ async def get_server_status_embed() -> discord.Embed:
 
         stats = ""
         if rcon_players:
-            # Use RCON data (names, time, ping)
+            # Use RCON data (names, time, ping) - custom format only gives name
             stats = "\n".join(
                 f"🎮 **{p['name']}** | ⏳ {p['time']} | 📶 {p['ping']} ms"
                 for p in rcon_players
@@ -189,13 +187,11 @@ async def get_server_status_embed() -> discord.Embed:
         return embed
 
     except asyncio.TimeoutError:
-        # Handle A2S player query timeout separately
         embed = discord.Embed(title="⚠️ CS2 Server Status - 🟡 Partial Info", color=0xFFCC00)
         embed.add_field(name="❌ Player Info Timeout", value="Server is online, but player list could not be retrieved in time.", inline=False)
         return embed
     
     except Exception:
-        # Handle general A2S info or RCON errors
         embed = discord.Embed(title="⚠️ CS2 Server Status - 🔴 Offline", color=0xFF0000)
         embed.add_field(name="❌ Server Unreachable", value="The server is currently offline.", inline=False)
         return embed
@@ -231,10 +227,8 @@ async def auto_advertise():
 async def on_ready():
     # Command sync calls removed as requested
     if GUILD_ID:
-        # await tree.sync(guild=discord.Object(id=GUILD_ID)) # Sync removed
         print(f"✅ Bot is running. Commands must be synced manually.")
     else:
-        # await tree.sync() # Sync removed
         print(f"✅ Bot is running. Commands must be synced manually.")
 
     auto_say.start()
@@ -250,12 +244,6 @@ async def status(interaction: discord.Interaction):
     await interaction.response.defer()
     embed = await get_server_status_embed()
     await interaction.followup.send(embed=embed)
-
-# ELO/Leaderboard command removed as requested
-# @tree.command(name="elo", description="Check Faceit ELO")
-# @discord.app_commands.describe(nickname="The Faceit nickname")
-# async def elo(interaction: discord.Interaction, nickname: str):
-#     ... (code removed) ...
 
 @tree.command(name="demos", description="Get latest CS2 demos")
 async def demos(interaction: discord.Interaction):
