@@ -51,7 +51,6 @@ def send_rcon_command(command: str) -> str:
             resp = rcon.command(command)
             return resp if len(resp) <= 2000 else resp[:2000] + "... (truncated)"
     except Exception as e:
-        # We don't print the error here to avoid console clutter during RCON fallback attempts
         return f"⚠️ Error: {e}"
 
 def country_code_to_flag(code: str) -> str:
@@ -74,10 +73,9 @@ def fetch_demos():
         return [f"⚠️ Error fetching demos: {e}"]
 
 # ---------- Blank-name fix: RCON parsing ----------
-# Accepts vanilla `status` lines.
 STATUS_NAME_RE = re.compile(r'^#\s*\d+\s+"(?P<name>.*?)"\s+')
 
-# 🎯 NEW REGEX for the custom CSS format (e.g., • [#1] "Name")
+# FIXED REGEX for the custom CSS format (e.g., • [#1] "Name")
 CSS_LIST_RE    = re.compile(r'^\s*•\s*\[#\d+\]\s*"(?P<name>[^"]*)"')
 
 def sanitize_name(s: str) -> str:
@@ -90,8 +88,8 @@ def sanitize_name(s: str) -> str:
 
 def rcon_list_players():
     """
-    Try CounterStrikeSharp 'css_players' first; fall back to 'status'.
-    Returns: list of dicts: [{'name': 'Player', 'time': 'mm:ss'|'—', 'ping': 'xx'|'—'}]
+    Returns: list of dicts: [{'name': 'Player', 'time': '—', 'ping': '—'}]
+    Note: Time/ping fields are only populated by the vanilla 'status' command.
     """
     txt = send_rcon_command('css_players')
     used_css = txt and 'Unknown command' not in txt and 'Error' not in txt
@@ -99,29 +97,23 @@ def rcon_list_players():
     if not used_css:
         txt = send_rcon_command('status')
 
-    # Removed debugging print statements
-
     players = []
 
     for raw in txt.splitlines():
         line = raw.strip()
 
-        # Custom CSS format: "• [#1] "Name" (IP Address: ...)"
+        # Custom CSS format
         m_css = CSS_LIST_RE.match(line)
         if m_css:
             name = sanitize_name(m_css.group('name'))
-            # Custom CSS output doesn't give time/ping, so we use placeholders
             players.append({'name': name, 'time': '—', 'ping': '—'})
             continue
 
-        # Vanilla status format: '# 2 "Name" ...'
+        # Vanilla status format (fields kept for robustness, but not displayed later)
         m_std = STATUS_NAME_RE.match(line)
         if m_std:
             name = sanitize_name(m_std.group('name'))
-
-            # Try to guess time (mm:ss) and a ping number from the line
             time_match = re.search(r'\b(\d{1,2}:\d{2})\b', line)
-            # Find a number at the end, which is typically the ping in the vanilla format
             ping_match = re.search(r'(\d+)\s*$', line.split('"')[-1].strip()) 
             
             players.append({
@@ -146,13 +138,10 @@ async def get_server_status_embed() -> discord.Embed:
     try:
         loop = asyncio.get_running_loop()
         info = await loop.run_in_executor(None, a2s.info, addr)
-        # Use a timeout of 5 seconds for player info query
         a2s_players = await asyncio.wait_for(loop.run_in_executor(None, a2s.players, addr), timeout=5)
 
-        # Check if A2S successfully returned players, but all names are blank/missing
         names_blank = (not a2s_players) or all(not getattr(p, 'name', '') for p in a2s_players)
 
-        # Pull players via RCON only if A2S failed to get useful names
         rcon_players = []
         if names_blank:
             rcon_players = rcon_list_players()
@@ -167,9 +156,9 @@ async def get_server_status_embed() -> discord.Embed:
 
         stats = ""
         if rcon_players:
-            # Use RCON data (names, time, ping) - custom format only gives name
+            # ✅ ONLY SHOW NAME (Time/Ping removed)
             stats = "\n".join(
-                f"🎮 **{p['name']}** | ⏳ {p['time']} | 📶 {p['ping']} ms"
+                f"🎮 **{p['name']}**"
                 for p in rcon_players
             )
         elif a2s_players:
@@ -225,7 +214,6 @@ async def auto_advertise():
 # ====== READY (Command syncing removed) ======
 @bot.event
 async def on_ready():
-    # Command sync calls removed as requested
     if GUILD_ID:
         print(f"✅ Bot is running. Commands must be synced manually.")
     else:
@@ -234,7 +222,25 @@ async def on_ready():
     auto_say.start()
     auto_advertise.start()
 
-# ====== COMMANDS ======
+# ====== COMMANDS (Temporary sync command added for cleanup) ======
+# TEMPORARY COMMAND: Use this ONCE to remove the old, cached commands from Discord.
+@tree.command(name="clearsync", description="OWNER: Force sync and remove old commands.")
+@owner_only()
+async def clearsync(interaction: discord.Interaction):
+    await interaction.response.defer(ephemeral=True)
+    
+    # Sync the tree, which forces Discord to update its list to match the current code
+    if GUILD_ID:
+        guild = discord.Object(id=GUILD_ID)
+        await tree.sync(guild=guild)
+        await interaction.followup.send(f"✅ Synced commands to Guild {GUILD_ID}. Old commands should now be gone.", ephemeral=True)
+    else:
+        await tree.sync()
+        await interaction.followup.send("✅ Globally Synced commands. Old commands should now be gone.", ephemeral=True)
+        
+    print("Commands successfully re-synced/cleared.")
+
+# Regular Commands
 @tree.command(name="whoami", description="Show your Discord user ID")
 async def whoami(interaction: discord.Interaction):
     await interaction.response.send_message(f"👤 Your ID: `{interaction.user.id}`", ephemeral=True)
