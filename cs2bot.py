@@ -134,18 +134,14 @@ def rcon_list_players():
 # ---------------------------------------------------
 
 async def get_server_status_embed() -> discord.Embed:
-    """Query A2S; if player names are blank/hidden, use RCON parsing as fallback."""
     addr = (SERVER_IP, SERVER_PORT)
     try:
         loop = asyncio.get_running_loop()
         info = await loop.run_in_executor(None, a2s.info, addr)
         a2s_players = await loop.run_in_executor(None, a2s.players, addr)
 
-        # Are A2S names all blank or missing?
-        names_blank = (not a2s_players) or all(not getattr(p, 'name', '') for p in a2s_players)
-
-        # Pull names via RCON when A2S is useless
-        rcon_players = rcon_list_players() if names_blank else None
+        # Always try to get readable names via RCON (css_listplayers or status)
+        rcon_players = rcon_list_players()
 
         berlin_tz = pytz.timezone("Europe/Berlin")
         last_updated = datetime.now(berlin_tz).strftime("%Y-%m-%d %H:%M:%S %Z")
@@ -155,20 +151,28 @@ async def get_server_status_embed() -> discord.Embed:
         embed.add_field(name="🗺️ Map", value=info.map_name, inline=True)
         embed.add_field(name="👥 Players", value=f"{info.player_count}/{info.max_players}", inline=True)
 
+        def a2s_lines():
+            if not a2s_players:
+                return []
+            lines = []
+            for p in sorted(a2s_players, key=lambda x: getattr(x, 'score', 0), reverse=True):
+                nm = sanitize_name(getattr(p, 'name', '') or '')
+                if nm in ('', '-', '—'):
+                    nm = 'Player'
+                lines.append(f"🎮 **{nm}** | 🏆 {getattr(p, 'score', 0)} | ⏳ {getattr(p, 'duration', 0)/60:.1f} mins")
+            return lines
+
+        # Prefer RCON list if it found any names; otherwise fall back to A2S
         if rcon_players:
             stats = "\n".join(
                 f"🎮 **{p['name']}** | ⏳ {p['time']} | 📶 {p['ping']} ms"
                 for p in rcon_players
-            ) or "No players online."
-        elif a2s_players:
-            stats = "\n".join(
-                f"🎮 **{sanitize_name(getattr(p, 'name', '') or '—')}** | 🏆 {getattr(p, 'score', 0)} | ⏳ {getattr(p, 'duration', 0)/60:.1f} mins"
-                for p in sorted(a2s_players, key=lambda x: getattr(x, 'score', 0), reverse=True)
-            ) or "No players online."
+            )
         else:
-            stats = "No players online."
+            lines = a2s_lines()
+            stats = "\n".join(lines) if lines else "No players online."
 
-        embed.add_field(name="📊 Player Stats", value=stats, inline=False)
+        embed.add_field(name="📊 Player Stats", value=stats or "No players online.", inline=False)
         embed.set_footer(text=f"Last updated: {last_updated}")
         return embed
 
