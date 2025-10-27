@@ -180,11 +180,79 @@ async def say(interaction: discord.Interaction, message: str):
 
 @tree.command(name="demos", description="Get the latest CS2 demos")
 async def demos(interaction: discord.Interaction):
+    """Fetches and displays the latest 5 CS2 demos from the web directory."""
+    
+    if interaction.channel_id != SERVER_DEMOS_CHANNEL_ID:
+        await interaction.response.send_message(
+            f"❌ This command can only be used in <#{SERVER_DEMOS_CHANNEL_ID}>.", ephemeral=True
+        )
+        return
+
+    await interaction.response.defer()
+    demo_list = fetch_demos()
+    demo_text = "\n".join(demo_list)
+
+    embed = discord.Embed(title="🎥 Latest CS2 Demos", color=0x00ff00)
+    embed.description = demo_text
+
     await interaction.followup.send(embed=embed)
 
 @tree.command(name="elo", description="Check Faceit ELO using nickname")
 @discord.app_commands.describe(nickname="The Faceit nickname")
 async def elo(interaction: discord.Interaction, nickname: str):
+    """Fetch Faceit ELO, level, and region based on nickname."""
+    await interaction.response.defer()
+
+    api_key = os.getenv("FACEIT_API_KEY")
+    if not api_key:
+        await interaction.followup.send("❌ FACEIT_API_KEY is missing in environment variables.")
+        return
+
+    headers = {
+        "Authorization": f"Bearer {api_key}"
+    }
+
+    try:
+        # 🔍 Get player info
+        url = f"https://open.faceit.com/data/v4/players?nickname={nickname}"
+        response = requests.get(url, headers=headers)
+        data = response.json()
+
+        if response.status_code != 200:
+            msg = data.get("message", "Unknown error occurred.")
+            raise Exception(msg)
+
+        # ✅ Extract CS2 or CSGO data
+        games = data.get("games", {})
+        cs_game = games.get("cs2") or games.get("csgo")
+
+        if not cs_game:
+            await interaction.followup.send("⚠️ No CS2 or CSGO data found for this player.")
+            return
+
+        elo = cs_game.get("faceit_elo", "N/A")
+        level = cs_game.get("skill_level", "N/A")
+        region = cs_game.get("region", "N/A")
+        profile_url = f"https://www.faceit.com/en/players/{nickname}"
+        country_code = data.get("country", "N/A")
+        flag = country_code_to_flag(country_code)
+
+
+        embed = discord.Embed(
+            title=f"🎮 Faceit Profile: {nickname}",
+            description=f"[🌐 View on Faceit]({profile_url})",
+            color=0x0099ff
+        )
+        embed.add_field(name="📊 ELO", value=str(elo), inline=True)
+        embed.add_field(name="⭐ Level", value=str(level), inline=True)
+        embed.add_field(name="🌍 Region", value=region, inline=True)
+        embed.set_footer(text="Faceit stats via open.faceit.com API")
+        embed.add_field(name="🌐 Country", value=f"{flag} {country_code}", inline=True)
+
+
+        await interaction.followup.send(embed=embed)
+
+    except Exception as e:
         await interaction.followup.send(f"❌ Error fetching Faceit data: `{e}`")
 
 
