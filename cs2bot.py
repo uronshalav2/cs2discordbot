@@ -139,14 +139,17 @@ async def get_server_status_embed() -> discord.Embed:
     try:
         loop = asyncio.get_running_loop()
         info = await loop.run_in_executor(None, a2s.info, addr)
-        a2s_players = await loop.run_in_executor(None, a2s.players, addr)
+        # Use a timeout of 5 seconds for player info query
+        a2s_players = await asyncio.wait_for(loop.run_in_executor(None, a2s.players, addr), timeout=5)
 
-        # Are A2S names all blank or missing?
+        # Check if A2S successfully returned players, but all names are blank/missing
         names_blank = (not a2s_players) or all(not getattr(p, 'name', '') for p in a2s_players)
 
-        # Pull names via RCON when A2S is useless
-        rcon_players = rcon_list_players() if names_blank else None
-
+        # Pull players via RCON only if A2S failed to get useful names
+        rcon_players = []
+        if names_blank:
+            rcon_players = rcon_list_players()
+            
         berlin_tz = pytz.timezone("Europe/Berlin")
         last_updated = datetime.now(berlin_tz).strftime("%Y-%m-%d %H:%M:%S %Z")
 
@@ -155,28 +158,38 @@ async def get_server_status_embed() -> discord.Embed:
         embed.add_field(name="🗺️ Map", value=info.map_name, inline=True)
         embed.add_field(name="👥 Players", value=f"{info.player_count}/{info.max_players}", inline=True)
 
+        stats = ""
         if rcon_players:
+            # Use RCON data (names, time, ping)
             stats = "\n".join(
                 f"🎮 **{p['name']}** | ⏳ {p['time']} | 📶 {p['ping']} ms"
                 for p in rcon_players
-            ) or "No players online."
+            )
         elif a2s_players:
+            # Use A2S data (names, score, duration)
             stats = "\n".join(
                 f"🎮 **{sanitize_name(getattr(p, 'name', '') or '—')}** | 🏆 {getattr(p, 'score', 0)} | ⏳ {getattr(p, 'duration', 0)/60:.1f} mins"
                 for p in sorted(a2s_players, key=lambda x: getattr(x, 'score', 0), reverse=True)
-            ) or "No players online."
-        else:
+            )
+        
+        if not stats:
             stats = "No players online."
 
         embed.add_field(name="📊 Player Stats", value=stats, inline=False)
         embed.set_footer(text=f"Last updated: {last_updated}")
         return embed
 
+    except asyncio.TimeoutError:
+        # Handle A2S player query timeout separately
+        embed = discord.Embed(title="⚠️ CS2 Server Status - 🟡 Partial Info", color=0xFFCC00)
+        embed.add_field(name="❌ Player Info Timeout", value="Server is online, but player list could not be retrieved in time.", inline=False)
+        return embed
+    
     except Exception:
+        # Handle general A2S info or RCON errors
         embed = discord.Embed(title="⚠️ CS2 Server Status - 🔴 Offline", color=0xFF0000)
         embed.add_field(name="❌ Server Unreachable", value="The server is currently offline.", inline=False)
         return embed
-
 # ====== TASKS ======
 @tasks.loop(minutes=15)
 async def auto_say():
@@ -192,7 +205,7 @@ async def auto_say():
     send_rcon_command('say Server is owned by Reshtan Gaming Center')
     await channel.send("✅ **Server is owned by Reshtan Gaming Center** (Auto Message)")
 
-@tasks.loop(minutes=2)
+@tasks.loop(minutes=8)
 async def auto_advertise():
     ads = [
         "<___Join our Discord: discord.gg/reshtangamingcenter___>",
