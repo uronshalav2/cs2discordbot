@@ -200,7 +200,7 @@ async def auto_say():
     send_rcon_command('say Server is owned by Reshtan Gaming Center')
     await channel.send("✅ **Server is owned by Reshtan Gaming Center** (Auto Message)")
 
-@tasks.loop(minutes=8)
+@tasks.loop(minutes=20)
 async def auto_advertise():
     ads = [
         "<___Join our Discord: discord.gg/reshtangamingcenter___>",
