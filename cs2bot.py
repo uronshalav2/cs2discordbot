@@ -185,31 +185,6 @@ async def get_server_status_embed() -> discord.Embed:
         embed.add_field(name="❌ Server Unreachable", value="The server is currently offline.", inline=False)
         return embed
 
-# ====== TASKS ======
-@tasks.loop(minutes=15)
-async def auto_say():
-    channel = bot.get_channel(CHANNEL_ID)
-    if not channel:
-        return
-    async for m in channel.history(limit=20):
-        if m.author == bot.user:
-            try:
-                await m.delete()
-            except:
-                pass
-    send_rcon_command('say Server is owned by Reshtan Gaming Center')
-    await channel.send("✅ **Server is owned by Reshtan Gaming Center** (Auto Message)")
-
-@tasks.loop(minutes=20)
-async def auto_advertise():
-    ads = [
-        "<___Join our Discord: discord.gg/reshtangamingcenter___>",
-        "<___Invite your friends!___>",
-        "<___Server powered by Reshtan Gaming Center___>",
-    ]
-    msg = ads[auto_advertise.current_loop % len(ads)]
-    resp = send_rcon_command(f"css_cssay {msg}")
-    print(f"✅ Auto-advertise: {msg} | RCON: {resp}")
 
 # ====== READY (Command syncing removed) ======
 @bot.event
@@ -219,8 +194,6 @@ async def on_ready():
     else:
         print(f"✅ Bot is running. Commands must be synced manually.")
 
-    auto_say.start()
-    auto_advertise.start()
 
 # ====== COMMANDS (Temporary sync command added for cleanup) ======
 # TEMPORARY COMMAND: Use this ONCE to remove the old, cached commands from Discord.
