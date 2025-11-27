@@ -20,7 +20,7 @@ RCON_PORT = int(os.getenv("RCON_PORT", 27015))
 RCON_PASSWORD = os.getenv("RCON_PASSWORD", "")
 CHANNEL_ID = int(os.getenv("CHANNEL_ID", 0))
 SERVER_DEMOS_CHANNEL_ID = int(os.getenv("SERVER_DEMOS_CHANNEL_ID", 0))
-DEMOS_URL = os.getenv("DEMOS_URL", "https://de34.fsho.st/demos/cs2/1842/")
+DEMOS_URL = os.getenv("DEMOS_URL", "https://fr6.fsho.st/demos/cs2/1842/")
 GUILD_ID = int(os.getenv("GUILD_ID", "0") or "0")
 
 # ====== OWNER ID ======
