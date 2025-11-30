@@ -4,7 +4,7 @@ import asyncio
 import discord
 import requests
 from bs4 import BeautifulSoup
-from discord.ext import tasks, commands
+from discord.ext import commands
 from discord import app_commands
 import a2s
 from mcrcon import MCRcon
@@ -13,9 +13,11 @@ import pytz
 from typing import Literal, Optional
 import json 
 
-# ====== BOT CONFIG ======
+# ====================================================================
+# ====== BOT CONFIG & ENVIRONMENT VARIABLES ==========================
+# ====================================================================
 TOKEN = os.getenv("TOKEN")
-SERVER_IP = os.getenv("SERVER_IP", "127.0.0.1")
+SERVER_IP = os.getenv("SERVER_IP", "127.00.0.1")
 SERVER_PORT = int(os.getenv("SERVER_PORT", 27015))
 RCON_IP = os.getenv("RCON_IP", SERVER_IP)
 RCON_PORT = int(os.getenv("RCON_PORT", 27015))
@@ -25,20 +27,22 @@ SERVER_DEMOS_CHANNEL_ID = int(os.getenv("SERVER_DEMOS_CHANNEL_ID", 0))
 DEMOS_URL = os.getenv("DEMOS_URL")
 GUILD_ID = int(os.getenv("GUILD_ID", "0") or "0")
 
-# ====== API KEYS ======
+# API Keys
 FACEIT_API_KEY = os.getenv("FACEIT_API_KEY") 
 
-# ====== OWNER ID (Used for both prefix and slash commands) ======
+# Owner ID
 OWNER_ID = int(os.getenv("OWNER_ID", 0))
 
-# ====== DISCORD CLIENT ======
+# ====================================================================
+# ====== DISCORD CLIENT SETUP ========================================
+# ====================================================================
 intents = discord.Intents.default()
+# Required for prefix commands (!sync) to work
 intents.message_content = True 
 intents.messages = True 
 
 bot = commands.Bot(command_prefix="!", intents=intents, owner_id=OWNER_ID)
-# REMOVED: tree = app_commands.CommandTree(bot) 
-# The tree is now automatically created and accessible as bot.tree
+# The command tree is now automatically created and accessed via bot.tree
 
 # ====== MAP WHITELIST ======
 MAP_WHITELIST = [
@@ -46,10 +50,13 @@ MAP_WHITELIST = [
     "de_nuke", "de_ancient", "de_vertigo", "de_anubis"
 ]
 
-# ====== HELPERS ======
+# ====================================================================
+# ====== HELPER FUNCTIONS ============================================
+# ====================================================================
+
 def owner_only():
+    """Application Command check to restrict usage to the bot owner."""
     async def predicate(interaction: discord.Interaction):
-        # Access the tree via bot.tree for checks if needed, but here we use owner_id
         return interaction.user.id == OWNER_ID
     return app_commands.check(predicate)
 
@@ -63,11 +70,13 @@ def send_rcon_command(command: str) -> str:
         return f"⚠️ Error: {e}"
 
 def country_code_to_flag(code: str) -> str:
+    """Converts a two-letter country code to a regional indicator emoji flag."""
     if not code or len(code) != 2:
         return "🏳️"
     return chr(ord(code[0].upper()) + 127397) + chr(ord(code[1].upper()) + 127397)
 
 def fetch_demos():
+    """Scrapes the DEMOS_URL for the latest demo files."""
     try:
         r = requests.get(DEMOS_URL, timeout=10)
         if r.status_code != 200:
@@ -81,11 +90,12 @@ def fetch_demos():
     except Exception as e:
         return [f"⚠️ Error fetching demos: {e}"]
 
-# ---------- Blank-name fix: RCON parsing ----------
+# ---------- RCON Parsing Helpers ----------
 STATUS_NAME_RE = re.compile(r'^#\s*\d+\s+"(?P<name>.*?)"\s+')
 CSS_LIST_RE    = re.compile(r'^\s*•\s*\[#\d+\]\s*"(?P<name>[^"]*)"')
 
 def sanitize_name(s: str) -> str:
+    """Cleans up player names for Discord markdown safety."""
     if not s:
         return "—"
     s = s.replace('\x00', '').replace('\u200b', '')
@@ -106,14 +116,12 @@ def rcon_list_players():
     for raw in txt.splitlines():
         line = raw.strip()
 
-        # Custom CSS format
         m_css = CSS_LIST_RE.match(line)
         if m_css:
             name = sanitize_name(m_css.group('name'))
             players.append({'name': name, 'time': '—', 'ping': '—'})
             continue
 
-        # Vanilla status format
         m_std = STATUS_NAME_RE.match(line)
         if m_std:
             name = sanitize_name(m_std.group('name'))
@@ -126,7 +134,6 @@ def rcon_list_players():
                 'ping': ping_match.group(1) if ping_match else '—'
             })
 
-    # De-dup + keep order
     seen = set()
     uniq = []
     for p in players:
@@ -134,10 +141,10 @@ def rcon_list_players():
             uniq.append(p)
             seen.add(p['name'])
     return uniq
-# ---------------------------------------------------
 
+# ---------- Status & FACEIT Logic ----------
 async def get_server_status_embed() -> discord.Embed:
-    """Query A2S; if player names are blank/hidden, use RCON parsing as fallback."""
+    """Queries A2S for server status and uses RCON as a player list fallback."""
     addr = (SERVER_IP, SERVER_PORT)
     try:
         loop = asyncio.get_running_loop()
@@ -160,10 +167,7 @@ async def get_server_status_embed() -> discord.Embed:
 
         stats = ""
         if rcon_players:
-            stats = "\n".join(
-                f"🎮 **{p['name']}**"
-                for p in rcon_players
-            )
+            stats = "\n".join(f"🎮 **{p['name']}**" for p in rcon_players)
         elif a2s_players:
             stats = "\n".join(
                 f"🎮 **{sanitize_name(getattr(p, 'name', '') or '—')}** | 🏆 {getattr(p, 'score', 0)} | ⏳ {getattr(p, 'duration', 0)/60:.1f} mins"
@@ -188,10 +192,7 @@ async def get_server_status_embed() -> discord.Embed:
         return embed
 
 async def fetch_faceit_player_stats(nickname: str) -> dict:
-    """
-    Fetches player data, including ELO, from the FACEIT API.
-    Returns a dictionary or raises an exception on error.
-    """
+    """Fetches player ELO and stats from the FACEIT API."""
     if not FACEIT_API_KEY:
         raise ValueError("FACEIT_API_KEY is not configured.")
 
@@ -209,7 +210,7 @@ async def fetch_faceit_player_stats(nickname: str) -> dict:
     player_data = id_resp.json()
     player_id = player_data.get('player_id')
     
-    # 2. Get Game Stats (for ELO and other metrics)
+    # 2. Get Game Stats (csgo is used for CS2 stats on FACEIT)
     stats_url = f"https://open.faceit.com/data/v4/players/{player_id}/stats/csgo"
     stats_resp = requests.get(stats_url, headers=headers)
 
@@ -217,7 +218,6 @@ async def fetch_faceit_player_stats(nickname: str) -> dict:
         stats_resp.raise_for_status()
         
     stats_data = stats_resp.json()
-    
     lifetime_stats = stats_data.get('lifetime')
     
     return {
@@ -232,13 +232,14 @@ async def fetch_faceit_player_stats(nickname: str) -> dict:
         'kd_ratio': lifetime_stats.get('Average K/D Ratio')
     }
 
-# ====== READY ======
+# ====================================================================
+# ====== EVENTS & PREFIX COMMANDS (COMMAND SYNCING) ==================
+# ====================================================================
+
 @bot.event
 async def on_ready():
     print(f"✅ Bot is running. Logged in as {bot.user.name}")
     print("Use the '!sync' prefix command to update application commands.")
-
-# ====== PREFIX COMMANDS (for syncing) ======
 
 @bot.command()
 @commands.guild_only()
@@ -264,7 +265,7 @@ async def sync(ctx: commands.Context, guilds: commands.Greedy[discord.Object], s
             synced = await ctx.bot.tree.sync()
 
         await ctx.send(
-            f"✅ Synced {len(synced)} commands {'globally' if spec is None else 'to the current guild'}. (Check the UI in a few minutes or hours)."
+            f"✅ Synced {len(synced)} commands {'globally' if spec is None else 'to the current guild'}."
         )
         return
 
@@ -279,11 +280,13 @@ async def sync(ctx: commands.Context, guilds: commands.Greedy[discord.Object], s
 
     await ctx.send(f"✅ Synced the tree to {ret}/{len(guilds)} specified guilds.")
 
+# ====================================================================
+# ====== SLASH COMMANDS ==============================================
+# ====================================================================
 
-# ====== SLASH COMMANDS ======
+# --- Sync / Owner Commands ---
 
-# Use this to force a full re-sync if the bot is only running on one main guild.
-@bot.tree.command(name="appsync", description="OWNER: Force sync and remove old commands.")
+@bot.tree.command(name="appsync", description="OWNER: Force sync slash commands to the main guild or globally.")
 @owner_only()
 async def appsync(interaction: discord.Interaction):
     await interaction.response.defer(ephemeral=True)
@@ -298,7 +301,31 @@ async def appsync(interaction: discord.Interaction):
         
     print("Commands successfully re-synced.")
 
+# --- Utility Commands ---
 
+@bot.tree.command(name="whoami", description="Show your Discord user ID")
+async def whoami(interaction: discord.Interaction):
+    await interaction.response.send_message(f"👤 Your ID: `{interaction.user.id}`", ephemeral=True)
+
+@bot.tree.command(name="status", description="Get the current CS2 server status")
+async def status(interaction: discord.Interaction):
+    await interaction.response.defer()
+    embed = await get_server_status_embed()
+    await interaction.followup.send(embed=embed)
+
+@bot.tree.command(name="demos", description="Get latest CS2 demos")
+async def demos(interaction: discord.Interaction):
+    if SERVER_DEMOS_CHANNEL_ID and interaction.channel_id != SERVER_DEMOS_CHANNEL_ID:
+        await interaction.response.send_message(
+            f"❌ Only usable in <#{SERVER_DEMOS_CHANNEL_ID}>.", ephemeral=True
+        )
+        return
+    await interaction.response.defer()
+    demo_list = fetch_demos()
+    embed = discord.Embed(title="🎥 Latest CS2 Demos", color=0x00FF00)
+    embed.description = "\n".join(demo_list)
+    await interaction.followup.send(embed=embed)
+    
 @bot.tree.command(name="elo", description="Fetch FACEIT ELO and stats for a given nickname.")
 async def elo(interaction: discord.Interaction, nickname: str):
     await interaction.response.defer()
@@ -331,31 +358,8 @@ async def elo(interaction: discord.Interaction, nickname: str):
         await interaction.followup.send(f"❌ An unexpected error occurred while fetching FACEIT data.", ephemeral=True)
 
 
-# Regular Commands (Status and Demos remain the same)
-@bot.tree.command(name="whoami", description="Show your Discord user ID")
-async def whoami(interaction: discord.Interaction):
-    await interaction.response.send_message(f"👤 Your ID: `{interaction.user.id}`", ephemeral=True)
+# --- Owner-Only CSS Commands ---
 
-@bot.tree.command(name="status", description="Get the current CS2 server status")
-async def status(interaction: discord.Interaction):
-    await interaction.response.defer()
-    embed = await get_server_status_embed()
-    await interaction.followup.send(embed=embed)
-
-@bot.tree.command(name="demos", description="Get latest CS2 demos")
-async def demos(interaction: discord.Interaction):
-    if SERVER_DEMOS_CHANNEL_ID and interaction.channel_id != SERVER_DEMOS_CHANNEL_ID:
-        await interaction.response.send_message(
-            f"❌ Only usable in <#{SERVER_DEMOS_CHANNEL_ID}>.", ephemeral=True
-        )
-        return
-    await interaction.response.defer()
-    demo_list = fetch_demos()
-    embed = discord.Embed(title="🎥 Latest CS2 Demos", color=0x00FF00)
-    embed.description = "\n".join(demo_list)
-    await interaction.followup.send(embed=embed)
-
-# ====== OWNER-ONLY CSS COMMANDS (remain the same) ======
 @bot.tree.command(name="csssay", description="Send a chat message via CSSSharp")
 @owner_only()
 async def csssay(interaction: discord.Interaction, message: str):
@@ -401,7 +405,10 @@ async def cssreload(interaction: discord.Interaction):
     resp = send_rcon_command('css_reloadplugins')
     await interaction.response.send_message(f"♻️ Reloaded plugins.\n{resp}", ephemeral=True)
 
-# ====== RUN ======
+# ====================================================================
+# ====== RUN BLOCK ===================================================
+# ====================================================================
+
 if not TOKEN:
     raise SystemExit("❌ TOKEN not set in environment.")
 bot.run(TOKEN)
