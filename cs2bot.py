@@ -29,6 +29,7 @@ GUILD_ID = int(os.getenv("GUILD_ID", "0") or "0")
 
 # API Keys
 FACEIT_API_KEY = os.getenv("FACEIT_API_KEY") 
+FACEIT_GAME_ID = "csgo" # FACEIT currently uses 'csgo' for CS2 stats
 
 # Owner ID
 OWNER_ID = int(os.getenv("OWNER_ID", 0))
@@ -42,7 +43,7 @@ intents.message_content = True
 intents.messages = True 
 
 bot = commands.Bot(command_prefix="!", intents=intents, owner_id=OWNER_ID)
-# The command tree is now automatically created and accessed via bot.tree
+# The command tree is accessed via bot.tree
 
 # ====== MAP WHITELIST ======
 MAP_WHITELIST = [
@@ -192,7 +193,7 @@ async def get_server_status_embed() -> discord.Embed:
         return embed
 
 async def fetch_faceit_player_stats(nickname: str) -> dict:
-    """Fetches player ELO and stats from the FACEIT API."""
+    """Fetches player ELO and stats from the FACEIT API using the 'csgo' game ID."""
     if not FACEIT_API_KEY:
         raise ValueError("FACEIT_API_KEY is not configured.")
 
@@ -210,23 +211,28 @@ async def fetch_faceit_player_stats(nickname: str) -> dict:
     player_data = id_resp.json()
     player_id = player_data.get('player_id')
     
-    # 2. Get Game Stats (csgo is used for CS2 stats on FACEIT)
-    stats_url = f"https://open.faceit.com/data/v4/players/{player_id}/stats/csgo"
+    # 2. Get Game Stats using the defined GAME_ID ('csgo')
+    stats_url = f"https://open.faceit.com/data/v4/players/{player_id}/stats/{FACEIT_GAME_ID}"
     stats_resp = requests.get(stats_url, headers=headers)
 
+    if stats_resp.status_code == 404:
+         raise ValueError(f"Player has not played {FACEIT_GAME_ID} (CS2) on FACEIT.")
     if stats_resp.status_code != 200:
         stats_resp.raise_for_status()
         
     stats_data = stats_resp.json()
     lifetime_stats = stats_data.get('lifetime')
     
+    # Extract data using the 'csgo' key
+    csgo_game_data = player_data.get('games', {}).get(FACEIT_GAME_ID, {})
+    
     return {
         'nickname': player_data.get('nickname'),
         'player_id': player_id,
         'country_flag': country_code_to_flag(player_data.get('country')),
         'avatar': player_data.get('avatar'),
-        'level': player_data.get('games', {}).get('csgo', {}).get('skill_level'),
-        'elo': player_data.get('games', {}).get('csgo', {}).get('faceit_elo'),
+        'level': csgo_game_data.get('skill_level'),
+        'elo': csgo_game_data.get('faceit_elo'),
         'matches': lifetime_stats.get('Matches'),
         'win_rate': lifetime_stats.get('Win Rate %'),
         'kd_ratio': lifetime_stats.get('Average K/D Ratio')
@@ -279,6 +285,20 @@ async def sync(ctx: commands.Context, guilds: commands.Greedy[discord.Object], s
             ret += 1
 
     await ctx.send(f"✅ Synced the tree to {ret}/{len(guilds)} specified guilds.")
+
+# Error handler for !sync to help diagnose permission issues
+@sync.error
+async def sync_error(ctx, error):
+    if isinstance(error, commands.NotOwner):
+        await ctx.send("❌ ERROR: You must be the **Bot Owner** to use `!sync`.", ephemeral=True)
+    elif isinstance(error, commands.NoPrivateMessage):
+        await ctx.send("❌ ERROR: `!sync` can only be used in a server channel.", ephemeral=True)
+    elif isinstance(error, commands.MissingRequiredArgument):
+        # This catches errors if the user inputs an invalid guild ID for example
+        await ctx.send(f"❌ ERROR: Missing argument for `!sync`: {error}", ephemeral=True)
+    else:
+        # Catch any other exception during command execution
+        await ctx.send(f"❌ An unexpected error occurred: `{error}`")
 
 # ====================================================================
 # ====== SLASH COMMANDS ==============================================
