@@ -11,7 +11,7 @@ from mcrcon import MCRcon
 from datetime import datetime
 import pytz
 from typing import Literal, Optional
-import json # Added for handling API responses
+import json 
 
 # ====== BOT CONFIG ======
 TOKEN = os.getenv("TOKEN")
@@ -26,7 +26,6 @@ DEMOS_URL = os.getenv("DEMOS_URL")
 GUILD_ID = int(os.getenv("GUILD_ID", "0") or "0")
 
 # ====== API KEYS ======
-# YOU MUST SET THIS IN YOUR ENVIRONMENT
 FACEIT_API_KEY = os.getenv("FACEIT_API_KEY") 
 
 # ====== OWNER ID (Used for both prefix and slash commands) ======
@@ -38,7 +37,8 @@ intents.message_content = True
 intents.messages = True 
 
 bot = commands.Bot(command_prefix="!", intents=intents, owner_id=OWNER_ID)
-tree = app_commands.CommandTree(bot)
+# REMOVED: tree = app_commands.CommandTree(bot) 
+# The tree is now automatically created and accessible as bot.tree
 
 # ====== MAP WHITELIST ======
 MAP_WHITELIST = [
@@ -49,6 +49,7 @@ MAP_WHITELIST = [
 # ====== HELPERS ======
 def owner_only():
     async def predicate(interaction: discord.Interaction):
+        # Access the tree via bot.tree for checks if needed, but here we use owner_id
         return interaction.user.id == OWNER_ID
     return app_commands.check(predicate)
 
@@ -64,7 +65,6 @@ def send_rcon_command(command: str) -> str:
 def country_code_to_flag(code: str) -> str:
     if not code or len(code) != 2:
         return "🏳️"
-    # Unicode regional indicator symbols (works for most countries)
     return chr(ord(code[0].upper()) + 127397) + chr(ord(code[1].upper()) + 127397)
 
 def fetch_demos():
@@ -102,7 +102,7 @@ def rcon_list_players():
         txt = send_rcon_command('status')
 
     players = []
-    # ... (rcon_list_players logic remains the same) ...
+    
     for raw in txt.splitlines():
         line = raw.strip()
 
@@ -137,7 +137,7 @@ def rcon_list_players():
 # ---------------------------------------------------
 
 async def get_server_status_embed() -> discord.Embed:
-    # ... (get_server_status_embed logic remains the same) ...
+    """Query A2S; if player names are blank/hidden, use RCON parsing as fallback."""
     addr = (SERVER_IP, SERVER_PORT)
     try:
         loop = asyncio.get_running_loop()
@@ -204,13 +204,12 @@ async def fetch_faceit_player_stats(nickname: str) -> dict:
     if id_resp.status_code == 404:
         raise ValueError("Player not found on FACEIT.")
     elif id_resp.status_code != 200:
-        id_resp.raise_for_status() # Raise for other HTTP errors (e.g., rate limit)
+        id_resp.raise_for_status()
     
     player_data = id_resp.json()
     player_id = player_data.get('player_id')
     
     # 2. Get Game Stats (for ELO and other metrics)
-    # Assuming CS:GO/CS2 is the desired game (GameID is 'csgo')
     stats_url = f"https://open.faceit.com/data/v4/players/{player_id}/stats/csgo"
     stats_resp = requests.get(stats_url, headers=headers)
 
@@ -219,7 +218,6 @@ async def fetch_faceit_player_stats(nickname: str) -> dict:
         
     stats_data = stats_resp.json()
     
-    # Extract the necessary data
     lifetime_stats = stats_data.get('lifetime')
     
     return {
@@ -285,23 +283,23 @@ async def sync(ctx: commands.Context, guilds: commands.Greedy[discord.Object], s
 # ====== SLASH COMMANDS ======
 
 # Use this to force a full re-sync if the bot is only running on one main guild.
-@tree.command(name="appsync", description="OWNER: Force sync and remove old commands.")
+@bot.tree.command(name="appsync", description="OWNER: Force sync and remove old commands.")
 @owner_only()
 async def appsync(interaction: discord.Interaction):
     await interaction.response.defer(ephemeral=True)
     
     if GUILD_ID:
         guild = discord.Object(id=GUILD_ID)
-        await tree.sync(guild=guild)
+        await bot.tree.sync(guild=guild)
         await interaction.followup.send(f"✅ Synced commands to Guild {GUILD_ID}.", ephemeral=True)
     else:
-        await tree.sync()
+        await bot.tree.sync()
         await interaction.followup.send("✅ Globally Synced commands.", ephemeral=True)
         
     print("Commands successfully re-synced.")
 
 
-@tree.command(name="elo", description="Fetch FACEIT ELO and stats for a given nickname.")
+@bot.tree.command(name="elo", description="Fetch FACEIT ELO and stats for a given nickname.")
 async def elo(interaction: discord.Interaction, nickname: str):
     await interaction.response.defer()
     
@@ -310,7 +308,7 @@ async def elo(interaction: discord.Interaction, nickname: str):
         
         embed = discord.Embed(
             title=f"⭐ FACEIT Stats for {stats['country_flag']} {stats['nickname']}", 
-            color=0xFF5500 # Orange/Red typical of FACEIT
+            color=0xFF5500
         )
         embed.set_thumbnail(url=stats['avatar'])
 
@@ -320,7 +318,7 @@ async def elo(interaction: discord.Interaction, nickname: str):
         
         embed.add_field(name="Matches", value=f"{stats['matches']}", inline=True)
         embed.add_field(name="K/D Ratio", value=f"{stats['kd_ratio']}", inline=True)
-        embed.add_field(name="\u200b", value="\u200b", inline=True) # Invisible field for spacing
+        embed.add_field(name="\u200b", value="\u200b", inline=True)
 
         embed.set_footer(text=f"Player ID: {stats['player_id']}")
         await interaction.followup.send(embed=embed)
@@ -328,24 +326,23 @@ async def elo(interaction: discord.Interaction, nickname: str):
     except ValueError as e:
         await interaction.followup.send(f"❌ Error: {e}", ephemeral=True)
     except requests.HTTPError as e:
-        # Catch rate limits (429) or other API issues
         await interaction.followup.send(f"❌ FACEIT API Error: Failed to fetch data. Check your API key or server status. (Status: {e.response.status_code})", ephemeral=True)
     except Exception as e:
         await interaction.followup.send(f"❌ An unexpected error occurred while fetching FACEIT data.", ephemeral=True)
 
 
 # Regular Commands (Status and Demos remain the same)
-@tree.command(name="whoami", description="Show your Discord user ID")
+@bot.tree.command(name="whoami", description="Show your Discord user ID")
 async def whoami(interaction: discord.Interaction):
     await interaction.response.send_message(f"👤 Your ID: `{interaction.user.id}`", ephemeral=True)
 
-@tree.command(name="status", description="Get the current CS2 server status")
+@bot.tree.command(name="status", description="Get the current CS2 server status")
 async def status(interaction: discord.Interaction):
     await interaction.response.defer()
     embed = await get_server_status_embed()
     await interaction.followup.send(embed=embed)
 
-@tree.command(name="demos", description="Get latest CS2 demos")
+@bot.tree.command(name="demos", description="Get latest CS2 demos")
 async def demos(interaction: discord.Interaction):
     if SERVER_DEMOS_CHANNEL_ID and interaction.channel_id != SERVER_DEMOS_CHANNEL_ID:
         await interaction.response.send_message(
@@ -359,31 +356,31 @@ async def demos(interaction: discord.Interaction):
     await interaction.followup.send(embed=embed)
 
 # ====== OWNER-ONLY CSS COMMANDS (remain the same) ======
-@tree.command(name="csssay", description="Send a chat message via CSSSharp")
+@bot.tree.command(name="csssay", description="Send a chat message via CSSSharp")
 @owner_only()
 async def csssay(interaction: discord.Interaction, message: str):
     resp = send_rcon_command(f'css_cssay {message}')
     await interaction.response.send_message(f"💬 Sent: {resp}", ephemeral=True)
 
-@tree.command(name="csshsay", description="Display a HUD message via CSSSharp")
+@bot.tree.command(name="csshsay", description="Display a HUD message via CSSSharp")
 @owner_only()
 async def csshsay(interaction: discord.Interaction, message: str):
     resp = send_rcon_command(f'css_hsay {message}')
     await interaction.response.send_message(f"🖥️ HUD: {resp}", ephemeral=True)
 
-@tree.command(name="csskick", description="Kick a player via CSSSharp")
+@bot.tree.command(name="csskick", description="Kick a player via CSSSharp")
 @owner_only()
 async def csskick(interaction: discord.Interaction, player: str):
     resp = send_rcon_command(f'css_kick "{player}"')
     await interaction.response.send_message(f"👢 Kicked `{player}`.\n{resp}", ephemeral=True)
 
-@tree.command(name="cssban", description="Ban a player via CSSSharp")
+@bot.tree.command(name="cssban", description="Ban a player via CSSSharp")
 @owner_only()
 async def cssban(interaction: discord.Interaction, player: str, minutes: int, reason: str = "No reason"):
     resp = send_rcon_command(f'css_ban "{player}" {minutes} "{reason}"')
     await interaction.response.send_message(f"🔨 Banned `{player}` for {minutes}m.\n{resp}", ephemeral=True)
 
-@tree.command(name="csschangemap", description="Change map (whitelisted)")
+@bot.tree.command(name="csschangemap", description="Change map (whitelisted)")
 @owner_only()
 async def csschangemap(interaction: discord.Interaction, map: str):
     if map not in MAP_WHITELIST:
@@ -398,7 +395,7 @@ async def map_autocomplete(interaction: discord.Interaction, current: str):
     choices = [m for m in MAP_WHITELIST if current_lower in m.lower()]
     return [app_commands.Choice(name=m, value=m) for m in choices[:25]]
 
-@tree.command(name="cssreload", description="Reload CounterStrikeSharp plugins")
+@bot.tree.command(name="cssreload", description="Reload CounterStrikeSharp plugins")
 @owner_only()
 async def cssreload(interaction: discord.Interaction):
     resp = send_rcon_command('css_reloadplugins')
