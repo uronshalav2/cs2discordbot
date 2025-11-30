@@ -4,12 +4,14 @@ import asyncio
 import discord
 import requests
 from bs4 import BeautifulSoup
-from discord.ext import tasks
+from discord.ext import tasks, commands
 from discord import app_commands
 import a2s
 from mcrcon import MCRcon
 from datetime import datetime
 import pytz
+from typing import Literal, Optional
+import json # Added for handling API responses
 
 # ====== BOT CONFIG ======
 TOKEN = os.getenv("TOKEN")
@@ -23,13 +25,19 @@ SERVER_DEMOS_CHANNEL_ID = int(os.getenv("SERVER_DEMOS_CHANNEL_ID", 0))
 DEMOS_URL = os.getenv("DEMOS_URL")
 GUILD_ID = int(os.getenv("GUILD_ID", "0") or "0")
 
-# ====== OWNER ID ======
+# ====== API KEYS ======
+# YOU MUST SET THIS IN YOUR ENVIRONMENT
+FACEIT_API_KEY = os.getenv("FACEIT_API_KEY") 
+
+# ====== OWNER ID (Used for both prefix and slash commands) ======
 OWNER_ID = int(os.getenv("OWNER_ID", 0))
 
 # ====== DISCORD CLIENT ======
 intents = discord.Intents.default()
-intents.messages = True
-bot = discord.Client(intents=intents)
+intents.message_content = True 
+intents.messages = True 
+
+bot = commands.Bot(command_prefix="!", intents=intents, owner_id=OWNER_ID)
 tree = app_commands.CommandTree(bot)
 
 # ====== MAP WHITELIST ======
@@ -56,6 +64,7 @@ def send_rcon_command(command: str) -> str:
 def country_code_to_flag(code: str) -> str:
     if not code or len(code) != 2:
         return "🏳️"
+    # Unicode regional indicator symbols (works for most countries)
     return chr(ord(code[0].upper()) + 127397) + chr(ord(code[1].upper()) + 127397)
 
 def fetch_demos():
@@ -74,8 +83,6 @@ def fetch_demos():
 
 # ---------- Blank-name fix: RCON parsing ----------
 STATUS_NAME_RE = re.compile(r'^#\s*\d+\s+"(?P<name>.*?)"\s+')
-
-# FIXED REGEX for the custom CSS format (e.g., • [#1] "Name")
 CSS_LIST_RE    = re.compile(r'^\s*•\s*\[#\d+\]\s*"(?P<name>[^"]*)"')
 
 def sanitize_name(s: str) -> str:
@@ -87,10 +94,7 @@ def sanitize_name(s: str) -> str:
     return s.strip()
 
 def rcon_list_players():
-    """
-    Returns: list of dicts: [{'name': 'Player', 'time': '—', 'ping': '—'}]
-    Note: Time/ping fields are only populated by the vanilla 'status' command.
-    """
+    """Returns a list of unique, sanitized player names from RCON."""
     txt = send_rcon_command('css_players')
     used_css = txt and 'Unknown command' not in txt and 'Error' not in txt
 
@@ -98,7 +102,7 @@ def rcon_list_players():
         txt = send_rcon_command('status')
 
     players = []
-
+    # ... (rcon_list_players logic remains the same) ...
     for raw in txt.splitlines():
         line = raw.strip()
 
@@ -109,7 +113,7 @@ def rcon_list_players():
             players.append({'name': name, 'time': '—', 'ping': '—'})
             continue
 
-        # Vanilla status format (fields kept for robustness, but not displayed later)
+        # Vanilla status format
         m_std = STATUS_NAME_RE.match(line)
         if m_std:
             name = sanitize_name(m_std.group('name'))
@@ -133,7 +137,7 @@ def rcon_list_players():
 # ---------------------------------------------------
 
 async def get_server_status_embed() -> discord.Embed:
-    """Query A2S; if player names are blank/hidden, use RCON parsing as fallback."""
+    # ... (get_server_status_embed logic remains the same) ...
     addr = (SERVER_IP, SERVER_PORT)
     try:
         loop = asyncio.get_running_loop()
@@ -156,13 +160,11 @@ async def get_server_status_embed() -> discord.Embed:
 
         stats = ""
         if rcon_players:
-            # ✅ ONLY SHOW NAME (Time/Ping removed)
             stats = "\n".join(
                 f"🎮 **{p['name']}**"
                 for p in rcon_players
             )
         elif a2s_players:
-            # Use A2S data (names, score, duration)
             stats = "\n".join(
                 f"🎮 **{sanitize_name(getattr(p, 'name', '') or '—')}** | 🏆 {getattr(p, 'score', 0)} | ⏳ {getattr(p, 'duration', 0)/60:.1f} mins"
                 for p in sorted(a2s_players, key=lambda x: getattr(x, 'score', 0), reverse=True)
@@ -185,35 +187,154 @@ async def get_server_status_embed() -> discord.Embed:
         embed.add_field(name="❌ Server Unreachable", value="The server is currently offline.", inline=False)
         return embed
 
+async def fetch_faceit_player_stats(nickname: str) -> dict:
+    """
+    Fetches player data, including ELO, from the FACEIT API.
+    Returns a dictionary or raises an exception on error.
+    """
+    if not FACEIT_API_KEY:
+        raise ValueError("FACEIT_API_KEY is not configured.")
 
-# ====== READY (Command syncing removed) ======
+    headers = {"Authorization": f"Bearer {FACEIT_API_KEY}"}
+    
+    # 1. Get Player ID from Nickname
+    player_id_url = f"https://open.faceit.com/data/v4/players?nickname={nickname}"
+    id_resp = requests.get(player_id_url, headers=headers)
+    
+    if id_resp.status_code == 404:
+        raise ValueError("Player not found on FACEIT.")
+    elif id_resp.status_code != 200:
+        id_resp.raise_for_status() # Raise for other HTTP errors (e.g., rate limit)
+    
+    player_data = id_resp.json()
+    player_id = player_data.get('player_id')
+    
+    # 2. Get Game Stats (for ELO and other metrics)
+    # Assuming CS:GO/CS2 is the desired game (GameID is 'csgo')
+    stats_url = f"https://open.faceit.com/data/v4/players/{player_id}/stats/csgo"
+    stats_resp = requests.get(stats_url, headers=headers)
+
+    if stats_resp.status_code != 200:
+        stats_resp.raise_for_status()
+        
+    stats_data = stats_resp.json()
+    
+    # Extract the necessary data
+    lifetime_stats = stats_data.get('lifetime')
+    
+    return {
+        'nickname': player_data.get('nickname'),
+        'player_id': player_id,
+        'country_flag': country_code_to_flag(player_data.get('country')),
+        'avatar': player_data.get('avatar'),
+        'level': player_data.get('games', {}).get('csgo', {}).get('skill_level'),
+        'elo': player_data.get('games', {}).get('csgo', {}).get('faceit_elo'),
+        'matches': lifetime_stats.get('Matches'),
+        'win_rate': lifetime_stats.get('Win Rate %'),
+        'kd_ratio': lifetime_stats.get('Average K/D Ratio')
+    }
+
+# ====== READY ======
 @bot.event
 async def on_ready():
-    if GUILD_ID:
-        print(f"✅ Bot is running. Commands must be synced manually.")
-    else:
-        print(f"✅ Bot is running. Commands must be synced manually.")
+    print(f"✅ Bot is running. Logged in as {bot.user.name}")
+    print("Use the '!sync' prefix command to update application commands.")
+
+# ====== PREFIX COMMANDS (for syncing) ======
+
+@bot.command()
+@commands.guild_only()
+@commands.is_owner()
+async def sync(ctx: commands.Context, guilds: commands.Greedy[discord.Object], spec: Optional[Literal["~", "*", "^"]] = None) -> None:
+    """
+    Manually syncs application commands. 
+    Use: !sync | !sync ~ | !sync * | !sync ^
+    """
+    await ctx.send("Starting command synchronization...", delete_after=5)
+
+    if not guilds:
+        if spec == "~":
+            synced = await ctx.bot.tree.sync(guild=ctx.guild)
+        elif spec == "*":
+            ctx.bot.tree.copy_global_to(guild=ctx.guild)
+            synced = await ctx.bot.tree.sync(guild=ctx.guild)
+        elif spec == "^":
+            ctx.bot.tree.clear_commands(guild=ctx.guild)
+            await ctx.bot.tree.sync(guild=ctx.guild)
+            synced = []
+        else:
+            synced = await ctx.bot.tree.sync()
+
+        await ctx.send(
+            f"✅ Synced {len(synced)} commands {'globally' if spec is None else 'to the current guild'}. (Check the UI in a few minutes or hours)."
+        )
+        return
+
+    ret = 0
+    for guild in guilds:
+        try:
+            await ctx.bot.tree.sync(guild=guild)
+        except discord.HTTPException:
+            pass
+        else:
+            ret += 1
+
+    await ctx.send(f"✅ Synced the tree to {ret}/{len(guilds)} specified guilds.")
 
 
-# ====== COMMANDS (Temporary sync command added for cleanup) ======
-# TEMPORARY COMMAND: Use this ONCE to remove the old, cached commands from Discord.
-@tree.command(name="clearsync", description="OWNER: Force sync and remove old commands.")
+# ====== SLASH COMMANDS ======
+
+# Use this to force a full re-sync if the bot is only running on one main guild.
+@tree.command(name="appsync", description="OWNER: Force sync and remove old commands.")
 @owner_only()
-async def clearsync(interaction: discord.Interaction):
+async def appsync(interaction: discord.Interaction):
     await interaction.response.defer(ephemeral=True)
     
-    # Sync the tree, which forces Discord to update its list to match the current code
     if GUILD_ID:
         guild = discord.Object(id=GUILD_ID)
         await tree.sync(guild=guild)
-        await interaction.followup.send(f"✅ Synced commands to Guild {GUILD_ID}. Old commands should now be gone.", ephemeral=True)
+        await interaction.followup.send(f"✅ Synced commands to Guild {GUILD_ID}.", ephemeral=True)
     else:
         await tree.sync()
-        await interaction.followup.send("✅ Globally Synced commands. Old commands should now be gone.", ephemeral=True)
+        await interaction.followup.send("✅ Globally Synced commands.", ephemeral=True)
         
-    print("Commands successfully re-synced/cleared.")
+    print("Commands successfully re-synced.")
 
-# Regular Commands
+
+@tree.command(name="elo", description="Fetch FACEIT ELO and stats for a given nickname.")
+async def elo(interaction: discord.Interaction, nickname: str):
+    await interaction.response.defer()
+    
+    try:
+        stats = await fetch_faceit_player_stats(nickname)
+        
+        embed = discord.Embed(
+            title=f"⭐ FACEIT Stats for {stats['country_flag']} {stats['nickname']}", 
+            color=0xFF5500 # Orange/Red typical of FACEIT
+        )
+        embed.set_thumbnail(url=stats['avatar'])
+
+        embed.add_field(name="FACEIT Level", value=f"**{stats['level']}**", inline=True)
+        embed.add_field(name="ELO", value=f"**{stats['elo']}**", inline=True)
+        embed.add_field(name="Win Rate", value=f"**{stats['win_rate']}%**", inline=True)
+        
+        embed.add_field(name="Matches", value=f"{stats['matches']}", inline=True)
+        embed.add_field(name="K/D Ratio", value=f"{stats['kd_ratio']}", inline=True)
+        embed.add_field(name="\u200b", value="\u200b", inline=True) # Invisible field for spacing
+
+        embed.set_footer(text=f"Player ID: {stats['player_id']}")
+        await interaction.followup.send(embed=embed)
+
+    except ValueError as e:
+        await interaction.followup.send(f"❌ Error: {e}", ephemeral=True)
+    except requests.HTTPError as e:
+        # Catch rate limits (429) or other API issues
+        await interaction.followup.send(f"❌ FACEIT API Error: Failed to fetch data. Check your API key or server status. (Status: {e.response.status_code})", ephemeral=True)
+    except Exception as e:
+        await interaction.followup.send(f"❌ An unexpected error occurred while fetching FACEIT data.", ephemeral=True)
+
+
+# Regular Commands (Status and Demos remain the same)
 @tree.command(name="whoami", description="Show your Discord user ID")
 async def whoami(interaction: discord.Interaction):
     await interaction.response.send_message(f"👤 Your ID: `{interaction.user.id}`", ephemeral=True)
@@ -237,7 +358,7 @@ async def demos(interaction: discord.Interaction):
     embed.description = "\n".join(demo_list)
     await interaction.followup.send(embed=embed)
 
-# ====== OWNER-ONLY CSS COMMANDS ======
+# ====== OWNER-ONLY CSS COMMANDS (remain the same) ======
 @tree.command(name="csssay", description="Send a chat message via CSSSharp")
 @owner_only()
 async def csssay(interaction: discord.Interaction, message: str):
