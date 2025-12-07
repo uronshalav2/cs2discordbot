@@ -221,6 +221,13 @@ async def get_status_embed():
     embed.add_field(name="Map", value=info.map_name, inline=True)
     embed.add_field(name="Players", value=f"{info.player_count}/{info.max_players}", inline=True)
 
+    # ✅ ADD THIS
+    embed.add_field(
+        name="🌐 Connect IP",
+        value=f"`{SERVER_IP}:{SERVER_PORT}`",
+        inline=False
+    )
+
     # format player list
     if isinstance(players, list) and isinstance(players[0], dict):
         # RCON format
