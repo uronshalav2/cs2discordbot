@@ -69,52 +69,80 @@ def send_rcon(command: str) -> str:
 
 # ---------- Demo Scraper ----------
 def fetch_demos():
-    # Pull values from Railway Variables
-    COOKIE = os.getenv("FSHO_COOKIE")
-    X_TOKEN = os.getenv("XSRF_TOKEN")
-    # This URL comes from your Network Tab screenshot
-    LIVEWIRE_URL =os.getenv("LIVEWIRE_URL")
-
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-        "Cookie": COOKIE,
-        "X-CSRF-TOKEN": X_TOKEN,
-        "Content-Type": "application/json",
-        "Referer": "https://fshost.me/pro/servers/1842/files"
-    }
-
-    # Standard Livewire payload for fetching the files table
-    payload = {
-        "fingerprint": {"name": "pro.servers.files-table", "path": "pro/servers/1842/files", "method": "GET"},
-        "serverMemo": {"children": [], "errors": [], "htmlHash": "", "data": {"server": 1842}, "dataMeta": []},
-        "updates": []
-    }
+    # 1. Pull Credentials from Railway
+    USER = os.getenv("FSHO_USER", "").strip()
+    PASS = os.getenv("FSHO_PASS", "").strip()
+    LIVEWIRE_URL = os.getenv("LIVEWIRE_URL", "").strip()
+    
+    # We use a session object to handle cookies automatically
+    session = requests.Session()
+    session.headers.update({
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+    })
 
     try:
-        res = requests.post(LIVEWIRE_URL, headers=headers, json=payload, timeout=10)
+        # 2. Get the Login Page to find the initial CSRF token
+        login_page = session.get("https://fshost.me/login", timeout=10)
+        soup = BeautifulSoup(login_page.text, "html.parser")
+        
+        # Look for the hidden input named '_token' which Laravel/Livewire requires
+        csrf_input = soup.find("input", {"name": "_token"})
+        if not csrf_input:
+            return ["⚠️ Could not find login token on the page."]
+        
+        initial_token = csrf_input["value"]
+
+        # 3. Perform the Login
+        login_data = {
+            "_token": initial_token,
+            "email": USER,
+            "password": PASS,
+            "remember": "on"
+        }
+        
+        login_response = session.post("https://fshost.me/login", data=login_data, timeout=10)
+        
+        # Check if login was successful (usually a redirect or 200)
+        if login_response.status_code != 200 and not login_response.history:
+             return ["⚠️ Login failed. Check your FSHO_USER and FSHO_PASS."]
+
+        # 4. Request the File Table via Livewire
+        # We must pull the NEW XSRF-TOKEN created after login
+        current_xsrf = session.cookies.get("XSRF-TOKEN")
+        
+        # Livewire payload specific to the fshost file table
+        payload = {
+            "fingerprint": {"name": "pro.servers.files-table", "path": "pro/servers/1842/files", "method": "GET"},
+            "serverMemo": {"data": {"server": 1842}},
+            "updates": []
+        }
+
+        headers = {
+            "X-CSRF-TOKEN": current_xsrf, # Proof of authenticated POST
+            "Content-Type": "application/json",
+            "Referer": "https://fshost.me/pro/servers/1842/files"
+        }
+
+        res = session.post(LIVEWIRE_URL, headers=headers, json=payload, timeout=10)
         
         if res.status_code != 200:
-            return [f"⚠️ Error {res.status_code}: Your token likely expired at 19:03 GMT."]
+            return [f"⚠️ Livewire Error {res.status_code} after login."]
 
+        # 5. Parse the Links
         data = res.json()
-        # Livewire puts the table HTML inside the 'effects' key
         html_content = data.get('effects', {}).get('html', '')
         
-        if not html_content:
-            return ["⚠️ Could not find the file table in the server response."]
-
         soup = BeautifulSoup(html_content, "html.parser")
-        # Find all absolute links ending in .dem
         links = [a['href'] for a in soup.find_all("a", href=True) if a['href'].endswith(".dem")]
 
         if not links:
-            return ["⚠️ No demos found. The server might be empty or session is invalid."]
+            return ["⚠️ Logged in successfully, but no demos found in the table."]
 
-        # Show the 5 newest files
-        return [f"[{lnk.split('/')[-1]}](<{lnk}>)" for lnk in links[-5:]]
+        # Format newest 5 links for Discord
+        return [f"🎮 [{lnk.split('/')[-1]}](<{lnk}>)" for lnk in links[-5:]]
 
     except Exception as e:
-        return [f"⚠️ Bot script error: {e}"]
+        return [f"⚠️ Auto-login encountered an error: {str(e)}"]
 # ---------- Player Parsing ----------
 STATUS_NAME_RE = re.compile(r'^#\s*\d+\s+"(?P<name>.*?)"\s+')
 CSS_LIST_RE = re.compile(r'^\s*•\s*\[#\d+\]\s*"(?P<name>[^"]*)"')
