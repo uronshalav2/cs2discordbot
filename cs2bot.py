@@ -78,7 +78,7 @@ def send_rcon(command: str) -> str:
 def fetch_demos():
     headers = {
         "User-Agent": "Mozilla/5.0...",
-        "Cookie": COOKIE
+        "Cookie": FSHO_COOKIE
     }
     
     try:
