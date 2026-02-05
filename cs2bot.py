@@ -47,13 +47,6 @@ intents.messages = True
 
 bot = commands.Bot(command_prefix="!", intents=intents, owner_id=OWNER_ID)
 
-FSHO_COOKIE = os.getenv("FSHO_COOKIE")
-
-HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-    "Cookie": FSHO_COOKIE,
-    "Referer": "https://fsho.st/"
-}
 # ===============================================================
 # ====================== UTILITIES ==============================
 # ===============================================================
@@ -76,31 +69,52 @@ def send_rcon(command: str) -> str:
 
 # ---------- Demo Scraper ----------
 def fetch_demos():
+    # Pull values from Railway Variables
+    COOKIE = os.getenv("FSHO_COOKIE")
+    X_TOKEN = os.getenv("XSRF_TOKEN")
+    # This URL comes from your Network Tab screenshot
+    LIVEWIRE_URL =os.getenv("LIVEWIRE_URL")
+
     headers = {
-        "User-Agent": "Mozilla/5.0...",
-        "Cookie": FSHO_COOKIE
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        "Cookie": COOKIE,
+        "X-CSRF-TOKEN": X_TOKEN,
+        "Content-Type": "application/json",
+        "Referer": "https://fshost.me/pro/servers/1842/files"
     }
-    
+
+    # Standard Livewire payload for fetching the files table
+    payload = {
+        "fingerprint": {"name": "pro.servers.files-table", "path": "pro/servers/1842/files", "method": "GET"},
+        "serverMemo": {"children": [], "errors": [], "htmlHash": "", "data": {"server": 1842}, "dataMeta": []},
+        "updates": []
+    }
+
     try:
-        res = requests.get(URL, headers=headers, timeout=10)
-        soup = BeautifulSoup(res.text, "html.parser")
-
-        # 1. Grab all 'a' tags
-        # 2. Extract 'href'
-        # 3. Filter for absolute links ending in .dem
-        links = [
-            a.get('href') 
-            for a in soup.find_all('a', href=True) 
-            if a.get('href').endswith('.dem')
-        ]
-
-        return links # This returns a clean list of just the URLs
+        res = requests.post(LIVEWIRE_URL, headers=headers, json=payload, timeout=10)
         
-    except Exception as e:
-        print(f"Error: {e}")
-        return []
-        return [f"⚠️ Bot script crashed: {e}"]
+        if res.status_code != 200:
+            return [f"⚠️ Error {res.status_code}: Your token likely expired at 19:03 GMT."]
 
+        data = res.json()
+        # Livewire puts the table HTML inside the 'effects' key
+        html_content = data.get('effects', {}).get('html', '')
+        
+        if not html_content:
+            return ["⚠️ Could not find the file table in the server response."]
+
+        soup = BeautifulSoup(html_content, "html.parser")
+        # Find all absolute links ending in .dem
+        links = [a['href'] for a in soup.find_all("a", href=True) if a['href'].endswith(".dem")]
+
+        if not links:
+            return ["⚠️ No demos found. The server might be empty or session is invalid."]
+
+        # Show the 5 newest files
+        return [f"[{lnk.split('/')[-1]}](<{lnk}>)" for lnk in links[-5:]]
+
+    except Exception as e:
+        return [f"⚠️ Bot script error: {e}"]
 # ---------- Player Parsing ----------
 STATUS_NAME_RE = re.compile(r'^#\s*\d+\s+"(?P<name>.*?)"\s+')
 CSS_LIST_RE = re.compile(r'^\s*•\s*\[#\d+\]\s*"(?P<name>[^"]*)"')
