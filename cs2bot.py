@@ -69,7 +69,6 @@ def send_rcon(command: str) -> str:
 
 # ---------- Demo Scraper ----------
 def fetch_demos():
-    # Setup
     USER = os.getenv("FSHO_USER").strip()
     PASS = os.getenv("FSHO_PASS").strip()
     URL = os.getenv("LIVEWIRE_URL").strip()
@@ -81,28 +80,44 @@ def fetch_demos():
         # 1. Login
         login_pg = s.get("https://fshost.me/login")
         token = BeautifulSoup(login_pg.text, "html.parser").find("input", {"name": "_token"})["value"]
-        s.post("https://fshost.me/login", data={"_token": token, "email": USER, "password": PASS})
+        
+        # We check the login response to make sure it worked
+        login_res = s.post("https://fshost.me/login", data={"_token": token, "email": USER, "password": PASS})
+        if login_res.status_code != 200:
+            return ["⚠️ Login failed. Check your email/password in Railway."]
 
         # 2. Get Demos
-        headers = {"X-CSRF-TOKEN": s.cookies.get("XSRF-TOKEN"), "Content-Type": "application/json"}
+        headers = {
+            "X-CSRF-TOKEN": s.cookies.get("XSRF-TOKEN"), 
+            "Content-Type": "application/json",
+            "X-Livewire": "true"
+        }
         payload = {
             "fingerprint": {"name": "pro.servers.files-table", "path": "pro/servers/1842/files", "method": "GET"},
             "serverMemo": {"data": {"server": 1842}},
             "updates": []
         }
         
-        res = s.post(URL, headers=headers, json=payload).json()
-        html = res.get('effects', {}).get('html', '')
+        res = s.post(URL, headers=headers, json=payload)
         
-        # 3. Clean Links
+        # This prevents the "line 1 column 1" error
+        if "application/json" not in res.headers.get("Content-Type", ""):
+            return ["⚠️ Server sent HTML instead of JSON. Session might be blocked."]
+
+        data = res.json()
+        html = data.get('effects', {}).get('html', '')
+        
+        # 3. Get Links
         soup = BeautifulSoup(html, "html.parser")
         links = [a['href'] for a in soup.find_all("a", href=True) if ".dem" in a['href']]
 
-        if not links: return ["No demos found."]
-        return [f"🎬 {l.split('/')[-1]}" for l in links[-5:]] # Shows last 5
+        if not links: return ["✅ Logged in, but no demos are on the server."]
+        
+        # Show last 5 demos with clickable links
+        return [f"🎬 [{l.split('/')[-1]}](<{l}>)" for l in links[-5:]]
 
     except Exception as e:
-        return [f"Error: {e}"]
+        return [f"⚠️ Error: {str(e)}"]
 # ---------- Player Parsing ----------
 STATUS_NAME_RE = re.compile(r'^#\s*\d+\s+"(?P<name>.*?)"\s+')
 CSS_LIST_RE = re.compile(r'^\s*•\s*\[#\d+\]\s*"(?P<name>[^"]*)"')
