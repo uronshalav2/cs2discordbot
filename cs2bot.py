@@ -77,18 +77,22 @@ def fetch_demos():
     s.headers.update({"User-Agent": "Mozilla/5.0"})
 
     try:
-        # 1. Login
-        login_pg = s.get("https://fshost.me/login")
+        # 1. Get the login page to grab the bot's own CSRF token
+        login_pg = s.get("https://fshost.me/login", timeout=10)
         token = BeautifulSoup(login_pg.text, "html.parser").find("input", {"name": "_token"})["value"]
-        
-        # We check the login response to make sure it worked
-        login_res = s.post("https://fshost.me/login", data={"_token": token, "email": USER, "password": PASS})
-        if login_res.status_code != 200:
-            return ["⚠️ Login failed. Check your email/password in Railway."]
 
-        # 2. Get Demos
+        # 2. Log in using your email and password
+        # Added 'remember': '1' per your requirement
+        login_data = {"_token": token, "email": USER, "password": PASS, "remember": "1"}
+        login_res = s.post("https://fshost.me/login", data=login_data, allow_redirects=True)
+
+        # Safety Check: Did we actually get past the login screen?
+        if "login" in login_res.url:
+            return ["⚠️ Login Failed: The site rejected your email or password."]
+
+        # 3. Request the Demo Table via Livewire
         headers = {
-            "X-CSRF-TOKEN": s.cookies.get("XSRF-TOKEN"), 
+            "X-CSRF-TOKEN": s.cookies.get("XSRF-TOKEN"),
             "Content-Type": "application/json",
             "X-Livewire": "true"
         }
@@ -98,26 +102,25 @@ def fetch_demos():
             "updates": []
         }
         
-        res = s.post(URL, headers=headers, json=payload)
+        res = s.post(URL, headers=headers, json=payload, timeout=10)
         
-        # This prevents the "line 1 column 1" error
-        if "application/json" not in res.headers.get("Content-Type", ""):
-            return ["⚠️ Server sent HTML instead of JSON. Session might be blocked."]
-
+        # 4. Extract HTML and Links
         data = res.json()
-        html = data.get('effects', {}).get('html', '')
-        
-        # 3. Get Links
-        soup = BeautifulSoup(html, "html.parser")
+        html_content = data.get('effects', {}).get('html', '')
+        soup = BeautifulSoup(html_content, "html.parser")
         links = [a['href'] for a in soup.find_all("a", href=True) if ".dem" in a['href']]
 
-        if not links: return ["✅ Logged in, but no demos are on the server."]
-        
-        # Show last 5 demos with clickable links
-        return [f"🎬 [{l.split('/')[-1]}](<{l}>)" for l in links[-5:]]
+        if not links:
+            return ["✅ Login worked, but no demos are on the server right now."]
+
+        # Return newest 5 demos as clickable links
+        return [f"🎮 [{l.split('/')[-1]}](<{l}>)" for l in links[-5:]]
 
     except Exception as e:
-        return [f"⚠️ Error: {str(e)}"]
+        return [f"⚠️ Bot encountered an error: {str(e)}"]
+
+
+
 # ---------- Player Parsing ----------
 STATUS_NAME_RE = re.compile(r'^#\s*\d+\s+"(?P<name>.*?)"\s+')
 CSS_LIST_RE = re.compile(r'^\s*•\s*\[#\d+\]\s*"(?P<name>[^"]*)"')
