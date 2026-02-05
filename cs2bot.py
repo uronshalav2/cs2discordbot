@@ -75,7 +75,7 @@ def send_rcon(command: str) -> str:
 
 
 # ---------- Demo Scraper ----------
-def get_demo_links():
+def fetch_demos():
     headers = {
         "User-Agent": "Mozilla/5.0...",
         "Cookie": COOKIE
