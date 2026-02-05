@@ -47,12 +47,12 @@ intents.messages = True
 
 bot = commands.Bot(command_prefix="!", intents=intents, owner_id=OWNER_ID)
 
-COOKIE_STRING = os.getenv("FSHO_COOKIE", "")
+FSHO_COOKIE = os.getenv("FSHO_COOKIE")
 
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-    "Cookie": COOKIE_STRING, # Pass the Railway variable here
-    "Referer": "https://fr6.fsho.st/"
+    "Cookie": FSHO_COOKIE,
+    "Referer": "https://fsho.st/"
 }
 # ===============================================================
 # ====================== UTILITIES ==============================
@@ -77,26 +77,31 @@ def send_rcon(command: str) -> str:
 # ---------- Demo Scraper ----------
 def fetch_demos():
     try:
-
-        res = requests.get(DEMOS_URL, headers=HEADERS, timeout=10)
+        # Use a timeout so the bot doesn't hang forever
+        res = requests.get(DEMOS_URL, headers=HEADERS, timeout=15)
         
-        if res.status_code == 401 or res.status_code == 403:
-            return ["⚠️ Auth failed. Update your FSHO_COOKIE in Railway!"]
+        # Check if the page actually loaded
+        if res.status_code != 200:
+            return [f"⚠️ Error {res.status_code}: Check if your Railway cookie is expired."]
 
         soup = BeautifulSoup(res.text, "html.parser")
         
-        # Using the absolute link logic from your screenshot
+        # Find all <a> tags where the href ends with .dem
         links = [a['href'] for a in soup.find_all("a", href=True) if a["href"].endswith(".dem")]
 
         if not links:
-            return ["⚠️ No demos found. Table might be empty or restricted."]
+            # If this happens, print res.text to your Railway logs to see what the bot sees!
+            return ["⚠️ No demos found. The page might be loading via JavaScript."]
 
+        # Show the most recent 5
         latest = links[-5:]
-        # Extracting filename from the full URL path
+        
+        # We format it as [filename](<url>)
+        # The < > around the URL prevents Discord from generating big embed previews
         return [f"[{d.split('/')[-1]}](<{d}>)" for d in latest]
 
     except Exception as e:
-        return [f"⚠️ Error: {e}"]
+        return [f"⚠️ Bot script crashed: {e}"]
 
 # ---------- Player Parsing ----------
 STATUS_NAME_RE = re.compile(r'^#\s*\d+\s+"(?P<name>.*?)"\s+')
