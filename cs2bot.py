@@ -75,32 +75,30 @@ def send_rcon(command: str) -> str:
 
 
 # ---------- Demo Scraper ----------
-def fetch_demos():
+def get_demo_links():
+    headers = {
+        "User-Agent": "Mozilla/5.0...",
+        "Cookie": COOKIE
+    }
+    
     try:
-        # Use a timeout so the bot doesn't hang forever
-        res = requests.get(DEMOS_URL, headers=HEADERS, timeout=15)
-        
-        # Check if the page actually loaded
-        if res.status_code != 200:
-            return [f"⚠️ Error {res.status_code}: Check if your Railway cookie is expired."]
-
+        res = requests.get(URL, headers=headers, timeout=10)
         soup = BeautifulSoup(res.text, "html.parser")
+
+        # 1. Grab all 'a' tags
+        # 2. Extract 'href'
+        # 3. Filter for absolute links ending in .dem
+        links = [
+            a.get('href') 
+            for a in soup.find_all('a', href=True) 
+            if a.get('href').endswith('.dem')
+        ]
+
+        return links # This returns a clean list of just the URLs
         
-        # Find all <a> tags where the href ends with .dem
-        links = [a['href'] for a in soup.find_all("a", href=True) if a["href"].endswith(".dem")]
-
-        if not links:
-            # If this happens, print res.text to your Railway logs to see what the bot sees!
-            return ["⚠️ No demos found. The page might be loading via JavaScript."]
-
-        # Show the most recent 5
-        latest = links[-5:]
-        
-        # We format it as [filename](<url>)
-        # The < > around the URL prevents Discord from generating big embed previews
-        return [f"[{d.split('/')[-1]}](<{d}>)" for d in latest]
-
     except Exception as e:
+        print(f"Error: {e}")
+        return []
         return [f"⚠️ Bot script crashed: {e}"]
 
 # ---------- Player Parsing ----------
