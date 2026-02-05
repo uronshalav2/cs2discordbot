@@ -74,27 +74,33 @@ def fetch_demos():
     URL = os.getenv("LIVEWIRE_URL").strip()
     
     s = requests.Session()
-    s.headers.update({"User-Agent": "Mozilla/5.0"})
+    # High-quality browser headers to bypass basic bot detection
+    s.headers.update({
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        "Accept": "application/json, text/plain, */*",
+        "Origin": "https://fshost.me",
+        "Referer": "https://fshost.me/login"
+    })
 
     try:
-        # 1. Get the login page to grab the bot's own CSRF token
+        # 1. Fetch the login page for the session token
         login_pg = s.get("https://fshost.me/login", timeout=10)
-        token = BeautifulSoup(login_pg.text, "html.parser").find("input", {"name": "_token"})["value"]
+        soup = BeautifulSoup(login_pg.text, "html.parser")
+        token = soup.find("input", {"name": "_token"})["value"]
 
-        # 2. Log in using your email and password
-        # Added 'remember': '1' per your requirement
+        # 2. Perform the Login
         login_data = {"_token": token, "email": USER, "password": PASS, "remember": "1"}
-        login_res = s.post("https://fshost.me/login", data=login_data, allow_redirects=True)
+        r = s.post("https://fshost.me/login", data=login_data, allow_redirects=True, timeout=10)
 
-        # Safety Check: Did we actually get past the login screen?
-        if "login" in login_res.url:
-            return ["⚠️ Login Failed: The site rejected your email or password."]
+        # --- DEBUG CHECK ---
+        if "login" in r.url:
+            return [f"⚠️ Login Failed. Bot is stuck at: {r.url}. Check your password in Railway."]
 
-        # 3. Request the Demo Table via Livewire
+        # 3. Request the Demo Table
         headers = {
             "X-CSRF-TOKEN": s.cookies.get("XSRF-TOKEN"),
-            "Content-Type": "application/json",
-            "X-Livewire": "true"
+            "X-Livewire": "true",
+            "Referer": "https://fshost.me/pro/servers/1842/files"
         }
         payload = {
             "fingerprint": {"name": "pro.servers.files-table", "path": "pro/servers/1842/files", "method": "GET"},
@@ -104,22 +110,21 @@ def fetch_demos():
         
         res = s.post(URL, headers=headers, json=payload, timeout=10)
         
-        # 4. Extract HTML and Links
+        # Verify if the response is actually the JSON data we need
+        if "json" not in res.headers.get("Content-Type", ""):
+             return [f"⚠️ Error: Server sent HTML instead of data. (URL: {res.url})"]
+
+        # 4. Extract Links
         data = res.json()
-        html_content = data.get('effects', {}).get('html', '')
-        soup = BeautifulSoup(html_content, "html.parser")
+        html = data.get('effects', {}).get('html', '')
+        soup = BeautifulSoup(html, "html.parser")
         links = [a['href'] for a in soup.find_all("a", href=True) if ".dem" in a['href']]
 
-        if not links:
-            return ["✅ Login worked, but no demos are on the server right now."]
-
-        # Return newest 5 demos as clickable links
-        return [f"🎮 [{l.split('/')[-1]}](<{l}>)" for l in links[-5:]]
+        if not links: return ["✅ Logged in, but the demo list is empty."]
+        return [f"🎬 [{l.split('/')[-1]}](<{l}>)" for l in links[-5:]]
 
     except Exception as e:
-        return [f"⚠️ Bot encountered an error: {str(e)}"]
-
-
+        return [f"⚠️ Debug Error: {str(e)}"]
 
 # ---------- Player Parsing ----------
 STATUS_NAME_RE = re.compile(r'^#\s*\d+\s+"(?P<name>.*?)"\s+')
