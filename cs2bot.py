@@ -47,7 +47,13 @@ intents.messages = True
 
 bot = commands.Bot(command_prefix="!", intents=intents, owner_id=OWNER_ID)
 
+COOKIE_STRING = os.getenv("FSHO_COOKIE", "")
 
+HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+    "Cookie": COOKIE_STRING, # Pass the Railway variable here
+    "Referer": "https://fr6.fsho.st/"
+}
 # ===============================================================
 # ====================== UTILITIES ==============================
 # ===============================================================
@@ -71,22 +77,26 @@ def send_rcon(command: str) -> str:
 # ---------- Demo Scraper ----------
 def fetch_demos():
     try:
-        res = requests.get(DEMOS_URL, timeout=10)
-        if res.status_code != 200:
-            return ["⚠️ Could not fetch demos."]
+
+        res = requests.get(DEMOS_URL, headers=HEADERS, timeout=10)
+        
+        if res.status_code == 401 or res.status_code == 403:
+            return ["⚠️ Auth failed. Update your FSHO_COOKIE in Railway!"]
 
         soup = BeautifulSoup(res.text, "html.parser")
+        
+        # Using the absolute link logic from your screenshot
         links = [a['href'] for a in soup.find_all("a", href=True) if a["href"].endswith(".dem")]
 
         if not links:
-            return ["⚠️ No demos found."]
+            return ["⚠️ No demos found. Table might be empty or restricted."]
 
         latest = links[-5:]
-        return [f"[{d}](<{DEMOS_URL}{d}>)" for d in latest]
+        # Extracting filename from the full URL path
+        return [f"[{d.split('/')[-1]}](<{d}>)" for d in latest]
 
     except Exception as e:
-        return [f"⚠️ Error fetching demos: {e}"]
-
+        return [f"⚠️ Error: {e}"]
 
 # ---------- Player Parsing ----------
 STATUS_NAME_RE = re.compile(r'^#\s*\d+\s+"(?P<name>.*?)"\s+')
