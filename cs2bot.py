@@ -26,9 +26,9 @@ from mcrcon import MCRcon
 
 TOKEN = os.getenv(“TOKEN”)
 if TOKEN:
-# Remove common problematic characters
-TOKEN = TOKEN.replace(’”’, ‘’).replace(’”’, ‘’).replace(’”’, ‘’)  # Smart quotes
-TOKEN = TOKEN.replace(”’”, ‘’).replace(”’”, ‘’).replace(”‛”, ‘’)  # Smart single quotes
+# Remove common problematic characters using Unicode escape sequences
+TOKEN = TOKEN.replace(’\u201c’, ‘’).replace(’\u201d’, ‘’)  # Smart double quotes
+TOKEN = TOKEN.replace(’\u2018’, ‘’).replace(’\u2019’, ‘’)  # Smart single quotes  
 TOKEN = TOKEN.replace(’\u200b’, ‘’).replace(’\ufeff’, ‘’)  # Zero-width spaces
 TOKEN = TOKEN.strip()  # Remove leading/trailing whitespace
 
