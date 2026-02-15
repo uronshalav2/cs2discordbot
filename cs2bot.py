@@ -19,23 +19,23 @@ from mcrcon import MCRcon
 # ===============================================================
 
 TOKEN = os.getenv("TOKEN")
-SERVER_IP = os.getenv(“SERVER_IP”, “127.0.0.1”)
-SERVER_PORT = int(os.getenv(“SERVER_PORT”, 27015))
-RCON_IP = os.getenv(“RCON_IP”, SERVER_IP)
-RCON_PORT = int(os.getenv(“RCON_PORT”, 27015))
-RCON_PASSWORD = os.getenv(“RCON_PASSWORD”, “”)
-CHANNEL_ID = int(os.getenv(“CHANNEL_ID”, 0))
-SERVER_DEMOS_CHANNEL_ID = int(os.getenv(“SERVER_DEMOS_CHANNEL_ID”, 0))
-DEMOS_JSON_URL = os.getenv(“DEMOS_JSON_URL”)
-GUILD_ID = int(os.getenv(“GUILD_ID”, “0”) or “0”)
-FACEIT_API_KEY = os.getenv(“FACEIT_API_KEY”)
-OWNER_ID = int(os.getenv(“OWNER_ID”, 0))
+SERVER_IP = os.getenv("SERVER_IP", "127.0.0.1")
+SERVER_PORT = int(os.getenv("SERVER_PORT", 27015))
+RCON_IP = os.getenv("RCON_IP", SERVER_IP)
+RCON_PORT = int(os.getenv("RCON_PORT", 27015))
+RCON_PASSWORD = os.getenv("RCON_PASSWORD", "")
+CHANNEL_ID = int(os.getenv("CHANNEL_ID", 0))
+SERVER_DEMOS_CHANNEL_ID = int(os.getenv("SERVER_DEMOS_CHANNEL_ID", 0))
+DEMOS_JSON_URL = os.getenv("DEMOS_JSON_URL")
+GUILD_ID = int(os.getenv("GUILD_ID", "0") or "0")
+FACEIT_API_KEY = os.getenv("FACEIT_API_KEY")
+OWNER_ID = int(os.getenv("OWNER_ID", 0))
 
-FACEIT_GAME_ID = “cs2”
+FACEIT_GAME_ID = "cs2"
 
 MAP_WHITELIST = [
-“de_inferno”, “de_mirage”, “de_dust2”, “de_overpass”,
-“de_nuke”, “de_ancient”, “de_vertigo”, “de_anubis”
+"de_inferno", "de_mirage", "de_dust2", "de_overpass",
+"de_nuke", "de_ancient", "de_vertigo", "de_anubis"
 ]
 
 # ===============================================================
@@ -48,7 +48,7 @@ intents = discord.Intents.default()
 intents.message_content = True
 intents.messages = True
 
-bot = commands.Bot(command_prefix=”!”, intents=intents, owner_id=OWNER_ID)
+bot = commands.Bot(command_prefix="!", intents=intents, owner_id=OWNER_ID)
 
 # ===============================================================
 
@@ -69,17 +69,17 @@ with MCRcon(RCON_IP, RCON_PASSWORD, port=RCON_PORT) as rcon:
 resp = rcon.command(command)
 return resp[:2000] if len(resp) > 2000 else resp
 except Exception as e:
-return f”⚠️ RCON Error: {e}”
+return f"⚠️ RCON Error: {e}"
 
 # ––––– Demo Fetcher (JSON-based with proper headers) –––––
 
 def fetch_demos():
-“””
+"""
 Fetches demo files from the JSON endpoint.
 Returns a list of formatted demo links.
-“””
+"""
 if not DEMOS_JSON_URL:
-return [“⚠️ DEMOS_JSON_URL is not configured in environment variables.”]
+return ["⚠️ DEMOS_JSON_URL is not configured in environment variables."]
 
 ```
 # Browser-like headers to avoid bot detection
@@ -136,18 +136,18 @@ except Exception as e:
 
 # ––––– Player Parsing –––––
 
-STATUS_NAME_RE = re.compile(r’^#\s*\d+\s+”(?P<n>.*?)”\s+’)
-CSS_LIST_RE = re.compile(r’^\s*•\s*[#\d+]\s*”(?P<n>[^”]*)”’)
+STATUS_NAME_RE = re.compile(r’^#\s*\d+\s+"(?P<n>.*?)"\s+’)
+CSS_LIST_RE = re.compile(r’^\s*•\s*[#\d+]\s*"(?P<n>[^"]*)"’)
 
 def sanitize(s: str) -> str:
 if not s:
-return “—”
+return "—"
 for ch in [’*’, ‘_’, ‘`’, ‘~’, ‘|’, ‘>’, ‘@’]:
-s = s.replace(ch, f”\{ch}”)
-return s.replace(”\x00”, “”).strip()
+s = s.replace(ch, f"\{ch}")
+return s.replace("\x00", "").strip()
 
 def rcon_list_players():
-txt = send_rcon(“css_players”)
+txt = send_rcon("css_players")
 
 ```
 if "Unknown command" in txt or "Error" in txt:
@@ -195,12 +195,12 @@ return uniq
 
 def flag(cc):
 if not cc or len(cc) != 2:
-return “🏳️”
-return “”.join(chr(ord(c.upper()) + 127397) for c in cc)
+return "🏳️"
+return "".join(chr(ord(c.upper()) + 127397) for c in cc)
 
 async def fetch_faceit_stats_cs2(nickname: str) -> dict:
 if not FACEIT_API_KEY:
-raise ValueError(“FACEIT_API_KEY missing”)
+raise ValueError("FACEIT_API_KEY missing")
 
 ```
 headers = {"Authorization": f"Bearer {FACEIT_API_KEY}"}
@@ -302,8 +302,8 @@ return embed
 
 @bot.event
 async def on_ready():
-print(f”Bot online as {bot.user.name}”)
-print(“Use !sync to sync slash commands.”)
+print(f"Bot online as {bot.user.name}")
+print("Use !sync to sync slash commands.")
 
 # ===============================================================
 
@@ -314,8 +314,8 @@ print(“Use !sync to sync slash commands.”)
 @bot.command()
 @commands.guild_only()
 @commands.is_owner()
-async def sync(ctx, guilds: commands.Greedy[discord.Object] = None, spec: Optional[Literal[”~”, “*”, “^”]] = None):
-await ctx.send(“Syncing…”, delete_after=5)
+async def sync(ctx, guilds: commands.Greedy[discord.Object] = None, spec: Optional[Literal["~", "*", "^"]] = None):
+await ctx.send("Syncing…", delete_after=5)
 
 ```
 if not guilds:
@@ -350,16 +350,16 @@ await ctx.send(f"Synced to {count}/{len(guilds)} guilds.")
 
 # ===============================================================
 
-@bot.tree.command(name=“status”)
+@bot.tree.command(name="status")
 async def status_cmd(inter: discord.Interaction):
 await inter.response.defer()
 embed = await get_status_embed()
 await inter.followup.send(embed=embed)
 
-@bot.tree.command(name=“demos”)
+@bot.tree.command(name="demos")
 async def demos_cmd(inter: discord.Interaction):
 if SERVER_DEMOS_CHANNEL_ID and inter.channel_id != SERVER_DEMOS_CHANNEL_ID:
-return await inter.response.send_message(“Wrong channel!”, ephemeral=True)
+return await inter.response.send_message("Wrong channel!", ephemeral=True)
 
 ```
 await inter.response.defer()
@@ -368,7 +368,7 @@ embed = discord.Embed(title="🎥 Latest Demos", description="\n".join(lst), col
 await inter.followup.send(embed=embed)
 ```
 
-@bot.tree.command(name=“elo”, description=“Get FACEIT stats for CS2”)
+@bot.tree.command(name="elo", description="Get FACEIT stats for CS2")
 async def faceit_cmd(inter: discord.Interaction, nickname: str):
 await inter.response.defer()
 
@@ -401,50 +401,50 @@ await inter.followup.send(embed=embed)
 
 # ===============================================================
 
-@bot.tree.command(name=“csssay”)
+@bot.tree.command(name="csssay")
 @owner_only()
 async def csssay(inter, message: str):
-resp = send_rcon(f”css_cssay {message}”)
+resp = send_rcon(f"css_cssay {message}")
 await inter.response.send_message(resp, ephemeral=True)
 
-@bot.tree.command(name=“csshsay”)
+@bot.tree.command(name="csshsay")
 @owner_only()
 async def csshsay(inter, message: str):
-resp = send_rcon(f”css_hsay {message}”)
+resp = send_rcon(f"css_hsay {message}")
 await inter.response.send_message(resp, ephemeral=True)
 
-@bot.tree.command(name=“csskick”)
+@bot.tree.command(name="csskick")
 @owner_only()
 async def csskick(inter, player: str):
-resp = send_rcon(f’css_kick “{player}”’)
+resp = send_rcon(f’css_kick "{player}"’)
 await inter.response.send_message(resp, ephemeral=True)
 
-@bot.tree.command(name=“cssban”)
+@bot.tree.command(name="cssban")
 @owner_only()
-async def cssban(inter, player: str, minutes: int, reason: str = “No reason”):
-resp = send_rcon(f’css_ban “{player}” {minutes} “{reason}”’)
+async def cssban(inter, player: str, minutes: int, reason: str = "No reason"):
+resp = send_rcon(f’css_ban "{player}" {minutes} "{reason}"’)
 await inter.response.send_message(resp, ephemeral=True)
 
-@bot.tree.command(name=“csschangemap”)
+@bot.tree.command(name="csschangemap")
 @owner_only()
 async def csschangemap(inter, map: str):
 if map not in MAP_WHITELIST:
-return await inter.response.send_message(“Map not allowed.”, ephemeral=True)
+return await inter.response.send_message("Map not allowed.", ephemeral=True)
 
 ```
 resp = send_rcon(f"css_changemap {map}")
 await inter.response.send_message(resp, ephemeral=True)
 ```
 
-@csschangemap.autocomplete(“map”)
+@csschangemap.autocomplete("map")
 async def autocomplete_map(inter, current: str):
 return [app_commands.Choice(name=m, value=m)
 for m in MAP_WHITELIST if current.lower() in m.lower()]
 
-@bot.tree.command(name=“cssreload”)
+@bot.tree.command(name="cssreload")
 @owner_only()
 async def cssreload(inter):
-resp = send_rcon(“css_reloadplugins”)
+resp = send_rcon("css_reloadplugins")
 await inter.response.send_message(resp, ephemeral=True)
 
 # ===============================================================
@@ -454,6 +454,6 @@ await inter.response.send_message(resp, ephemeral=True)
 # ===============================================================
 
 if not TOKEN:
-raise SystemExit(“TOKEN missing.”)
+raise SystemExit("TOKEN missing.")
 
 bot.run(TOKEN)
