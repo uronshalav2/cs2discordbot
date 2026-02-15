@@ -12,13 +12,26 @@ from discord import app_commands
 from typing import Literal, Optional
 from mcrcon import MCRcon
 
+# BeautifulSoup is no longer needed but kept for backward compatibility
+
+# You can remove beautifulsoup4 from requirements.txt
+
 # ===============================================================
 
 # =============== ENVIRONMENT VARIABLES =========================
 
 # ===============================================================
 
+# Get TOKEN and clean it
+
 TOKEN = os.getenv(“TOKEN”)
+if TOKEN:
+# Remove common problematic characters
+TOKEN = TOKEN.replace(’”’, ‘’).replace(’”’, ‘’).replace(’”’, ‘’)  # Smart quotes
+TOKEN = TOKEN.replace(”’”, ‘’).replace(”’”, ‘’).replace(”‛”, ‘’)  # Smart single quotes
+TOKEN = TOKEN.replace(’\u200b’, ‘’).replace(’\ufeff’, ‘’)  # Zero-width spaces
+TOKEN = TOKEN.strip()  # Remove leading/trailing whitespace
+
 SERVER_IP = os.getenv(“SERVER_IP”, “127.0.0.1”)
 SERVER_PORT = int(os.getenv(“SERVER_PORT”, 27015))
 RCON_IP = os.getenv(“RCON_IP”, SERVER_IP)
@@ -435,7 +448,23 @@ await inter.response.send_message(resp, ephemeral=True)
 
 # ===============================================================
 
-if not TOKEN:
-raise SystemExit(“TOKEN missing.”)
+print(”=” * 50)
+print(“🤖 Starting Discord Bot…”)
+print(”=” * 50)
 
+# Diagnostic checks
+
+print(f”✓ TOKEN: {‘Set’ if TOKEN else ‘❌ MISSING’}”)
+print(f”✓ SERVER_IP: {SERVER_IP}”)
+print(f”✓ DEMOS_JSON_URL: {‘Set’ if DEMOS_JSON_URL else ‘⚠️  Not set (optional)’}”)
+print(f”✓ OWNER_ID: {OWNER_ID if OWNER_ID else ‘⚠️  Not set’}”)
+print(”=” * 50)
+
+if not TOKEN:
+raise SystemExit(“❌ TOKEN is missing from environment variables!”)
+
+try:
 bot.run(TOKEN)
+except Exception as e:
+print(f”❌ Bot crashed: {e}”)
+raise
