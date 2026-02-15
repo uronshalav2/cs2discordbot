@@ -18,7 +18,7 @@ from mcrcon import MCRcon
 
 # ===============================================================
 
-TOKEN = os.getenv(“TOKEN”)
+TOKEN = os.getenv("TOKEN")
 SERVER_IP = os.getenv(“SERVER_IP”, “127.0.0.1”)
 SERVER_PORT = int(os.getenv(“SERVER_PORT”, 27015))
 RCON_IP = os.getenv(“RCON_IP”, SERVER_IP)
