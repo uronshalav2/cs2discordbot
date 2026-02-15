@@ -5,4 +5,4 @@ pytz
 mcrcon
 valve
 requests
-beautifulsoup4
+matplotlib
