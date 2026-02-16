@@ -41,6 +41,7 @@ GUILD_ID = int(os.getenv("GUILD_ID", "0") or "0")
 FACEIT_API_KEY = os.getenv("FACEIT_API_KEY")
 OWNER_ID = int(os.getenv("OWNER_ID", 0))
 STATUS_CHANNEL_ID = int(os.getenv("STATUS_CHANNEL_ID", 0))
+NOTIFICATIONS_CHANNEL_ID = int(os.getenv("NOTIFICATIONS_CHANNEL_ID", 0))
 FACEIT_GAME_ID = "cs2"
 MAP_WHITELIST = [
     "de_inferno", "de_mirage", "de_dust2", "de_overpass",
@@ -473,6 +474,8 @@ def update_player_tracking(current_player_names, map_name):
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
     
+    notifications = []
+    
     # Check for players who left
     for player_name in list(current_players.keys()):
         if player_name not in current_player_names:
@@ -485,15 +488,39 @@ def update_player_tracking(current_player_names, map_name):
                          VALUES (?, ?, ?, ?, ?)''',
                       (player_name, join_time, leave_time, duration, map_name))
             
+            # Create leave notification
+            hours = duration // 60
+            mins = duration % 60
+            
+            if hours > 0:
+                time_str = f"{hours}h {mins}m"
+            else:
+                time_str = f"{mins}m"
+            
+            notifications.append({
+                'type': 'leave',
+                'player': player_name,
+                'duration': time_str
+            })
+            
             del current_players[player_name]
     
     # Check for new players
     for player_name in current_player_names:
         if player_name not in current_players:
             current_players[player_name] = now
+            
+            # Create join notification
+            notifications.append({
+                'type': 'join',
+                'player': player_name,
+                'map': map_name
+            })
     
     conn.commit()
     conn.close()
+    
+    return notifications
 
 def get_player_stats(player_name):
     conn = sqlite3.connect(DB_FILE)
@@ -551,7 +578,7 @@ def get_leaderboard(limit=10):
     return leaderboard
 
 # ========== BACKGROUND TASKS ==========
-@tasks.loop(minutes=5)
+@tasks.loop(minutes=1)  # Changed to 1 minute for faster notifications
 async def update_server_stats():
     try:
         addr = (SERVER_IP, SERVER_PORT)
@@ -578,9 +605,42 @@ async def update_server_stats():
         else:
             player_names = []
         
-        # Record snapshot and update tracking
+        # Record snapshot (every check)
         record_snapshot(info.player_count, info.map_name)
-        update_player_tracking(player_names, info.map_name)
+        
+        # Update tracking and get notifications
+        notifications = update_player_tracking(player_names, info.map_name)
+        
+        # Send notifications to Discord
+        if notifications and NOTIFICATIONS_CHANNEL_ID:
+            channel = bot.get_channel(NOTIFICATIONS_CHANNEL_ID)
+            if channel:
+                for notif in notifications:
+                    if notif['type'] == 'join':
+                        embed = discord.Embed(
+                            description=f"👋 **{notif['player']}** joined the server",
+                            color=0x2ECC71
+                        )
+                        embed.add_field(
+                            name="Current Map",
+                            value=f"`{notif['map']}`",
+                            inline=True
+                        )
+                        embed.set_footer(text=f"Players online: {len(player_names)}")
+                        await channel.send(embed=embed)
+                    
+                    elif notif['type'] == 'leave':
+                        embed = discord.Embed(
+                            description=f"👋 **{notif['player']}** left the server",
+                            color=0x95A5A6
+                        )
+                        embed.add_field(
+                            name="Session Duration",
+                            value=f"`{notif['duration']}`",
+                            inline=True
+                        )
+                        embed.set_footer(text=f"Players online: {len(player_names)}")
+                        await channel.send(embed=embed)
         
     except Exception as e:
         print(f"Error in update_server_stats: {e}")
@@ -914,6 +974,44 @@ async def autocomplete_map(inter, current: str):
 async def cssreload(inter):
     resp = send_rcon("css_reloadplugins")
     await inter.response.send_message(resp, ephemeral=True)
+
+@bot.tree.command(name="notifications", description="Toggle join/leave notifications")
+@owner_only()
+async def notifications_cmd(inter: discord.Interaction, 
+                            enabled: bool,
+                            channel: discord.TextChannel = None):
+    """
+    Enable or disable player join/leave notifications
+    
+    Parameters:
+    -----------
+    enabled: True to enable, False to disable
+    channel: Channel where notifications should be posted (optional)
+    """
+    await inter.response.defer(ephemeral=True)
+    
+    if enabled:
+        if channel:
+            # User specified a channel
+            channel_id = channel.id
+            msg = f"✅ Notifications enabled in {channel.mention}"
+        elif NOTIFICATIONS_CHANNEL_ID:
+            # Already configured
+            channel_id = NOTIFICATIONS_CHANNEL_ID
+            msg = f"✅ Notifications are enabled in <#{NOTIFICATIONS_CHANNEL_ID}>"
+        else:
+            # No channel specified and none configured
+            return await inter.followup.send(
+                "❌ Please specify a channel: `/notifications enabled:True channel:#your-channel`",
+                ephemeral=True
+            )
+        
+        msg += f"\n\n**Note:** Set `NOTIFICATIONS_CHANNEL_ID={channel_id}` in Railway environment variables to persist this setting."
+        
+    else:
+        msg = "✅ Notifications disabled. Remove `NOTIFICATIONS_CHANNEL_ID` from Railway to persist."
+    
+    await inter.followup.send(msg, ephemeral=True)
 
 if not TOKEN:
     raise SystemExit("TOKEN missing.")
