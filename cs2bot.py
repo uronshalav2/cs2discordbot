@@ -180,9 +180,27 @@ def send_rcon(command: str) -> str:
     try:
         with MCRcon(RCON_IP, RCON_PASSWORD, port=RCON_PORT) as rcon:
             resp = rcon.command(command)
-            return resp[:2000] if len(resp) > 2000 else resp
+            
+            # Handle empty or whitespace-only responses (CSS plugins often do this)
+            if not resp or resp.strip() == "":
+                return "✅ Command executed successfully"
+            
+            # Check for common CSS success indicators
+            if any(indicator in resp.lower() for indicator in ["success", "completed", "done"]):
+                return f"✅ {resp[:1000]}"
+            
+            # Truncate long responses
+            response_text = resp[:2000] if len(resp) > 2000 else resp
+            
+            # If response seems like an error, mark it
+            if any(error in resp.lower() for error in ["error", "failed", "invalid", "unknown"]):
+                return f"⚠️ {response_text}"
+            
+            # Default: just return the response
+            return response_text
+            
     except Exception as e:
-        return f"RCON Error: {e}"
+        return f"❌ RCON Connection Error: {e}"
 
 def fetch_demos(offset=0, limit=5):
     if not DEMOS_JSON_URL:
@@ -927,40 +945,75 @@ async def faceit_cmd(inter: discord.Interaction, nickname: str):
     embed.set_footer(text=f"Player ID: {stats['player_id']}")
     await inter.followup.send(embed=embed)
 
-# Admin commands (keeping them short for mobile)
-@bot.tree.command(name="csssay")
+# Admin commands with enhanced feedback
+@bot.tree.command(name="csssay", description="Send center-screen message to all players")
 @owner_only()
-async def csssay(inter, message: str):
+async def csssay(inter: discord.Interaction, message: str):
+    await inter.response.defer(ephemeral=True)
     resp = send_rcon(f"css_cssay {message}")
-    await inter.response.send_message(resp, ephemeral=True)
+    
+    # Add context to the response
+    await inter.followup.send(
+        f"📢 **Message Sent**\n```{message}```\n{resp}",
+        ephemeral=True
+    )
 
-@bot.tree.command(name="csshsay")
+@bot.tree.command(name="csshsay", description="Send hint message to all players")
 @owner_only()
-async def csshsay(inter, message: str):
+async def csshsay(inter: discord.Interaction, message: str):
+    await inter.response.defer(ephemeral=True)
     resp = send_rcon(f"css_hsay {message}")
-    await inter.response.send_message(resp, ephemeral=True)
+    
+    await inter.followup.send(
+        f"💬 **Hint Sent**\n```{message}```\n{resp}",
+        ephemeral=True
+    )
 
-@bot.tree.command(name="csskick")
+@bot.tree.command(name="csskick", description="Kick a player from the server")
 @owner_only()
-async def csskick(inter, player: str):
+async def csskick(inter: discord.Interaction, player: str):
+    await inter.response.defer(ephemeral=True)
     resp = send_rcon(f'css_kick "{player}"')
-    await inter.response.send_message(resp, ephemeral=True)
+    
+    await inter.followup.send(
+        f"👢 **Kick Command**\nPlayer: `{player}`\n\n{resp}",
+        ephemeral=True
+    )
 
-@bot.tree.command(name="cssban")
+@bot.tree.command(name="cssban", description="Ban a player from the server")
 @owner_only()
-async def cssban(inter, player: str, minutes: int, reason: str = "No reason"):
+async def cssban(inter: discord.Interaction, 
+                player: str, 
+                minutes: int, 
+                reason: str = "No reason"):
+    await inter.response.defer(ephemeral=True)
     resp = send_rcon(f'css_ban "{player}" {minutes} "{reason}"')
-    await inter.response.send_message(resp, ephemeral=True)
+    
+    await inter.followup.send(
+        f"🔨 **Ban Command**\n"
+        f"Player: `{player}`\n"
+        f"Duration: `{minutes} minutes`\n"
+        f"Reason: `{reason}`\n\n{resp}",
+        ephemeral=True
+    )
 
-@bot.tree.command(name="csschangemap")
+@bot.tree.command(name="csschangemap", description="Change the server map")
 @owner_only()
-async def csschangemap(inter, map: str):
+async def csschangemap(inter: discord.Interaction, map: str):
     if map not in MAP_WHITELIST:
         return await inter.response.send_message(
-            "Map not allowed.", ephemeral=True
+            f"❌ Map `{map}` not allowed.\n"
+            f"Allowed maps: {', '.join(MAP_WHITELIST)}",
+            ephemeral=True
         )
+    
+    await inter.response.defer(ephemeral=True)
     resp = send_rcon(f"css_changemap {map}")
-    await inter.response.send_message(resp, ephemeral=True)
+    
+    await inter.followup.send(
+        f"🗺️ **Map Change**\nChanging to: `{map}`\n\n{resp}",
+        ephemeral=True
+    )
 
 @csschangemap.autocomplete("map")
 async def autocomplete_map(inter, current: str):
