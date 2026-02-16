@@ -42,6 +42,7 @@ FACEIT_API_KEY = os.getenv("FACEIT_API_KEY")
 OWNER_ID = int(os.getenv("OWNER_ID", 0))
 STATUS_CHANNEL_ID = int(os.getenv("STATUS_CHANNEL_ID", 0))
 NOTIFICATIONS_CHANNEL_ID = int(os.getenv("NOTIFICATIONS_CHANNEL_ID", 0))
+SERVER_LOG_PATH = os.getenv("SERVER_LOG_PATH", "")
 FACEIT_GAME_ID = "cs2"
 MAP_WHITELIST = [
     "de_inferno", "de_mirage", "de_dust2", "de_overpass",
@@ -50,6 +51,9 @@ MAP_WHITELIST = [
 
 # Bot/GOTV filter list - exclude these from stats
 BOT_FILTER = ["CSTV", "BOT", "GOTV", "SourceTV"]
+
+# Track last read position in log file
+log_file_position = 0
 
 intents = discord.Intents.default()
 intents.message_content = True
@@ -84,6 +88,13 @@ def init_database():
                  (map_name TEXT PRIMARY KEY,
                   times_played INTEGER DEFAULT 0,
                   total_players INTEGER DEFAULT 0)''')
+    
+    # Player kills/deaths table
+    c.execute('''CREATE TABLE IF NOT EXISTS player_stats
+                 (player_name TEXT PRIMARY KEY,
+                  kills INTEGER DEFAULT 0,
+                  deaths INTEGER DEFAULT 0,
+                  last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''')
     
     conn.commit()
     conn.close()
@@ -183,6 +194,151 @@ def is_bot_player(player_name: str) -> bool:
     """Check if player name indicates a bot/GOTV"""
     player_upper = player_name.upper()
     return any(bot_keyword in player_upper for bot_keyword in BOT_FILTER)
+
+def parse_server_logs():
+    """
+    Parse CS2 server logs to extract kill/death events
+    Returns list of events: [(killer, victim), ...]
+    """
+    global log_file_position
+    
+    if not SERVER_LOG_PATH or not os.path.exists(SERVER_LOG_PATH):
+        return []
+    
+    events = []
+    
+    try:
+        with open(SERVER_LOG_PATH, 'r', encoding='utf-8', errors='ignore') as f:
+            # Seek to last read position
+            f.seek(log_file_position)
+            
+            for line in f:
+                # CS2 kill log format examples:
+                # "PlayerName<ID><STEAMID><TEAM>" killed "VictimName<ID><STEAMID><TEAM>" with "weapon"
+                # Look for kill events
+                if ' killed ' in line:
+                    try:
+                        # Extract killer and victim names
+                        parts = line.split('"')
+                        if len(parts) >= 4:
+                            killer = parts[1].split('<')[0].strip()
+                            victim = parts[3].split('<')[0].strip()
+                            
+                            # Filter out bots
+                            if not is_bot_player(killer) and not is_bot_player(victim):
+                                events.append((killer, victim))
+                    except:
+                        continue
+            
+            # Update file position
+            log_file_position = f.tell()
+    
+    except Exception as e:
+        print(f"Error parsing logs: {e}")
+    
+    return events
+
+def update_kd_stats(events):
+    """Update kill/death stats in database from parsed events"""
+    if not events:
+        return
+    
+    conn = sqlite3.connect(DB_FILE)
+    c = conn.cursor()
+    
+    for killer, victim in events:
+        # Update killer's kills
+        c.execute('''INSERT INTO player_stats (player_name, kills, deaths)
+                     VALUES (?, 1, 0)
+                     ON CONFLICT(player_name) DO UPDATE SET
+                     kills = kills + 1,
+                     last_updated = CURRENT_TIMESTAMP''',
+                  (killer,))
+        
+        # Update victim's deaths
+        c.execute('''INSERT INTO player_stats (player_name, kills, deaths)
+                     VALUES (?, 0, 1)
+                     ON CONFLICT(player_name) DO UPDATE SET
+                     deaths = deaths + 1,
+                     last_updated = CURRENT_TIMESTAMP''',
+                  (victim,))
+    
+    conn.commit()
+    conn.close()
+    
+    print(f"Updated K/D stats: {len(events)} kill events processed")
+
+def fetch_player_stats_from_server():
+    """
+    Fetch current player stats from server using RCON
+    This gets the current scoreboard stats
+    """
+    try:
+        # Get player stats from server
+        stats_text = send_rcon("status")
+        
+        if not stats_text or "Error" in stats_text:
+            return {}
+        
+        player_stats = {}
+        
+        # Parse status output for scores
+        # Format: # userid name uniqueid connected ping loss state rate adr
+        for line in stats_text.splitlines():
+            if line.strip().startswith('#'):
+                try:
+                    parts = line.split('"')
+                    if len(parts) >= 2:
+                        name = parts[1].strip()
+                        
+                        # Skip bots
+                        if is_bot_player(name):
+                            continue
+                        
+                        # Extract score (between name and uniqueid)
+                        after_name = parts[2].strip().split()
+                        if after_name:
+                            score = int(after_name[0])
+                            player_stats[name] = score
+                except:
+                    continue
+        
+        return player_stats
+    
+    except Exception as e:
+        print(f"Error fetching player stats: {e}")
+        return {}
+
+def update_kd_from_scoreboard():
+    """
+    Update K/D stats from current server scoreboard
+    Note: In CS2, scoreboard score = kills
+    This is a snapshot approach, not incremental
+    """
+    player_stats = fetch_player_stats_from_server()
+    
+    if not player_stats:
+        return
+    
+    conn = sqlite3.connect(DB_FILE)
+    c = conn.cursor()
+    
+    for player_name, score in player_stats.items():
+        # In CS2, scoreboard score typically equals kills
+        # We can update kills based on current score
+        # Note: This won't track deaths accurately without log parsing
+        
+        c.execute('''INSERT INTO player_stats (player_name, kills, deaths)
+                     VALUES (?, ?, 0)
+                     ON CONFLICT(player_name) DO UPDATE SET
+                     kills = MAX(kills, ?),
+                     last_updated = CURRENT_TIMESTAMP''',
+                  (player_name, score, score))
+    
+    conn.commit()
+    conn.close()
+    
+    print(f"Updated stats for {len(player_stats)} players from scoreboard")
 
 def send_rcon(command: str) -> str:
     try:
@@ -579,22 +735,43 @@ def get_player_stats(player_name):
     last_seen = c.fetchone()
     last_seen_time = last_seen[0] if last_seen else None
     
+    # K/D stats
+    c.execute('''SELECT kills, deaths
+                 FROM player_stats
+                 WHERE player_name = ?''', (player_name,))
+    kd_result = c.fetchone()
+    
+    if kd_result:
+        kills, deaths = kd_result
+        kd_ratio = kills / deaths if deaths > 0 else kills
+    else:
+        kills, deaths, kd_ratio = 0, 0, 0.0
+    
     conn.close()
     
     return {
         'total_minutes': total_minutes,
         'total_sessions': total_sessions,
         'favorite_map': favorite_map,
-        'last_seen': last_seen_time
+        'last_seen': last_seen_time,
+        'kills': kills,
+        'deaths': deaths,
+        'kd_ratio': kd_ratio
     }
 
 def get_leaderboard(limit=10):
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
     
-    c.execute('''SELECT player_name, SUM(duration_minutes) as total_time
-                 FROM player_sessions
-                 GROUP BY player_name
+    # Get playtime and K/D stats
+    c.execute('''SELECT 
+                    ps.player_name,
+                    SUM(ps.duration_minutes) as total_time,
+                    COALESCE(pst.kills, 0) as kills,
+                    COALESCE(pst.deaths, 0) as deaths
+                 FROM player_sessions ps
+                 LEFT JOIN player_stats pst ON ps.player_name = pst.player_name
+                 GROUP BY ps.player_name
                  ORDER BY total_time DESC''')
     
     all_players = c.fetchall()
@@ -602,7 +779,7 @@ def get_leaderboard(limit=10):
     
     # Filter out bots and limit results
     real_players = [
-        (name, time) for name, time in all_players 
+        (name, time, kills, deaths) for name, time, kills, deaths in all_players 
         if not is_bot_player(name)
     ]
     
@@ -612,6 +789,14 @@ def get_leaderboard(limit=10):
 @tasks.loop(minutes=1)  # Changed to 1 minute for faster notifications
 async def update_server_stats():
     try:
+        # Parse server logs for kill/death events (most accurate)
+        if SERVER_LOG_PATH:
+            events = parse_server_logs()
+            update_kd_stats(events)
+        else:
+            # Fallback: Use scoreboard stats (kills only, no deaths)
+            update_kd_from_scoreboard()
+        
         addr = (SERVER_IP, SERVER_PORT)
         loop = asyncio.get_running_loop()
         info = await loop.run_in_executor(None, a2s.info, addr)
@@ -636,11 +821,14 @@ async def update_server_stats():
         else:
             player_names = []
         
-        # Record snapshot (every check)
-        record_snapshot(info.player_count, info.map_name)
+        # Filter out bots from player tracking
+        real_player_names = [name for name in player_names if not is_bot_player(name)]
         
-        # Update tracking and get notifications
-        notifications = update_player_tracking(player_names, info.map_name)
+        # Record snapshot (every check) - use real player count
+        record_snapshot(len(real_player_names), info.map_name)
+        
+        # Update tracking and get notifications (only for real players)
+        notifications = update_player_tracking(real_player_names, info.map_name)
         
         # Send notifications to Discord
         if notifications and NOTIFICATIONS_CHANNEL_ID:
@@ -657,7 +845,7 @@ async def update_server_stats():
                             value=f"`{notif['map']}`",
                             inline=True
                         )
-                        embed.set_footer(text=f"Players online: {len(player_names)}")
+                        embed.set_footer(text=f"Players online: {len(real_player_names)}")
                         await channel.send(embed=embed)
                     
                     elif notif['type'] == 'leave':
@@ -670,7 +858,7 @@ async def update_server_stats():
                             value=f"`{notif['duration']}`",
                             inline=True
                         )
-                        embed.set_footer(text=f"Players online: {len(player_names)}")
+                        embed.set_footer(text=f"Players online: {len(real_player_names)}")
                         await channel.send(embed=embed)
         
     except Exception as e:
@@ -843,6 +1031,24 @@ async def profile_cmd(inter: discord.Interaction, player_name: str):
         value=f"**{avg_session:.0f}** min",
         inline=True
     )
+    
+    # K/D Stats
+    embed.add_field(
+        name="💀 Kills",
+        value=f"**{stats['kills']}**",
+        inline=True
+    )
+    embed.add_field(
+        name="☠️ Deaths",
+        value=f"**{stats['deaths']}**",
+        inline=True
+    )
+    embed.add_field(
+        name="📊 K/D Ratio",
+        value=f"**{stats['kd_ratio']:.2f}**",
+        inline=True
+    )
+    
     embed.add_field(
         name="🗺️ Favorite Map",
         value=f"`{stats['favorite_map']}`",
@@ -890,13 +1096,17 @@ async def leaderboard_cmd(inter: discord.Interaction):
     
     medals = ["🥇", "🥈", "🥉"]
     
-    for i, (player_name, total_minutes) in enumerate(leaderboard, 1):
+    for i, (player_name, total_minutes, kills, deaths) in enumerate(leaderboard, 1):
         hours = total_minutes / 60
+        kd_ratio = kills / deaths if deaths > 0 else kills
         medal = medals[i-1] if i <= 3 else f"`{i}.`"
+        
+        # Format K/D display
+        kd_display = f"K/D: {kd_ratio:.2f}" if (kills > 0 or deaths > 0) else "K/D: N/A"
         
         embed.add_field(
             name=f"{medal} {player_name}",
-            value=f"**{hours:.1f}** hours",
+            value=f"**{hours:.1f}** hours • {kd_display}",
             inline=False
         )
     
@@ -1040,6 +1250,34 @@ async def autocomplete_map(inter, current: str):
 async def cssreload(inter):
     resp = send_rcon("css_reloadplugins")
     await inter.response.send_message(resp, ephemeral=True)
+
+@bot.tree.command(name="setkd", description="Set kills/deaths for a player")
+@owner_only()
+async def setkd_cmd(inter: discord.Interaction, player_name: str, kills: int, deaths: int):
+    """Manually set K/D stats for a player"""
+    await inter.response.defer(ephemeral=True)
+    
+    conn = sqlite3.connect(DB_FILE)
+    c = conn.cursor()
+    
+    c.execute('''INSERT OR REPLACE INTO player_stats
+                 (player_name, kills, deaths, last_updated)
+                 VALUES (?, ?, ?, CURRENT_TIMESTAMP)''',
+              (player_name, kills, deaths))
+    
+    conn.commit()
+    conn.close()
+    
+    kd_ratio = kills / deaths if deaths > 0 else kills
+    
+    await inter.followup.send(
+        f"✅ **K/D Stats Updated**\n"
+        f"Player: `{player_name}`\n"
+        f"Kills: **{kills}**\n"
+        f"Deaths: **{deaths}**\n"
+        f"K/D Ratio: **{kd_ratio:.2f}**",
+        ephemeral=True
+    )
 
 @bot.tree.command(name="notifications", description="Toggle join/leave notifications")
 @owner_only()
