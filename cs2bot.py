@@ -15,6 +15,9 @@ from typing import Literal, Optional
 from mcrcon import MCRcon
 from collections import defaultdict
 
+# Discord UI components
+from discord.ui import Button, View
+
 # Try to import matplotlib for graphs
 try:
     import matplotlib
@@ -84,6 +87,86 @@ def init_database():
 # Initialize database on startup
 init_database()
 
+# ========== PAGINATION VIEW FOR DEMOS ==========
+class DemosView(View):
+    def __init__(self, offset=0):
+        super().__init__(timeout=300)  # 5 minute timeout
+        self.offset = offset
+        self.update_buttons()
+    
+    def update_buttons(self):
+        self.clear_items()
+        
+        # Previous button
+        if self.offset > 0:
+            prev_btn = Button(
+                label="◀ Previous",
+                style=discord.ButtonStyle.secondary,
+                custom_id="prev"
+            )
+            prev_btn.callback = self.previous_page
+            self.add_item(prev_btn)
+        
+        # Next button (will be enabled/disabled based on has_more)
+        next_btn = Button(
+            label="Next ▶",
+            style=discord.ButtonStyle.primary,
+            custom_id="next"
+        )
+        next_btn.callback = self.next_page
+        self.add_item(next_btn)
+        
+        # Refresh button
+        refresh_btn = Button(
+            label="🔄 Refresh",
+            style=discord.ButtonStyle.success,
+            custom_id="refresh"
+        )
+        refresh_btn.callback = self.refresh_page
+        self.add_item(refresh_btn)
+    
+    async def previous_page(self, interaction: discord.Interaction):
+        self.offset = max(0, self.offset - 5)
+        await self.update_message(interaction)
+    
+    async def next_page(self, interaction: discord.Interaction):
+        self.offset += 5
+        await self.update_message(interaction)
+    
+    async def refresh_page(self, interaction: discord.Interaction):
+        await self.update_message(interaction)
+    
+    async def update_message(self, interaction: discord.Interaction):
+        await interaction.response.defer()
+        
+        result = fetch_demos(self.offset, 5)
+        
+        embed = discord.Embed(
+            title="🎥 Server Demos",
+            description="\n\n".join(result["demos"]),
+            color=0x9B59B6
+        )
+        
+        if result.get("total"):
+            embed.set_footer(
+                text=f"Showing {result['showing']} of {result['total']} demos"
+            )
+        
+        # Update view buttons
+        self.update_buttons()
+        
+        # Disable next button if no more demos
+        if not result.get("has_more", False):
+            for item in self.children:
+                if item.custom_id == "next":
+                    item.disabled = True
+        
+        await interaction.followup.edit_message(
+            message_id=interaction.message.id,
+            embed=embed,
+            view=self
+        )
+
 # Track current players
 current_players = {}
 
@@ -100,9 +183,9 @@ def send_rcon(command: str) -> str:
     except Exception as e:
         return f"RCON Error: {e}"
 
-def fetch_demos():
+def fetch_demos(offset=0, limit=5):
     if not DEMOS_JSON_URL:
-        return ["DEMOS_JSON_URL not configured"]
+        return {"demos": ["DEMOS_JSON_URL not configured"], "has_more": False}
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
         'Accept': 'application/json',
@@ -111,21 +194,54 @@ def fetch_demos():
     try:
         response = requests.get(DEMOS_JSON_URL, headers=headers, timeout=15)
         if response.status_code == 403:
-            return ["Access Denied (403). URL may have expired."]
+            return {"demos": ["Access Denied (403). URL may have expired."], "has_more": False}
         response.raise_for_status()
         data = response.json()
         demos = data.get("demos", [])
         if not demos:
-            return ["No demos available"]
+            return {"demos": ["No demos available"], "has_more": False}
+        
+        # Sort by modified_at (newest first)
+        demos_sorted = sorted(
+            demos,
+            key=lambda x: x.get("modified_at", ""),
+            reverse=True
+        )
+        
+        # Paginate
+        start_idx = offset
+        end_idx = offset + limit
+        page_demos = demos_sorted[start_idx:end_idx]
+        has_more = end_idx < len(demos_sorted)
+        
+        # Format demos
         formatted_demos = []
-        for demo in demos[-5:]:
+        for demo in page_demos:
             name = demo.get("name", "Unknown")
             url = demo.get("download_url", "#")
             size = demo.get("size_formatted", "N/A")
-            formatted_demos.append(f"🎬 [{name}](<{url}>) — {size}")
-        return formatted_demos
+            date_str = demo.get("modified_at", "")
+            
+            # Parse and format date
+            try:
+                date_obj = datetime.fromisoformat(date_str.replace('Z', '+00:00'))
+                date_display = date_obj.strftime("%b %d, %Y %H:%M")
+            except:
+                date_display = "Unknown date"
+            
+            formatted_demos.append(
+                f"🎬 [{name}](<{url}>)\n"
+                f"    📅 {date_display} • 💾 {size}"
+            )
+        
+        return {
+            "demos": formatted_demos,
+            "has_more": has_more,
+            "total": len(demos_sorted),
+            "showing": f"{start_idx + 1}-{min(end_idx, len(demos_sorted))}"
+        }
     except Exception as e:
-        return [f"Error: {str(e)}"]
+        return {"demos": [f"Error: {str(e)}"], "has_more": False}
 
 STATUS_NAME_RE = re.compile(r'^#\s*\d+\s+"(?P<n>.*?)"\s+')
 CSS_LIST_RE = re.compile(r'^\s*•\s*\[#\d+\]\s*"(?P<n>[^"]*)"')
@@ -497,9 +613,33 @@ async def update_status_message():
 @bot.event
 async def on_ready():
     print(f"Bot online as {bot.user.name}")
+    print(f"Bot ID: {bot.user.id}")
+    print(f"Owner ID from env: {OWNER_ID}")
+    
+    # Auto-sync slash commands
+    print("Syncing slash commands...")
+    try:
+        synced = await bot.tree.sync()
+        print(f"✓ Synced {len(synced)} commands globally")
+    except Exception as e:
+        print(f"✗ Failed to sync commands: {e}")
+    
     print("Starting background tasks...")
     update_server_stats.start()
     update_status_message.start()
+
+@bot.event
+async def on_message(message):
+    # Ignore bot's own messages
+    if message.author == bot.user:
+        return
+    
+    # Debug log for owner messages starting with !
+    if message.content.startswith('!') and message.author.id == OWNER_ID:
+        print(f"Owner command detected: {message.content}")
+    
+    # Process commands
+    await bot.process_commands(message)
 
 # ========== COMMANDS ==========
 @bot.command()
@@ -507,20 +647,27 @@ async def on_ready():
 @commands.is_owner()
 async def sync(ctx, guilds: commands.Greedy[discord.Object] = None,
                spec: Optional[Literal["~", "*", "^"]] = None):
-    await ctx.send("Syncing...", delete_after=5)
+    print(f"Sync command called by {ctx.author.id}")
+    await ctx.send("⏳ Syncing commands...", delete_after=5)
+    
     if not guilds:
         if spec == "~":
             synced = await bot.tree.sync(guild=ctx.guild)
+            await ctx.send(f"✅ Synced {len(synced)} commands to this server.")
         elif spec == "*":
             bot.tree.copy_global_to(guild=ctx.guild)
             synced = await bot.tree.sync(guild=ctx.guild)
+            await ctx.send(f"✅ Copied and synced {len(synced)} commands to this server.")
         elif spec == "^":
             bot.tree.clear_commands(guild=ctx.guild)
+            await bot.tree.sync(guild=ctx.guild)
+            await ctx.send("✅ Cleared all commands from this server.")
             synced = []
         else:
             synced = await bot.tree.sync()
-        await ctx.send(f"Synced {len(synced)} commands.")
+            await ctx.send(f"✅ Synced {len(synced)} commands globally (may take up to 1 hour).")
         return
+    
     count = 0
     for guild in guilds:
         try:
@@ -528,7 +675,13 @@ async def sync(ctx, guilds: commands.Greedy[discord.Object] = None,
             count += 1
         except:
             pass
-    await ctx.send(f"Synced to {count}/{len(guilds)} guilds.")
+    await ctx.send(f"✅ Synced to {count}/{len(guilds)} guilds.")
+
+@bot.command()
+async def ping(ctx):
+    """Simple test command to verify bot is responding"""
+    latency = round(bot.latency * 1000)
+    await ctx.send(f"🏓 Pong! Latency: {latency}ms")
 
 @bot.tree.command(name="status", description="View server status")
 async def status_cmd(inter: discord.Interaction):
@@ -658,20 +811,37 @@ async def leaderboard_cmd(inter: discord.Interaction):
     
     await inter.followup.send(embed=embed)
 
-@bot.tree.command(name="demos")
+@bot.tree.command(name="demos", description="View server demos")
 async def demos_cmd(inter: discord.Interaction):
     if SERVER_DEMOS_CHANNEL_ID and inter.channel_id != SERVER_DEMOS_CHANNEL_ID:
         return await inter.response.send_message(
             "Wrong channel!", ephemeral=True
         )
+    
     await inter.response.defer()
-    lst = fetch_demos()
+    
+    result = fetch_demos(0, 5)
+    
     embed = discord.Embed(
-        title="🎥 Latest Demos",
-        description="\n".join(lst),
+        title="🎥 Server Demos",
+        description="\n\n".join(result["demos"]),
         color=0x9B59B6
     )
-    await inter.followup.send(embed=embed)
+    
+    if result.get("total"):
+        embed.set_footer(
+            text=f"Showing {result['showing']} of {result['total']} demos"
+        )
+    
+    view = DemosView(offset=0)
+    
+    # Disable next button if no more demos
+    if not result.get("has_more", False):
+        for item in view.children:
+            if item.custom_id == "next":
+                item.disabled = True
+    
+    await inter.followup.send(embed=embed, view=view)
 
 @bot.tree.command(name="elo", description="Get FACEIT stats for CS2")
 async def faceit_cmd(inter: discord.Interaction, nickname: str):
