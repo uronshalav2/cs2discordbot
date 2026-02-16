@@ -48,6 +48,9 @@ MAP_WHITELIST = [
     "de_nuke", "de_ancient", "de_vertigo", "de_anubis"
 ]
 
+# Bot/GOTV filter list - exclude these from stats
+BOT_FILTER = ["CSTV", "BOT", "GOTV", "SourceTV"]
+
 intents = discord.Intents.default()
 intents.message_content = True
 intents.messages = True
@@ -175,6 +178,11 @@ def owner_only():
     async def predicate(interaction: discord.Interaction):
         return interaction.user.id == OWNER_ID
     return app_commands.check(predicate)
+
+def is_bot_player(player_name: str) -> bool:
+    """Check if player name indicates a bot/GOTV"""
+    player_upper = player_name.upper()
+    return any(bot_keyword in player_upper for bot_keyword in BOT_FILTER)
 
 def send_rcon(command: str) -> str:
     try:
@@ -587,13 +595,18 @@ def get_leaderboard(limit=10):
     c.execute('''SELECT player_name, SUM(duration_minutes) as total_time
                  FROM player_sessions
                  GROUP BY player_name
-                 ORDER BY total_time DESC
-                 LIMIT ?''', (limit,))
+                 ORDER BY total_time DESC''')
     
-    leaderboard = c.fetchall()
+    all_players = c.fetchall()
     conn.close()
     
-    return leaderboard
+    # Filter out bots and limit results
+    real_players = [
+        (name, time) for name, time in all_players 
+        if not is_bot_player(name)
+    ]
+    
+    return real_players[:limit]
 
 # ========== BACKGROUND TASKS ==========
 @tasks.loop(minutes=1)  # Changed to 1 minute for faster notifications
@@ -763,13 +776,13 @@ async def ping(ctx):
 
 @bot.tree.command(name="status", description="View server status")
 async def status_cmd(inter: discord.Interaction):
-    await inter.response.defer()
+    await inter.response.defer(ephemeral=True)
     embed, _ = await get_enhanced_status_embed()
-    await inter.followup.send(embed=embed)
+    await inter.followup.send(embed=embed, ephemeral=True)
 
 @bot.tree.command(name="graph", description="View player count graph (24h)")
 async def graph_cmd(inter: discord.Interaction):
-    await inter.response.defer()
+    await inter.response.defer(ephemeral=True)
     
     if not HAS_MATPLOTLIB:
         return await inter.followup.send(
@@ -793,11 +806,11 @@ async def graph_cmd(inter: discord.Interaction):
     )
     embed.set_image(url="attachment://player_graph.png")
     
-    await inter.followup.send(embed=embed, file=file)
+    await inter.followup.send(embed=embed, file=file, ephemeral=True)
 
 @bot.tree.command(name="profile", description="View player statistics")
 async def profile_cmd(inter: discord.Interaction, player_name: str):
-    await inter.response.defer()
+    await inter.response.defer(ephemeral=True)
     
     stats = get_player_stats(player_name)
     
@@ -855,11 +868,11 @@ async def profile_cmd(inter: discord.Interaction, player_name: str):
     
     embed.set_footer(text=f"Stats tracked since bot installation")
     
-    await inter.followup.send(embed=embed)
+    await inter.followup.send(embed=embed, ephemeral=True)
 
 @bot.tree.command(name="leaderboard", description="View top players")
 async def leaderboard_cmd(inter: discord.Interaction):
-    await inter.response.defer()
+    await inter.response.defer(ephemeral=True)
     
     leaderboard = get_leaderboard(10)
     
@@ -871,7 +884,7 @@ async def leaderboard_cmd(inter: discord.Interaction):
     
     embed = discord.Embed(
         title="🏆 Top Players Leaderboard",
-        description="*Based on total playtime*",
+        description="*Based on total playtime • Bots excluded*",
         color=0xF1C40F
     )
     
@@ -887,7 +900,7 @@ async def leaderboard_cmd(inter: discord.Interaction):
             inline=False
         )
     
-    await inter.followup.send(embed=embed)
+    await inter.followup.send(embed=embed, ephemeral=True)
 
 @bot.tree.command(name="demos", description="View server demos")
 async def demos_cmd(inter: discord.Interaction):
@@ -896,7 +909,7 @@ async def demos_cmd(inter: discord.Interaction):
             "Wrong channel!", ephemeral=True
         )
     
-    await inter.response.defer()
+    await inter.response.defer(ephemeral=True)
     
     result = fetch_demos(0, 5)
     
@@ -919,11 +932,11 @@ async def demos_cmd(inter: discord.Interaction):
             if item.custom_id == "next":
                 item.disabled = True
     
-    await inter.followup.send(embed=embed, view=view)
+    await inter.followup.send(embed=embed, view=view, ephemeral=True)
 
 @bot.tree.command(name="elo", description="Get FACEIT stats for CS2")
 async def faceit_cmd(inter: discord.Interaction, nickname: str):
-    await inter.response.defer()
+    await inter.response.defer(ephemeral=True)
     try:
         stats = await fetch_faceit_stats_cs2(nickname)
     except Exception as e:
@@ -943,7 +956,7 @@ async def faceit_cmd(inter: discord.Interaction, nickname: str):
     embed.add_field(name="Matches", value=stats["matches"], inline=True)
     embed.add_field(name="K/D", value=stats["kd_ratio"], inline=True)
     embed.set_footer(text=f"Player ID: {stats['player_id']}")
-    await inter.followup.send(embed=embed)
+    await inter.followup.send(embed=embed, ephemeral=True)
 
 # Admin commands with enhanced feedback
 @bot.tree.command(name="csssay", description="Send center-screen message to all players")
