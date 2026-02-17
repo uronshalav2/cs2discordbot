@@ -60,24 +60,20 @@ intents.message_content = True
 intents.messages = True
 bot = commands.Bot(command_prefix="!", intents=intents, owner_id=OWNER_ID)
 
-# ========== DATABASE SETUP (PostgreSQL via Supabase) ==========
+# ========== DATABASE SETUP (Supabase via psycopg2 port 6543) ==========
 import psycopg2
-from psycopg2.extras import RealDictCursor
 
 DATABASE_URL = os.getenv("DATABASE_URL")
 
 def get_db():
-    """Get a database connection"""
     if not DATABASE_URL:
-        raise Exception("DATABASE_URL not set in environment variables!")
-    conn = psycopg2.connect(DATABASE_URL, sslmode='require')
-    return conn
+        raise Exception("DATABASE_URL not set!")
+    return psycopg2.connect(DATABASE_URL)
 
 def init_database():
     conn = get_db()
     c = conn.cursor()
 
-    # Player sessions table
     c.execute('''CREATE TABLE IF NOT EXISTS player_sessions (
                  id SERIAL PRIMARY KEY,
                  player_name TEXT NOT NULL,
@@ -86,20 +82,17 @@ def init_database():
                  duration_minutes INTEGER,
                  map_name TEXT)''')
 
-    # Server snapshots table (for graphs)
     c.execute('''CREATE TABLE IF NOT EXISTS server_snapshots (
                  id SERIAL PRIMARY KEY,
                  timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                  player_count INTEGER,
                  map_name TEXT)''')
 
-    # Map statistics
     c.execute('''CREATE TABLE IF NOT EXISTS map_stats (
                  map_name TEXT PRIMARY KEY,
                  times_played INTEGER DEFAULT 0,
                  total_players INTEGER DEFAULT 0)''')
 
-    # Player kills/deaths table
     c.execute('''CREATE TABLE IF NOT EXISTS player_stats (
                  player_name TEXT PRIMARY KEY,
                  kills INTEGER DEFAULT 0,
@@ -111,7 +104,6 @@ def init_database():
     conn.close()
     print("✓ Database initialized (Supabase PostgreSQL)")
 
-# Initialize database on startup
 try:
     init_database()
 except Exception as e:
@@ -710,56 +702,44 @@ def record_snapshot(player_count, map_name):
 def update_player_tracking(current_player_names, map_name):
     global current_players
     now = datetime.now()
-    
+    notifications = []
+
     conn = get_db()
     c = conn.cursor()
-    
-    notifications = []
-    
+
     # Check for players who left
     for player_name in list(current_players.keys()):
         if player_name not in current_player_names:
             join_time = current_players[player_name]
-            leave_time = now
-            duration = int((leave_time - join_time).total_seconds() / 60)
-            
+            duration = int((now - join_time).total_seconds() / 60)
+            hours = duration // 60
+            mins = duration % 60
+            time_str = f"{hours}h {mins}m" if hours > 0 else f"{mins}m"
+
             c.execute('''INSERT INTO player_sessions
                          (player_name, join_time, leave_time, duration_minutes, map_name)
                          VALUES (%s, %s, %s, %s, %s)''',
-                      (player_name, join_time, leave_time, duration, map_name))
-            
-            # Create leave notification
-            hours = duration // 60
-            mins = duration % 60
-            
-            if hours > 0:
-                time_str = f"{hours}h {mins}m"
-            else:
-                time_str = f"{mins}m"
-            
+                      (player_name, join_time, now, duration, map_name))
+
             notifications.append({
                 'type': 'leave',
                 'player': player_name,
                 'duration': time_str
             })
-            
             del current_players[player_name]
-    
+
     # Check for new players
     for player_name in current_player_names:
         if player_name not in current_players:
             current_players[player_name] = now
-            
-            # Create join notification
             notifications.append({
                 'type': 'join',
                 'player': player_name,
                 'map': map_name
             })
-    
+
     conn.commit()
     conn.close()
-    
     return notifications
 
 def get_player_stats(player_name):
