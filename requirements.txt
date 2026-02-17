@@ -6,3 +6,4 @@ mcrcon
 valve
 requests
 matplotlib
+psycopg2-binary
