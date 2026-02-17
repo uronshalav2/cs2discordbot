@@ -14,10 +14,69 @@ from discord import app_commands
 from typing import Literal, Optional
 from mcrcon import MCRcon
 from collections import defaultdict
+
+# HTTP server for receiving CS2 logs
 from aiohttp import web
+import threading
 
 # Discord UI components
 from discord.ui import Button, View
+
+# Track kill events from HTTP logs
+pending_kill_events = []
+
+# ========== HTTP LOG ENDPOINT ==========
+async def handle_log_post(request):
+    """
+    Receives logs from CS2 server via logaddress_add_http
+    Format: Plain text log lines sent via POST
+    """
+    global pending_kill_events
+    
+    try:
+        text = await request.text()
+        
+        # Parse kill events from log lines
+        # Format: L MM/DD/YYYY - HH:MM:SS: "Killer<id><steamid><team>" killed "Victim<id><steamid><team>" with "weapon"
+        kill_pattern = re.compile(
+            r'"([^"<]+)<\d+><[^>]*><[^>]*>" killed '
+            r'"([^"<]+)<\d+><[^>]*><[^>]*>" with'
+        )
+        
+        for line in text.splitlines():
+            if ' killed ' not in line:
+                continue
+            match = kill_pattern.search(line)
+            if match:
+                killer = match.group(1).strip()
+                victim = match.group(2).strip()
+                
+                # Filter bots
+                if not is_bot_player(killer) and not is_bot_player(victim):
+                    pending_kill_events.append((killer, victim))
+                    print(f"[LOG] Kill: {killer} → {victim}")
+        
+        return web.Response(text='OK')
+    except Exception as e:
+        print(f"Error processing log: {e}")
+        return web.Response(text='Error', status=500)
+
+async def handle_health_check(request):
+    """Health check endpoint"""
+    return web.Response(text='Bot is running')
+
+def start_http_server():
+    """Start HTTP server in background thread"""
+    app = web.Application()
+    app.router.add_post('/logs', handle_log_post)
+    app.router.add_get('/health', handle_health_check)
+    app.router.add_get('/', handle_health_check)
+    
+    # Run on all interfaces, Railway provides PORT env var
+    port = int(os.getenv('PORT', 8080))
+    
+    print(f"Starting HTTP server on port {port}")
+    web.run_app(app, host='0.0.0.0', port=port, print=None)
 
 # Try to import matplotlib for graphs
 try:
@@ -65,11 +124,6 @@ bot = commands.Bot(command_prefix="!", intents=intents, owner_id=OWNER_ID)
 import psycopg2
 
 DATABASE_URL = os.getenv("DATABASE_URL")
-# ===== HTTP LOG RECEIVER (Railway) =====
-PORT = int(os.environ.get("PORT", 8080))
-CURRENT_MAP = "unknown"
-log_queue = asyncio.Queue()
-
 
 def get_db():
     if not DATABASE_URL:
@@ -105,32 +159,6 @@ def init_database():
                  deaths INTEGER DEFAULT 0,
                  last_score INTEGER DEFAULT 0,
                  last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''')
-
-
-    # Full stats tables (kills, headshots, weapons, per-map)
-    c.execute('''CREATE TABLE IF NOT EXISTS kill_events (
-                 id SERIAL PRIMARY KEY,
-                 timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                 map_name TEXT,
-                 killer_name TEXT,
-                 victim_name TEXT,
-                 weapon TEXT,
-                 headshot BOOLEAN DEFAULT FALSE)''')
-
-    c.execute('''CREATE TABLE IF NOT EXISTS player_weapon_stats (
-             player_name TEXT,
-             weapon TEXT,
-             kills INTEGER DEFAULT 0,
-             headshots INTEGER DEFAULT 0,
-             PRIMARY KEY (player_name, weapon))''')
-
-    c.execute('''CREATE TABLE IF NOT EXISTS player_map_stats (
-             player_name TEXT,
-             map_name TEXT,
-             kills INTEGER DEFAULT 0,
-             deaths INTEGER DEFAULT 0,
-             headshots INTEGER DEFAULT 0,
-             PRIMARY KEY (player_name, map_name))''')
 
     conn.commit()
     conn.close()
@@ -364,111 +392,6 @@ def fetch_player_stats_from_server():
         print(f"Error fetching player stats: {e}")
         return {}
 
-# ===== FULL STATS (HTTP LOGS) =====
-_KILL_PATTERN = re.compile(
-    r'"(?P<killer>.+?)<\\d+><(?P<killer_steam>.+?)><(?P<killer_team>.+?)>"\\s+'
-    r'killed\\s+'
-    r'"(?P<victim>.+?)<\\d+><(?P<victim_steam>.+?)><(?P<victim_team>.+?)>"\\s+'
-    r'with\\s+"(?P<weapon>.+?)"(?:\\s+\\((?P<extra>.+?)\\))?'
-)
-
-def parse_kill_log_http(line: str):
-    """Parse a CS2 kill log line from HTTP logs."""
-    m = _KILL_PATTERN.search(line)
-    if not m:
-        return None
-    d = m.groupdict()
-    if d["killer"] == d["victim"]:
-        return None  # suicide
-    extra = (d.get("extra") or "").lower()
-    return {
-        "killer": d["killer"],
-        "victim": d["victim"],
-        "weapon": d["weapon"],
-        "headshot": extra == "headshot",
-        "map_name": CURRENT_MAP,
-    }
-
-def update_full_stats_from_kill(parsed: dict):
-    """Persist full kill stats + keep existing K/D table in sync."""
-    killer = parsed["killer"]
-    victim = parsed["victim"]
-    weapon = parsed.get("weapon")
-    headshot = bool(parsed.get("headshot"))
-    map_name = parsed.get("map_name") or "unknown"
-
-    # Keep existing K/D logic working
-    update_kd_stats([(killer, victim)])
-
-    conn = get_db()
-    c = conn.cursor()
-
-    c.execute(
-        '''INSERT INTO kill_events (map_name, killer_name, victim_name, weapon, headshot)
-           VALUES (%s, %s, %s, %s, %s)''',
-        (map_name, killer, victim, weapon, headshot)
-    )
-
-    # weapon stats (killer)
-    c.execute(
-        '''INSERT INTO player_weapon_stats (player_name, weapon, kills, headshots)
-           VALUES (%s, %s, 1, %s)
-           ON CONFLICT (player_name, weapon) DO UPDATE SET
-           kills = player_weapon_stats.kills + 1,
-           headshots = player_weapon_stats.headshots + %s''',
-        (killer, weapon, 1 if headshot else 0, 1 if headshot else 0)
-    )
-
-    # per-map stats (killer)
-    c.execute(
-        '''INSERT INTO player_map_stats (player_name, map_name, kills, deaths, headshots)
-           VALUES (%s, %s, 1, 0, %s)
-           ON CONFLICT (player_name, map_name) DO UPDATE SET
-           kills = player_map_stats.kills + 1,
-           headshots = player_map_stats.headshots + %s''',
-        (killer, map_name, 1 if headshot else 0, 1 if headshot else 0)
-    )
-
-    # per-map stats (victim death)
-    c.execute(
-        '''INSERT INTO player_map_stats (player_name, map_name, kills, deaths, headshots)
-           VALUES (%s, %s, 0, 1, 0)
-           ON CONFLICT (player_name, map_name) DO UPDATE SET
-           deaths = player_map_stats.deaths + 1''',
-        (victim, map_name)
-    )
-
-    conn.commit()
-    conn.close()
-
-async def handle_logs(request):
-    """HTTP endpoint: receives plaintext CS2 logs."""
-    try:
-        body = await request.text()
-        for line in body.splitlines():
-            line = line.strip()
-            if line:
-                await log_queue.put(line)
-        return web.Response(text="OK")
-    except Exception as e:
-        print(f"HTTP log error: {e}")
-        return web.Response(status=500, text="Error")
-
-async def process_log_queue():
-    """Background worker: parse queued logs and write stats."""
-    while True:
-        line = await log_queue.get()
-        try:
-            parsed = parse_kill_log_http(line)
-            if parsed:
-                update_full_stats_from_kill(parsed)
-        except Exception as e:
-            print(f"Log processing error: {e}")
-        finally:
-            log_queue.task_done()
-
-
-
 def update_kd_from_scoreboard():
     """
     Update K/D stats from current server scoreboard every minute.
@@ -697,8 +620,6 @@ async def get_enhanced_status_embed():
     try:
         loop = asyncio.get_running_loop()
         info = await loop.run_in_executor(None, a2s.info, addr)
-        global CURRENT_MAP
-        CURRENT_MAP = info.map_name
         a2s_players = await asyncio.wait_for(
             loop.run_in_executor(None, a2s.players, addr), 5
         )
@@ -964,16 +885,24 @@ def get_leaderboard(limit=10):
 @tasks.loop(minutes=1)
 async def update_server_stats():
     try:
-        # Fetch kills via RCON logs (mp_logdetail 3 method)
-        # No file access needed - works directly via RCON
-        loop = asyncio.get_running_loop()
-        events = await loop.run_in_executor(None, parse_server_logs)
-        if events:
-            update_kd_stats(events)
-            print(f"K/D: {len(events)} kills tracked via RCON logs")
+        global pending_kill_events
+        
+        # Process any pending kill events from HTTP logs
+        if pending_kill_events:
+            events_to_process = pending_kill_events.copy()
+            pending_kill_events = []  # Clear the list
+            update_kd_stats(events_to_process)
+            print(f"K/D: Processed {len(events_to_process)} kills from HTTP logs")
         else:
-            # Fallback to scoreboard if no kill events found
-            await loop.run_in_executor(None, update_kd_from_scoreboard)
+            # Fallback: Try RCON log method if no HTTP events
+            loop = asyncio.get_running_loop()
+            events = await loop.run_in_executor(None, parse_server_logs)
+            if events:
+                update_kd_stats(events)
+                print(f"K/D: {len(events)} kills tracked via RCON logs")
+            else:
+                # Final fallback to scoreboard
+                await loop.run_in_executor(None, update_kd_from_scoreboard)
         
         addr = (SERVER_IP, SERVER_PORT)
         loop = asyncio.get_running_loop()
@@ -1073,6 +1002,11 @@ async def on_ready():
     print(f"Bot ID: {bot.user.id}")
     print(f"Owner ID from env: {OWNER_ID}")
     
+    # Start HTTP server in background thread
+    http_thread = threading.Thread(target=start_http_server, daemon=True)
+    http_thread.start()
+    print(f"✓ HTTP log endpoint started on port {os.getenv('PORT', 8080)}")
+    
     # Enable detailed kill logging on server
     try:
         send_rcon_silent("mp_logdetail 3")
@@ -1088,27 +1022,7 @@ async def on_ready():
         print(f"✓ Synced {len(synced)} commands globally")
     except Exception as e:
         print(f"✗ Failed to sync commands: {e}")
-
-    # ===============================
-    # START HTTP LOG RECEIVER (Railway)
-    # ===============================
-
-    if not hasattr(bot, "http_started"):
-        bot.http_started = True
-
-        app = web.Application()
-        app.router.add_post("/logs", handle_logs)
-
-        runner = web.AppRunner(app)
-        await runner.setup()
-
-        site = web.TCPSite(runner, "0.0.0.0", PORT)
-        await site.start()
-
-        print(f"🌐 HTTP log receiver running on port {PORT}")
-
-        bot.loop.create_task(process_log_queue())
-
+    
     print("Starting background tasks...")
     update_server_stats.start()
     update_status_message.start()
@@ -1280,83 +1194,6 @@ async def profile_cmd(inter: discord.Interaction, player_name: str):
     
     embed.set_footer(text=f"Stats tracked since bot installation")
     
-    await inter.followup.send(embed=embed, ephemeral=True)
-
-
-@bot.tree.command(name="weapons", description="View top weapons for a player")
-async def weapons_cmd(inter: discord.Interaction, player_name: str):
-    await inter.response.defer(ephemeral=True)
-    conn = get_db()
-    c = conn.cursor()
-    c.execute('''SELECT weapon, kills, headshots
-                 FROM player_weapon_stats
-                 WHERE player_name = %s
-                 ORDER BY kills DESC
-                 LIMIT 10''', (player_name,))
-    rows = c.fetchall()
-    conn.close()
-
-    if not rows:
-        return await inter.followup.send(
-            f"❌ No weapon stats found for **{player_name}** (need HTTP logs).",
-            ephemeral=True
-        )
-
-    embed = discord.Embed(title=f"🔫 Top Weapons — {player_name}", color=0x3498DB)
-    for weapon, kills, headshots in rows:
-        hs_pct = (headshots / kills * 100) if kills else 0
-        embed.add_field(name=weapon, value=f"Kills: **{kills}** • HS: **{headshots}** ({hs_pct:.0f}%)", inline=False)
-    await inter.followup.send(embed=embed, ephemeral=True)
-
-@bot.tree.command(name="mapstats", description="View a player's stats per map")
-async def mapstats_cmd(inter: discord.Interaction, player_name: str):
-    await inter.response.defer(ephemeral=True)
-    conn = get_db()
-    c = conn.cursor()
-    c.execute('''SELECT map_name, kills, deaths, headshots
-                 FROM player_map_stats
-                 WHERE player_name = %s
-                 ORDER BY kills DESC
-                 LIMIT 10''', (player_name,))
-    rows = c.fetchall()
-    conn.close()
-
-    if not rows:
-        return await inter.followup.send(
-            f"❌ No map stats found for **{player_name}** (need HTTP logs).",
-            ephemeral=True
-        )
-
-    embed = discord.Embed(title=f"🗺️ Map Stats — {player_name}", color=0x1ABC9C)
-    for map_name, kills, deaths, headshots in rows:
-        kd = (kills / deaths) if deaths else kills
-        hs_pct = (headshots / kills * 100) if kills else 0
-        embed.add_field(name=map_name, value=f"K/D: **{kd:.2f}** • K: **{kills}** • D: **{deaths}** • HS: **{headshots}** ({hs_pct:.0f}%)", inline=False)
-    await inter.followup.send(embed=embed, ephemeral=True)
-
-@bot.tree.command(name="hs", description="View headshot rate for a player")
-async def hs_cmd(inter: discord.Interaction, player_name: str):
-    await inter.response.defer(ephemeral=True)
-    conn = get_db()
-    c = conn.cursor()
-    c.execute('''SELECT COALESCE(SUM(kills),0), COALESCE(SUM(headshots),0)
-                 FROM player_weapon_stats
-                 WHERE player_name = %s''', (player_name,))
-    kills, headshots = c.fetchone()
-    conn.close()
-
-    if not kills:
-        return await inter.followup.send(
-            f"❌ No headshot data for **{player_name}** (need HTTP logs).",
-            ephemeral=True
-        )
-
-    hs_pct = headshots / kills * 100
-    embed = discord.Embed(
-        title=f"🎯 Headshot Rate — {player_name}",
-        description=f"Headshots: **{headshots}** / **{kills}** kills\nRate: **{hs_pct:.1f}%**",
-        color=0xE74C3C
-    )
     await inter.followup.send(embed=embed, ephemeral=True)
 
 @bot.tree.command(name="leaderboard", description="View top players")
