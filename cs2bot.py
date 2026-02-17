@@ -801,12 +801,11 @@ def get_leaderboard(limit=10):
     conn = get_db()
     c = conn.cursor()
     
-    # Get playtime and K/D stats
     c.execute('''SELECT 
                     ps.player_name,
                     SUM(ps.duration_minutes) as total_time,
-                    COALESCE(pst.kills, 0) as kills,
-                    COALESCE(pst.deaths, 0) as deaths
+                    COALESCE(MAX(pst.kills), 0) as kills,
+                    COALESCE(MAX(pst.deaths), 0) as deaths
                  FROM player_sessions ps
                  LEFT JOIN player_stats pst ON ps.player_name = pst.player_name
                  GROUP BY ps.player_name
@@ -815,9 +814,8 @@ def get_leaderboard(limit=10):
     all_players = c.fetchall()
     conn.close()
     
-    # Filter out bots and limit results
     real_players = [
-        (name, time, kills, deaths) for name, time, kills, deaths in all_players 
+        (name, time, kills, deaths) for name, time, kills, deaths in all_players
         if not is_bot_player(name)
     ]
     
@@ -1293,6 +1291,43 @@ async def autocomplete_map(inter, current: str):
         app_commands.Choice(name=m, value=m)
         for m in MAP_WHITELIST if current.lower() in m.lower()
     ]
+
+@bot.tree.command(name="debugkd", description="Debug K/D tracking")
+@owner_only()
+async def debugkd_cmd(inter: discord.Interaction):
+    await inter.response.defer(ephemeral=True)
+
+    results = []
+
+    # Test mp_logdetail
+    r1 = send_rcon("mp_logdetail 3")
+    results.append(f"**mp_logdetail 3:**\n```{r1[:200]}```")
+
+    # Test log command
+    r2 = send_rcon("log")
+    results.append(f"**log command:**\n```{r2[:300] if r2 else 'Empty response'}```")
+
+    # Test status for scores
+    r3 = send_rcon("status")
+    results.append(f"**status (first 300 chars):**\n```{r3[:300] if r3 else 'Empty response'}```")
+
+    # Show current DB stats
+    try:
+        conn = get_db()
+        c = conn.cursor()
+        c.execute('SELECT COUNT(*) FROM player_stats')
+        count = c.fetchone()[0]
+        c.execute('SELECT player_name, kills, deaths FROM player_stats LIMIT 5')
+        rows = c.fetchall()
+        conn.close()
+        db_info = f"Players in DB: {count}\n"
+        for row in rows:
+            db_info += f"{row[0]}: {row[1]}K/{row[2]}D\n"
+        results.append(f"**Database:**\n```{db_info}```")
+    except Exception as e:
+        results.append(f"**Database Error:** {e}")
+
+    await inter.followup.send("\n".join(results), ephemeral=True)
 
 @bot.tree.command(name="cssreload")
 @owner_only()
