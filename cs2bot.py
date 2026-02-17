@@ -17,7 +17,6 @@ from collections import defaultdict
 
 # HTTP server for receiving CS2 logs
 from aiohttp import web
-import threading
 
 # Discord UI components
 from discord.ui import Button, View
@@ -65,8 +64,8 @@ async def handle_health_check(request):
     """Health check endpoint"""
     return web.Response(text='Bot is running')
 
-def start_http_server():
-    """Start HTTP server in background thread"""
+async def start_http_server():
+    """Start HTTP server using asyncio (not threading)"""
     app = web.Application()
     app.router.add_post('/logs', handle_log_post)
     app.router.add_get('/health', handle_health_check)
@@ -75,8 +74,13 @@ def start_http_server():
     # Run on all interfaces, Railway provides PORT env var
     port = int(os.getenv('PORT', 8080))
     
-    print(f"Starting HTTP server on port {port}")
-    web.run_app(app, host='0.0.0.0', port=port, print=None)
+    runner = web.AppRunner(app)
+    await runner.setup()
+    site = web.TCPSite(runner, '0.0.0.0', port)
+    await site.start()
+    
+    print(f"✓ HTTP log endpoint started on port {port}")
+    return runner
 
 # Try to import matplotlib for graphs
 try:
@@ -1002,10 +1006,11 @@ async def on_ready():
     print(f"Bot ID: {bot.user.id}")
     print(f"Owner ID from env: {OWNER_ID}")
     
-    # Start HTTP server in background thread
-    http_thread = threading.Thread(target=start_http_server, daemon=True)
-    http_thread.start()
-    print(f"✓ HTTP log endpoint started on port {os.getenv('PORT', 8080)}")
+    # Start HTTP server in the same asyncio event loop
+    try:
+        await start_http_server()
+    except Exception as e:
+        print(f"⚠️ Failed to start HTTP server: {e}")
     
     # Enable detailed kill logging on server
     try:
