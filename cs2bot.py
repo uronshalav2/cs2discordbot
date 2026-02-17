@@ -1088,26 +1088,26 @@ async def on_ready():
         print(f"✓ Synced {len(synced)} commands globally")
     except Exception as e:
         print(f"✗ Failed to sync commands: {e}")
-    
-    
-# ===============================
-# START HTTP LOG RECEIVER (Railway)
-# ===============================
-if not hasattr(bot, "http_started"):
-    bot.http_started = True
 
-    app = web.Application()
-    app.router.add_post("/logs", handle_logs)
+    # ===============================
+    # START HTTP LOG RECEIVER (Railway)
+    # ===============================
 
-    runner = web.AppRunner(app)
-    await runner.setup()
+    if not hasattr(bot, "http_started"):
+        bot.http_started = True
 
-    site = web.TCPSite(runner, "0.0.0.0", PORT)
-    await site.start()
+        app = web.Application()
+        app.router.add_post("/logs", handle_logs)
 
-    print(f"🌐 HTTP log receiver running on port {PORT}")
+        runner = web.AppRunner(app)
+        await runner.setup()
 
-    bot.loop.create_task(process_log_queue())
+        site = web.TCPSite(runner, "0.0.0.0", PORT)
+        await site.start()
+
+        print(f"🌐 HTTP log receiver running on port {PORT}")
+
+        bot.loop.create_task(process_log_queue())
 
     print("Starting background tasks...")
     update_server_stats.start()
