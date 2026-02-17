@@ -1,10 +1,9 @@
-discord.py
+discord.py>=2.0.0
 python-a2s
-python-dotenv
-pytz
 mcrcon
-valve
 requests
+pytz
 matplotlib
 psycopg2-binary
 aiohttp
+
