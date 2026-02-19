@@ -1268,7 +1268,7 @@ async def debugdb_cmd(inter: discord.Interaction):
             c.execute(f"SELECT COUNT(*) FROM {MATCHZY_TABLES['players']}")
             rows = c.fetchone()[0]
             lines.append(f"**MatchZy player rows:** {rows}")
-            c.execute(f"SELECT COUNT(DISTINCT match_id) FROM {MATCHZY_TABLES['players']}")
+            c.execute(f"SELECT COUNT(DISTINCT matchid) FROM {MATCHZY_TABLES['players']}")
             matches = c.fetchone()[0]
             lines.append(f"**MatchZy matches:** {matches}")
         
