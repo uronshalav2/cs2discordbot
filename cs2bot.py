@@ -92,7 +92,7 @@ async def handle_log_post(request):
         text = await request.text()
 
         # ── Store everything in the ring buffer for GET /logs viewer ──────────
-        ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        ts = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")
         _recent_log_lines.append(f"── {ts}  {remote}  ({len(text)} bytes) ──")
         for ln in text.splitlines():
             if ln.strip():
@@ -175,29 +175,59 @@ async def handle_health_check(request):
 
 async def handle_log_get(request):
     """
-    GET /logs  — renders the last 200 received log lines as plain HTML.
-    Open https://worker-production-bb14.up.railway.app/logs in your browser
-    to see exactly what data the CS2 server is posting.
+    GET /logs — live log viewer. All times UTC.
     """
-    lines_html = "\n".join(
-        f"<div style='font-family:monospace;white-space:pre;font-size:13px;"
-        f"color:{'#4fc3f7' if line.startswith('  ') else '#a5d6a7'}'>"
-        f"{line.replace('&','&amp;').replace('<','&lt;').replace('>','&gt;')}</div>"
-        for line in _recent_log_lines
-    ) or "<div style='color:#888'>No log data received yet. Make sure logaddress_add_http (or MatchZy remote log URL) is set to this endpoint.</div>"
+    now_utc = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")
+
+    def fmt_line(line):
+        escaped = line.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+        css = "hdr" if not line.startswith("  ") else "ln"
+        return f"<div class='{css}'>{escaped}</div>"
+
+    lines_html = "\n".join(fmt_line(l) for l in _recent_log_lines) or (
+        "<div class='empty'>No log data received yet. "
+        "Make sure the MatchZy remote log URL is set to POST /logs on this endpoint.</div>"
+    )
 
     html = f"""<!DOCTYPE html>
 <html>
 <head>
+  <meta charset="utf-8">
   <title>CS2 Remote Log Viewer</title>
-  <meta http-equiv="refresh" content="5">
-  <style>body{{background:#1e1e1e;color:#e0e0e0;margin:20px;font-family:monospace}}
-    h1{{color:#64b5f6}}p{{color:#9e9e9e}}#log{{background:#111;padding:12px;border-radius:6px;overflow:auto;max-height:90vh}}</style>
+  <style>
+    body  {{ background:#1a1a2e; color:#e0e0e0; margin:0; padding:16px 20px; font-family:monospace; font-size:13px; }}
+    h1    {{ color:#64b5f6; margin:0 0 4px; font-size:18px; }}
+    .meta {{ color:#888; margin:0 0 10px; font-size:12px; }}
+    .meta b {{ color:#aaa; }}
+    #log  {{ background:#0d0d1a; padding:12px 14px; border-radius:6px; overflow:auto; max-height:88vh; border:1px solid #2a2a4a; }}
+    .hdr  {{ color:#a5d6a7; white-space:pre; padding-top:6px; }}
+    .ln   {{ color:#b0bec5; white-space:pre; }}
+    .empty{{ color:#555; }}
+    #clock{{ float:right; color:#546e7a; font-size:11px; }}
+  </style>
 </head>
 <body>
-  <h1>📡 CS2 Remote Log Viewer</h1>
-  <p>Endpoint: <b>POST /logs</b> — Last {len(_recent_log_lines)} lines (auto-refreshes every 5s)</p>
+  <h1>📡 CS2 Remote Log Viewer <span id="clock"></span></h1>
+  <p class="meta">
+    Endpoint: <b>POST /logs</b> &nbsp;|&nbsp;
+    Lines buffered: <b>{len(_recent_log_lines)}/500</b> &nbsp;|&nbsp;
+    Page loaded: <b>{now_utc}</b> &nbsp;|&nbsp;
+  </p>
   <div id="log">{lines_html}</div>
+  <script>
+    var log = document.getElementById('log');
+    log.scrollTop = log.scrollHeight;
+
+    function utcClock() {{
+      var d = new Date();
+      var p = n => String(n).padStart(2,'0');
+      document.getElementById('clock').textContent =
+        d.getUTCFullYear()+'-'+p(d.getUTCMonth()+1)+'-'+p(d.getUTCDate())+' '+
+        p(d.getUTCHours())+':'+p(d.getUTCMinutes())+':'+p(d.getUTCSeconds())+' UTC';
+    }}
+    utcClock();
+    setInterval(utcClock, 1000);
+  </script>
 </body>
 </html>"""
     return web.Response(text=html, content_type='text/html')
