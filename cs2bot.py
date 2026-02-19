@@ -146,15 +146,21 @@ def _sse_broadcast(event_type: str, data: dict):
 
 async def handle_log_post(request):
     """
-    Receives logs from CS2 / MatchZy. Parses events, updates match state,
-    and broadcasts to all connected SSE clients (live page).
+    Receives two types of POST from MatchZy:
+      1. Plain text log lines (prefixed with "L date - time:")
+         Contains kills, round_stats block, match events, player actions.
+      2. Raw JSON webhook body ({"reason":8,"winner":...,"event":"round_end"})
+         Sent by MatchZy after each round — has full player stats with names.
     """
     global pending_kill_events
 
     try:
         remote       = request.remote
-        content_type = request.headers.get("Content-Type", "unknown")
+        content_type = request.headers.get("Content-Type", "")
         text         = await request.text()
+
+        if not text.strip():
+            return web.Response(text="OK")
 
         # Ring buffer for /logs debug viewer
         ts = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")
@@ -163,13 +169,102 @@ async def handle_log_post(request):
             if ln.strip():
                 _recent_log_lines.append(f"  {ln}")
 
+        # ════════════════════════════════════════════════════════════════════
+        # PATH A: MatchZy JSON round_end webhook
+        # Body starts with { and contains "event":"round_end"
+        # ════════════════════════════════════════════════════════════════════
+        stripped_text = text.strip()
+        if stripped_text.startswith("{"):
+            try:
+                wh = json.loads(stripped_text)
+            except json.JSONDecodeError:
+                wh = None
+
+            if wh and wh.get("event") == "round_end":
+                rnd      = wh.get("round_number", 0)
+                map_num  = wh.get("map_number",   0)
+                matchid  = wh.get("matchid",      -1)
+                winner   = wh.get("winner", {})
+                t1       = wh.get("team1", {})
+                t2       = wh.get("team2", {})
+
+                # Scores: team1 is always CT side in MatchZy JSON
+                score_ct = t1.get("score", _match_state["score_ct"])
+                score_t  = t2.get("score", _match_state["score_t"])
+
+                # Build enriched player list from webhook (has real names!)
+                players = []
+                for team_data, team_code in [(t1, "3"), (t2, "2")]:
+                    for p in team_data.get("players", []):
+                        steamid64 = str(p.get("steamid", ""))
+                        name      = p.get("name", "?")
+                        stats     = p.get("stats", {})
+                        # Derive accountid from steamid64
+                        # steamid64 = 76561197960265728 + accountid
+                        try:
+                            acct = str(int(steamid64) - 76561197960265728)
+                        except (ValueError, TypeError):
+                            acct = steamid64
+
+                        # Update registry with authoritative name
+                        if acct not in ("0", ""):
+                            existing = _player_registry.get(acct, {})
+                            _player_registry[acct] = {
+                                "name":      name,
+                                "steamid":   f"[U:1:{acct}]",
+                                "accountid": acct,
+                                "team":      "CT" if team_code == "3" else "TERRORIST",
+                            }
+
+                        players.append({
+                            "accountid": acct,
+                            "name":      name,
+                            "steamid":   steamid64,
+                            "team":      team_code,
+                            "kills":     str(stats.get("kills",   0)),
+                            "deaths":    str(stats.get("deaths",  0)),
+                            "assists":   str(stats.get("assists", 0)),
+                            "dmg":       str(stats.get("damage",  0)),
+                            "hsp":       str(round(stats.get("headshot_kills", 0) /
+                                           max(stats.get("kills", 1), 1) * 100, 1)),
+                            "adr":       str(round(stats.get("damage", 0) /
+                                           max(rnd, 1), 1)),
+                            "mvp":       str(stats.get("mvp", 0)),
+                        })
+
+                _match_state.update({
+                    "active":   True,
+                    "warmup":   False,
+                    "round":    rnd,
+                    "score_ct": score_ct,
+                    "score_t":  score_t,
+                })
+                if not _match_state["started_at"]:
+                    _match_state["started_at"] = datetime.utcnow().isoformat()
+
+                print(f"[WH] round_end  round={rnd}  CT:{score_ct} T:{score_t}  "
+                      f"winner={winner.get('team','?')}  players={len(players)}")
+
+                _sse_broadcast("round_stats", {
+                    "round":    rnd,
+                    "score_t":  score_t,
+                    "score_ct": score_ct,
+                    "map":      _match_state["map"],
+                    "server":   _match_state["server"],
+                    "players":  players,
+                })
+            return web.Response(text="OK")
+
+        # ════════════════════════════════════════════════════════════════════
+        # PATH B: Plain text log lines
+        # ════════════════════════════════════════════════════════════════════
         raw_lines = text.splitlines()
 
-        # ── Update player registry from EVERY line first ─────────────────────
+        # Update player registry from every line
         for line in raw_lines:
             _update_registry(_strip_prefix(line))
 
-        # ── MatchZy round_stats block ────────────────────────────────────────
+        # ── MatchZy round_stats block (JSON_BEGIN…JSON_END) ──────────────────
         block = _parse_matchzy_block(raw_lines)
         if block:
             rnd      = int(block.get("round_number", 0) or 0)
@@ -180,27 +275,25 @@ async def handle_log_post(request):
             players_raw = block.get("players", {})
             fields      = [f.strip() for f in block.get("fields", "").split(",")]
 
-            # Parse player rows and enrich with real names from registry
             players = []
             for pval in players_raw.values():
                 vals = [v.strip() for v in pval.split(",")]
-                if len(vals) == len(fields):
-                    row = dict(zip(fields, vals))
-                    acct = row.get("accountid", "0").strip()
-                    if acct == "0":
-                        continue
-                    # Look up real name + steamid from registry
-                    reg = _player_registry.get(acct, {})
-                    row["name"]    = reg.get("name",    acct)   # fallback to acct id
-                    row["steamid"] = reg.get("steamid", "")
-                    # Registry team is more up-to-date than block (block uses 2/3 codes)
-                    if not row.get("team") or row["team"] in ("2", "3"):
-                        reg_team = reg.get("team", "")
-                        if "CT" in reg_team.upper():
-                            row["team"] = "3"
-                        elif "TERRORIST" in reg_team.upper():
-                            row["team"] = "2"
-                    players.append(row)
+                if len(vals) != len(fields):
+                    continue
+                row  = dict(zip(fields, vals))
+                acct = row.get("accountid", "0").strip()
+                if acct == "0":
+                    continue
+                reg = _player_registry.get(acct, {})
+                row["name"]    = reg.get("name", acct)
+                row["steamid"] = reg.get("steamid", "")
+                # Normalise team code using registry (more reliable)
+                reg_team = reg.get("team", "")
+                if "CT" in reg_team.upper():
+                    row["team"] = "3"
+                elif "TERRORIST" in reg_team.upper():
+                    row["team"] = "2"
+                players.append(row)
 
             _match_state.update({
                 "active":   True,
@@ -214,7 +307,7 @@ async def handle_log_post(request):
             if not _match_state["started_at"]:
                 _match_state["started_at"] = datetime.utcnow().isoformat()
 
-            print(f"[LOG] 📊 round={rnd}  map={map_name}  T:{score_t} CT:{score_ct}  players={len(players)}")
+            print(f"[LOG] round_stats  round={rnd}  {map_name}  T:{score_t} CT:{score_ct}  players={len(players)}")
             _sse_broadcast("round_stats", {
                 "round":    rnd,
                 "score_t":  score_t,
@@ -224,34 +317,61 @@ async def handle_log_post(request):
                 "players":  players,
             })
 
-        # ── Plain log lines ──────────────────────────────────────────────────
+        # ── Parse MatchStatus score lines as fallback score source ────────────
+        # "MatchStatus: Score: 9:2 on map "de_dust2" RoundsPlayed: 11"
+        score_re = re.compile(r'MatchStatus: Score: (\d+):(\d+) on map "([^"]+)"')
+        for line in raw_lines:
+            c = _strip_prefix(line).strip()
+            sm = score_re.search(c)
+            if sm:
+                s_ct = int(sm.group(1))
+                s_t  = int(sm.group(2))
+                mn   = sm.group(3)
+                # Only update if score actually changed (avoid stale repeated lines)
+                if (s_ct != _match_state["score_ct"] or
+                    s_t  != _match_state["score_t"]  or
+                    mn   != _match_state["map"]):
+                    _match_state["score_ct"] = s_ct
+                    _match_state["score_t"]  = s_t
+                    _match_state["map"]      = mn
+                    _match_state["active"]   = True
+                    print(f"[LOG] score  CT:{s_ct} T:{s_t}  map={mn}")
+                    _sse_broadcast("score", {"score_ct": s_ct, "score_t": s_t, "map": mn})
+
+        # ── Kill lines ────────────────────────────────────────────────────────
         kill_re = re.compile(
-            r'"([^"<]+)<\d+><[^>]*><([^>]*)>" killed '
-            r'"([^"<]+)<\d+><[^>]*><[^>]*>" with "([^"]+)"'
+            r'"([^"<]+)<\d+><[^>]*><([^>]*)>" \[.*?\] killed '
+            r'"([^"<]+)<\d+><[^>]*><[^>]*>" \[.*?\] with "([^"]+)"'
         )
         for line in raw_lines:
             c = _strip_prefix(line).strip()
-            if not c:
+            if " killed " not in c:
                 continue
-
-            # Kill
             km = kill_re.search(c)
-            if km and " killed " in c:
+            if not km:
+                # Fallback simpler pattern (no coords)
+                km = re.search(
+                    r'"([^"<]+)<\d+><[^>]*><([^>]*)>" killed '
+                    r'"([^"<]+)<\d+><[^>]*><[^>]*>" with "([^"]+)"', c)
+            if km:
                 killer = km.group(1).strip()
-                team   = km.group(2).strip()   # CT or TERRORIST
+                team   = km.group(2).strip()
                 victim = km.group(3).strip()
                 weapon = km.group(4).strip()
                 if not _is_bot_name(killer) and not _is_bot_name(victim):
-                    side = "CT" if "CT" in team.upper() else "T"
-                    entry = {"killer": killer, "victim": victim, "weapon": weapon, "side": side,
+                    side  = "CT" if "CT" in team.upper() else "T"
+                    entry = {"killer": killer, "victim": victim,
+                             "weapon": weapon, "side": side,
                              "ts": datetime.utcnow().strftime("%H:%M:%S")}
                     _kill_feed.appendleft(entry)
                     pending_kill_events.append((killer, victim))
-                    print(f"[LOG] 💀 {killer} ({side}) → {victim} [{weapon}]")
+                    print(f"[LOG] kill  {killer}({side}) → {victim} [{weapon}]")
                     _sse_broadcast("kill", entry)
-                continue
 
-            # Match start
+        # ── Match lifecycle events ────────────────────────────────────────────
+        for line in raw_lines:
+            c = _strip_prefix(line).strip()
+
             if "Match_Start" in c:
                 map_m = re.search(r'on "([^"]+)"', c)
                 mn    = map_m.group(1) if map_m else _match_state["map"]
@@ -259,28 +379,21 @@ async def handle_log_post(request):
                                      "score_t": 0, "score_ct": 0, "round": 0,
                                      "started_at": datetime.utcnow().isoformat()})
                 _kill_feed.clear()
-                print(f"[LOG] 🏁 Match start on {mn}")
+                print(f"[LOG] match_start  map={mn}")
                 _sse_broadcast("match_start", {"map": mn})
 
-            # Match over
             elif "Match_Over" in c or "Game_Over" in c:
                 _match_state["active"] = False
-                print(f"[LOG] 🏆 Match over")
+                print(f"[LOG] match_over  CT:{_match_state['score_ct']} T:{_match_state['score_t']}")
                 _sse_broadcast("match_end", {
                     "score_t":  _match_state["score_t"],
                     "score_ct": _match_state["score_ct"],
                     "map":      _match_state["map"],
                 })
 
-            # Warmup
             elif "Warmup_Start" in c:
                 _match_state["warmup"] = True
-                print(f"[LOG] 🔥 Warmup")
                 _sse_broadcast("warmup", {})
-
-            # Round end
-            elif "round_end" in c.lower():
-                print(f"[LOG] 🔄 Round end")
 
         return web.Response(text="OK")
 
@@ -688,31 +801,47 @@ function connect() {
   es.addEventListener('state', e => {
     applyState(JSON.parse(e.data));
   });
-  es.addEventListener('round_stats', e => {
+  es.addEventListener('score', e => {
     const d = JSON.parse(e.data);
     $('score-ct').textContent = d.score_ct;
     $('score-t').textContent  = d.score_t;
+    if (d.map) $('map-name').textContent = d.map.toUpperCase();
+    setStatus('LIVE', 'live');
+  });
+  es.addEventListener('round_stats', e => {
+    const d = JSON.parse(e.data);
+    $('score-ct').textContent  = d.score_ct;
+    $('score-t').textContent   = d.score_t;
     $('round-num').textContent = d.round;
-    $('map-name').textContent = (d.map || '').toUpperCase();
-    $('server-name').textContent = d.server || '';
+    if (d.map)    $('map-name').textContent    = d.map.toUpperCase();
+    if (d.server) $('server-name').textContent = d.server;
     setStatus('LIVE', 'live');
     renderPlayers(d.players || []);
-    $('killfeed').innerHTML = '<div class="kf-empty">No kills yet this round</div>';
+    // Only clear kill feed on new round (round number changed)
+    const prevRound = parseInt($('round-num').dataset.round || '0');
+    if (d.round > prevRound) {
+      $('killfeed').innerHTML = '<div class="kf-empty">New round started</div>';
+      $('round-num').dataset.round = d.round;
+    }
   });
   es.addEventListener('kill', e => {
     addKill(JSON.parse(e.data));
   });
   es.addEventListener('match_start', e => {
     const d = JSON.parse(e.data);
-    $('map-name').textContent = (d.map || '').toUpperCase();
-    $('score-ct').textContent = 0;
-    $('score-t').textContent  = 0;
+    $('map-name').textContent  = (d.map || '').toUpperCase();
+    $('score-ct').textContent  = 0;
+    $('score-t').textContent   = 0;
     $('round-num').textContent = 0;
+    $('round-num').dataset.round = 0;
     setStatus('LIVE', 'live');
     $('killfeed').innerHTML = '<div class="kf-empty">Match started!</div>';
     startElapsed(new Date().toISOString());
   });
   es.addEventListener('match_end', e => {
+    const d = JSON.parse(e.data);
+    $('score-ct').textContent = d.score_ct;
+    $('score-t').textContent  = d.score_t;
     setStatus('Ended', 'ended');
     if (elapsedTimer) clearInterval(elapsedTimer);
   });
