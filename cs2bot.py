@@ -23,95 +23,152 @@ from discord.ui import Button, View
 # Track kill events from HTTP logs
 pending_kill_events = []
 
-# In-memory ring buffer of the last 200 raw log lines received (for GET /logs debug view)
+# In-memory ring buffer — last 500 lines for the browser debug viewer
 from collections import deque
-_recent_log_lines: deque = deque(maxlen=200)
+_recent_log_lines: deque = deque(maxlen=500)
+
+# Bot keywords defined early so log handler can use them without forward-ref
+_BOT_KEYWORDS = ["CSTV", "BOT", "GOTV", "SourceTV"]
+
+def _is_bot_name(name: str) -> bool:
+    u = name.upper()
+    return any(kw in u for kw in _BOT_KEYWORDS)
+
+# Regex to strip the "L MM/DD/YYYY - HH:MM:SS: " prefix MatchZy adds to every line
+_LOG_PREFIX_RE = re.compile(r'^L \d{2}/\d{2}/\d{4} - \d{2}:\d{2}:\d{2}: ?')
+
+def _strip_prefix(line: str) -> str:
+    return _LOG_PREFIX_RE.sub('', line)
+
+def _parse_matchzy_block(raw_lines: list) -> dict | None:
+    """
+    MatchZy sends round stats wrapped in log lines like:
+        L date - time: JSON_BEGIN{
+        L date - time: "name": "round_stats",
+        ...
+        L date - time: }}JSON_END
+    Strip the log prefix from each line, reassemble, fix the wrapper so it
+    becomes valid JSON, then parse it.
+    """
+    in_block = False
+    block_lines = []
+    for line in raw_lines:
+        stripped = _strip_prefix(line.strip())
+        if stripped.startswith('JSON_BEGIN{'):
+            in_block = True
+            # Replace JSON_BEGIN{ with just {
+            block_lines = ['{']
+            continue
+        if stripped.startswith('}}JSON_END'):
+            in_block = False
+            block_lines.append('}')
+            break
+        if in_block:
+            block_lines.append(stripped)
+    if not block_lines:
+        return None
+    try:
+        return json.loads('\n'.join(block_lines))
+    except json.JSONDecodeError:
+        return None
 
 # ========== HTTP LOG ENDPOINT ==========
+
 async def handle_log_post(request):
     """
-    Receives logs from CS2 server via logaddress_add_http / MatchZy remote log URL.
-    Prints ALL incoming data so you can see exactly what the server is sending.
+    Receives logs from CS2 / MatchZy via the remote log URL.
+    MatchZy sends plain-text lines prefixed with: L MM/DD/YYYY - HH:MM:SS:
+    Each POST contains a batch of lines (one event or a full round-stats block).
     """
     global pending_kill_events
 
     try:
-        # ── Store in ring buffer for GET /logs debug view ─────────────────────
-        ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        _recent_log_lines.append(f"[{ts}] from={remote} bytes={len(text)}")
-        for line in text.splitlines():
-            if line.strip():
-                _recent_log_lines.append(f"  {line}")
-
-        # ── Show request metadata ──────────────────────────────────────────────
-        method      = request.method
-        path        = request.path
-        remote      = request.remote
-        headers     = dict(request.headers)
-        content_type = headers.get("Content-Type", "unknown")
+        # Read metadata BEFORE awaiting body
+        remote       = request.remote
+        method       = request.method
+        path         = request.path
+        content_type = request.headers.get("Content-Type", "unknown")
 
         text = await request.text()
 
-        # ── Pretty-print EVERYTHING arriving at /logs ──────────────────────────
-        separator = "=" * 70
-        print(f"\n{separator}")
-        print(f"[REMOTE LOG] {method} {path}  from {remote}")
-        print(f"[REMOTE LOG] Content-Type : {content_type}")
-        print(f"[REMOTE LOG] Headers      : {headers}")
-        print(f"[REMOTE LOG] Body ({len(text)} bytes):")
-        if text.strip():
-            for i, line in enumerate(text.splitlines(), 1):
-                print(f"  {i:>4}: {line}")
-        else:
-            print("  (empty body)")
-        print(separator)
+        # ── Store everything in the ring buffer for GET /logs viewer ──────────
+        ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        _recent_log_lines.append(f"── {ts}  {remote}  ({len(text)} bytes) ──")
+        for ln in text.splitlines():
+            if ln.strip():
+                _recent_log_lines.append(f"  {ln}")
 
-        # ── Detect format: JSON (MatchZy webhook) vs plain-text log lines ─────
-        if content_type and "json" in content_type.lower():
-            try:
-                payload = json.loads(text)
-                print(f"[REMOTE LOG] Parsed JSON payload:\n{json.dumps(payload, indent=2)}")
-                # MatchZy sends match/round events as JSON - no kill parsing needed
-                # MatchZy saves full stats to MySQL automatically.
-            except json.JSONDecodeError as je:
-                print(f"[REMOTE LOG] JSON parse error: {je}")
-        else:
-            # Plain-text CS2 log lines (logaddress_add_http)
-            kill_pattern = re.compile(
-                r'"([^"<]+)<\d+><[^>]*><[^>]*>" killed '
-                r'"([^"<]+)<\d+><[^>]*><[^>]*>" with'
-            )
-            for line in text.splitlines():
-                if not line.strip():
-                    continue
-                # Categorise lines for easier debugging
-                if ' killed ' in line:
-                    match = kill_pattern.search(line)
-                    if match:
-                        killer = match.group(1).strip()
-                        victim = match.group(2).strip()
-                        if not is_bot_player(killer) and not is_bot_player(victim):
-                            pending_kill_events.append((killer, victim))
-                            print(f"[REMOTE LOG] ✅ Kill parsed: {killer} → {victim}")
-                        else:
-                            print(f"[REMOTE LOG] 🤖 Bot kill skipped: {line.strip()}")
-                elif 'connected' in line.lower():
-                    print(f"[REMOTE LOG] 🟢 Connect event: {line.strip()}")
-                elif 'disconnected' in line.lower():
-                    print(f"[REMOTE LOG] 🔴 Disconnect event: {line.strip()}")
-                elif 'round_' in line.lower() or 'Round_' in line:
-                    print(f"[REMOTE LOG] 🔄 Round event: {line.strip()}")
-                elif 'match' in line.lower():
-                    print(f"[REMOTE LOG] 🏆 Match event: {line.strip()}")
-                else:
-                    print(f"[REMOTE LOG] ℹ️  Other: {line.strip()}")
+        # ── Print full request to Railway logs ────────────────────────────────
+        sep = "=" * 70
+        print(f"\n{sep}")
+        print(f"[LOG] {method} {path}  from={remote}  ct={content_type}")
+        print(f"[LOG] Body ({len(text)} bytes):")
+        for i, ln in enumerate(text.splitlines(), 1):
+            print(f"  {i:>4}: {ln}")
+        print(sep)
+
+        raw_lines = text.splitlines()
+
+        # ── Try to parse the MatchZy JSON_BEGIN…JSON_END block ────────────────
+        block = _parse_matchzy_block(raw_lines)
+        if block:
+            name = block.get('name', 'unknown')
+            rnd  = block.get('round_number', '?')
+            map_ = block.get('map', '?')
+            svr  = block.get('server', '?')
+            t_score  = block.get('score_t', '?')
+            ct_score = block.get('score_ct', '?')
+            players  = block.get('players', {})
+            fields   = [f.strip() for f in block.get('fields', '').split(',')]
+
+            print(f"[LOG] 📊 MatchZy block: {name}  round={rnd}  map={map_}  "
+                  f"score T:{t_score} CT:{ct_score}  players={len(players)}")
+            for pkey, pval in players.items():
+                vals = [v.strip() for v in pval.split(',')]
+                row  = dict(zip(fields, vals)) if len(vals) == len(fields) else {"raw": pval}
+                print(f"[LOG]   {pkey}: accountid={row.get('accountid','?')}  "
+                      f"team={row.get('team','?')}  kills={row.get('kills','?')}  "
+                      f"deaths={row.get('deaths','?')}  dmg={row.get('dmg','?')}  "
+                      f"adr={row.get('adr','?')}  kdr={row.get('kdr','?')}")
+
+        # ── Parse plain-text log lines for kills + events ─────────────────────
+        kill_re = re.compile(
+            r'"([^"<]+)<\d+><[^>]*><[^>]*>" killed '
+            r'"([^"<]+)<\d+><[^>]*><[^>]*>" with'
+        )
+        for line in raw_lines:
+            content = _strip_prefix(line).strip()
+            if not content:
+                continue
+
+            if ' killed ' in content:
+                m = kill_re.search(content)
+                if m:
+                    killer, victim = m.group(1).strip(), m.group(2).strip()
+                    if not _is_bot_name(killer) and not _is_bot_name(victim):
+                        pending_kill_events.append((killer, victim))
+                        print(f"[LOG] ✅ Kill: {killer} → {victim}")
+                    else:
+                        print(f"[LOG] 🤖 Bot kill skipped: {content}")
+
+            elif 'Match_Start' in content or 'match_start' in content:
+                print(f"[LOG] 🏁 Match start: {content}")
+            elif 'Warmup_Start' in content:
+                print(f"[LOG] 🔥 Warmup start: {content}")
+            elif 'round_end' in content.lower() or 'Round_End' in content:
+                print(f"[LOG] 🔄 Round end: {content}")
+            elif 'connected' in content.lower():
+                print(f"[LOG] 🟢 Connect: {content}")
+            elif 'disconnected' in content.lower():
+                print(f"[LOG] 🔴 Disconnect: {content}")
 
         return web.Response(text='OK')
+
     except Exception as e:
-        print(f"[REMOTE LOG] ❌ Error processing log: {e}")
-        import traceback
-        traceback.print_exc()
+        print(f"[LOG] ❌ Error: {e}")
+        import traceback; traceback.print_exc()
         return web.Response(text='Error', status=500)
+
 
 async def handle_health_check(request):
     return web.Response(text='Bot is running')
