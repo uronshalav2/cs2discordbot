@@ -27,6 +27,25 @@ pending_kill_events = []
 from collections import deque
 _recent_log_lines: deque = deque(maxlen=500)
 
+# ========== LIVE EVENTS QUEUE ==========
+# Events pushed here by handle_log_post, consumed by the Discord background task.
+_event_queue: asyncio.Queue = asyncio.Queue()
+
+# Tracks the current live match so we can edit a single embed each round (no spam)
+_live_match = {
+    "active":     False,
+    "map":        None,
+    "server":     None,
+    "round":      0,
+    "score_t":    0,
+    "score_ct":   0,
+    "started_at": None,
+    "message_id":    None,   # Discord message ID of the live embed — edited each round
+    "channel_id":    None,
+    "last_players":  None,   # Most recent player rows for embed rendering
+    "last_fields":   None,
+}
+
 # Bot keywords defined early so log handler can use them without forward-ref
 _BOT_KEYWORDS = ["CSTV", "BOT", "GOTV", "SourceTV"]
 
@@ -112,17 +131,20 @@ async def handle_log_post(request):
         # ── Try to parse the MatchZy JSON_BEGIN…JSON_END block ────────────────
         block = _parse_matchzy_block(raw_lines)
         if block:
-            name = block.get('name', 'unknown')
-            rnd  = block.get('round_number', '?')
-            map_ = block.get('map', '?')
-            svr  = block.get('server', '?')
-            t_score  = block.get('score_t', '?')
-            ct_score = block.get('score_ct', '?')
+            bname    = block.get('name', 'unknown')
+            rnd      = block.get('round_number', '0')
+            map_     = block.get('map', '?')
+            svr      = block.get('server', '?')
+            t_score  = block.get('score_t', '0')
+            ct_score = block.get('score_ct', '0')
             players  = block.get('players', {})
             fields   = [f.strip() for f in block.get('fields', '').split(',')]
 
-            print(f"[LOG] 📊 MatchZy block: {name}  round={rnd}  map={map_}  "
+            print(f"[LOG] 📊 MatchZy block: {bname}  round={rnd}  map={map_}  "
                   f"score T:{t_score} CT:{ct_score}  players={len(players)}")
+
+            # Parse player rows into dicts
+            player_rows = []
             for pkey, pval in players.items():
                 vals = [v.strip() for v in pval.split(',')]
                 row  = dict(zip(fields, vals)) if len(vals) == len(fields) else {"raw": pval}
@@ -130,6 +152,19 @@ async def handle_log_post(request):
                       f"team={row.get('team','?')}  kills={row.get('kills','?')}  "
                       f"deaths={row.get('deaths','?')}  dmg={row.get('dmg','?')}  "
                       f"adr={row.get('adr','?')}  kdr={row.get('kdr','?')}")
+                player_rows.append(row)
+
+            # Push round_stats event to Discord queue
+            await _event_queue.put({
+                "type":     "round_stats",
+                "round":    int(rnd) if str(rnd).isdigit() else 0,
+                "map":      map_,
+                "server":   svr,
+                "score_t":  int(t_score)  if str(t_score).isdigit()  else 0,
+                "score_ct": int(ct_score) if str(ct_score).isdigit() else 0,
+                "players":  player_rows,
+                "fields":   fields,
+            })
 
         # ── Parse plain-text log lines for kills + events ─────────────────────
         kill_re = re.compile(
@@ -145,22 +180,53 @@ async def handle_log_post(request):
                 m = kill_re.search(content)
                 if m:
                     killer, victim = m.group(1).strip(), m.group(2).strip()
+                    # Extract weapon: ... killed "..." with "ak47"
+                    weapon_m = re.search(r' with "([^"]+)"', content)
+                    weapon   = weapon_m.group(1) if weapon_m else ""
                     if not _is_bot_name(killer) and not _is_bot_name(victim):
                         pending_kill_events.append((killer, victim))
-                        print(f"[LOG] ✅ Kill: {killer} → {victim}")
+                        print(f"[LOG] ✅ Kill: {killer} → {victim} [{weapon}]")
+                        await _event_queue.put({
+                            "type":   "kill",
+                            "killer": killer,
+                            "victim": victim,
+                            "weapon": weapon,
+                        })
                     else:
                         print(f"[LOG] 🤖 Bot kill skipped: {content}")
 
             elif 'Match_Start' in content or 'match_start' in content:
-                print(f"[LOG] 🏁 Match start: {content}")
+                # Extract map name from: World triggered "Match_Start" on "de_mirage"
+                map_m = re.search(r'on "([^"]+)"', content)
+                map_name = map_m.group(1) if map_m else "?"
+                print(f"[LOG] 🏁 Match start on {map_name}")
+                await _event_queue.put({"type": "match_start", "map": map_name})
+
+            elif 'Match_Over' in content or 'Game_Over' in content:
+                print(f"[LOG] 🏆 Match over: {content}")
+                await _event_queue.put({"type": "match_end", "raw": content})
+
             elif 'Warmup_Start' in content:
-                print(f"[LOG] 🔥 Warmup start: {content}")
+                print(f"[LOG] 🔥 Warmup start")
+                await _event_queue.put({"type": "warmup"})
+
             elif 'round_end' in content.lower() or 'Round_End' in content:
                 print(f"[LOG] 🔄 Round end: {content}")
-            elif 'connected' in content.lower():
-                print(f"[LOG] 🟢 Connect: {content}")
-            elif 'disconnected' in content.lower():
-                print(f"[LOG] 🔴 Disconnect: {content}")
+
+            elif 'connected' in content.lower() and '"<' in content:
+                # "PlayerName<id><steamid><>" connected, address "ip"
+                name_m = re.match(r'"([^"<]+)<', content)
+                pname = name_m.group(1) if name_m else "Unknown"
+                if not _is_bot_name(pname):
+                    print(f"[LOG] 🟢 Connect: {pname}")
+                    await _event_queue.put({"type": "connect", "player": pname})
+
+            elif 'disconnected' in content.lower() and '"<' in content:
+                name_m = re.match(r'"([^"<]+)<', content)
+                pname = name_m.group(1) if name_m else "Unknown"
+                if not _is_bot_name(pname):
+                    print(f"[LOG] 🔴 Disconnect: {pname}")
+                    await _event_queue.put({"type": "disconnect", "player": pname})
 
         return web.Response(text='OK')
 
@@ -1088,6 +1154,301 @@ async def update_server_stats():
     except Exception as e:
         print(f"Error in update_server_stats: {e}")
 
+# ========== LIVE MATCH EVENTS TASK ==========
+
+# Kill feed buffer: list of "Killer → Victim" strings for the current round
+_round_kills: list = []
+
+def _team_label(team_val: str) -> str:
+    """MatchZy uses team=2 for T, team=3 for CT."""
+    if str(team_val) == "2":
+        return "T"
+    if str(team_val) == "3":
+        return "CT"
+    return "?"
+
+
+def _build_live_embed(players: list = None, fields: list = None) -> discord.Embed:
+    """
+    Build (or rebuild) the live match embed.
+    If player rows + field names are supplied, render a full top-stats table.
+    """
+    m = _live_match
+    elapsed = ""
+    if m["started_at"]:
+        secs    = int((datetime.utcnow() - m["started_at"]).total_seconds())
+        elapsed = f"{secs // 60}m {secs % 60}s"
+
+    embed = discord.Embed(
+        title=f"🟢  LIVE — {m['map'] or 'Unknown Map'}",
+        description=f"**{m['server'] or 'CS2 Server'}**",
+        color=0x2ECC71,
+        timestamp=datetime.utcnow(),
+    )
+
+    # Score bar
+    embed.add_field(
+        name="🔵 CT  vs  T 🔴",
+        value=f"## {m['score_ct']}  :  {m['score_t']}",
+        inline=False,
+    )
+    embed.add_field(name="Round",   value=f"`{m['round']}`", inline=True)
+    embed.add_field(name="Elapsed", value=f"`{elapsed or '—'}`", inline=True)
+    embed.add_field(name="\u200b",  value="\u200b",           inline=True)
+
+    # ── Top players table ──────────────────────────────────────────────────
+    if players and fields:
+        # Separate by team, sort by kills desc
+        ct_rows = sorted(
+            [p for p in players if _team_label(p.get("team","")) == "CT"],
+            key=lambda p: float(p.get("kills", 0) or 0), reverse=True
+        )
+        t_rows  = sorted(
+            [p for p in players if _team_label(p.get("team","")) == "T"],
+            key=lambda p: float(p.get("kills", 0) or 0), reverse=True
+        )
+
+        def player_lines(rows):
+            lines = []
+            for p in rows:
+                k   = p.get("kills",  "0").strip()
+                d   = p.get("deaths", "0").strip()
+                adr = p.get("adr",    "0").strip()
+                try:
+                    adr_f = f"{float(adr):.0f}"
+                except ValueError:
+                    adr_f = adr
+                # Use accountid as identifier (no steam name in block sadly)
+                acct = p.get("accountid", "?").strip()
+                lines.append(f"`{k}/{d}` ADR `{adr_f}` — acct `{acct}`")
+            return "\n".join(lines) if lines else "*—*"
+
+        embed.add_field(name="🔵 CT",  value=player_lines(ct_rows), inline=True)
+        embed.add_field(name="🔴 T",   value=player_lines(t_rows),  inline=True)
+        embed.add_field(name="\u200b", value="\u200b",               inline=True)
+
+    # ── Kill feed (last 5 kills this round) ───────────────────────────────
+    if _round_kills:
+        feed = "\n".join(f"💀 {k}" for k in _round_kills[-5:])
+        embed.add_field(name="Kill Feed (this round)", value=feed, inline=False)
+
+    embed.set_footer(text="Updated each round  •  Kill feed updates live")
+    return embed
+
+
+def _build_match_end_embed(players: list = None, fields: list = None) -> discord.Embed:
+    """Final summary embed with winner, score, duration and top fragger."""
+    m          = _live_match
+    score_t    = m["score_t"]
+    score_ct   = m["score_ct"]
+    map_name   = m["map"]   or "?"
+    server     = m["server"] or "CS2 Server"
+    started_at = m["started_at"]
+
+    duration = "—"
+    if started_at:
+        secs     = int((datetime.utcnow() - started_at).total_seconds())
+        duration = f"{secs // 60}m {secs % 60}s"
+
+    if score_ct > score_t:
+        result, color = "🔵 **CT Wins!**", 0x3498DB
+    elif score_t > score_ct:
+        result, color = "🔴 **T Wins!**",  0xE74C3C
+    else:
+        result, color = "🤝 **Draw**",      0x95A5A6
+
+    embed = discord.Embed(
+        title=f"🏁  Match Over — {map_name}",
+        description=f"**{server}**\n{result}",
+        color=color,
+        timestamp=datetime.utcnow(),
+    )
+    embed.add_field(
+        name="Final Score",
+        value=f"🔵 CT  **{score_ct}** : **{score_t}**  T 🔴",
+        inline=False,
+    )
+    embed.add_field(name="Map",      value=f"`{map_name}`", inline=True)
+    embed.add_field(name="Duration", value=f"`{duration}`", inline=True)
+    embed.add_field(name="\u200b",   value="\u200b",        inline=True)
+
+    # Top fragger from last round_stats block
+    if players and fields:
+        all_sorted = sorted(
+            [p for p in players if p.get("accountid","0").strip() != "0"],
+            key=lambda p: float(p.get("kills","0") or 0), reverse=True
+        )
+        if all_sorted:
+            mvp = all_sorted[0]
+            k   = mvp.get("kills",  "?").strip()
+            d   = mvp.get("deaths", "?").strip()
+            adr = mvp.get("adr",    "?").strip()
+            try:   adr = f"{float(adr):.0f}"
+            except ValueError: pass
+            team = _team_label(mvp.get("team","?"))
+            acct = mvp.get("accountid","?").strip()
+            embed.add_field(
+                name="🏆 Top Fragger",
+                value=f"AccountID `{acct}` ({team})\n`{k}` kills / `{d}` deaths / `{adr}` ADR",
+                inline=False,
+            )
+
+    embed.set_footer(text="Match complete — stats saved by MatchZy")
+    return embed
+
+
+@tasks.loop(seconds=1)
+async def process_log_events():
+    """Drain the log event queue and post/edit Discord messages."""
+    global _round_kills
+    if not NOTIFICATIONS_CHANNEL_ID:
+        return
+    channel = bot.get_channel(NOTIFICATIONS_CHANNEL_ID)
+    if not channel:
+        return
+
+    for _ in range(30):
+        try:
+            event = _event_queue.get_nowait()
+        except asyncio.QueueEmpty:
+            break
+
+        etype = event.get("type")
+        try:
+            # ── Warmup ────────────────────────────────────────────────────────
+            if etype == "warmup":
+                embed = discord.Embed(
+                    description="🔥  **Warmup started** — match will begin soon",
+                    color=0xF39C12,
+                    timestamp=datetime.utcnow(),
+                )
+                await channel.send(embed=embed)
+
+            # ── Match start ───────────────────────────────────────────────────
+            elif etype == "match_start":
+                _live_match.update({
+                    "active":     True,
+                    "map":        event.get("map"),
+                    "round":      0,
+                    "score_t":    0,
+                    "score_ct":   0,
+                    "started_at": datetime.utcnow(),
+                    "message_id": None,
+                    "channel_id": NOTIFICATIONS_CHANNEL_ID,
+                })
+                _round_kills.clear()
+                embed = _build_live_embed()
+                msg   = await channel.send(embed=embed)
+                _live_match["message_id"] = msg.id
+                print(f"[EVENTS] 🏁 Match start embed sent (msg {msg.id})")
+
+            # ── Round stats — edit live embed with full player table ───────────
+            elif etype == "round_stats":
+                _live_match["active"]   = True
+                _live_match["round"]    = event.get("round",    _live_match["round"])
+                _live_match["score_t"]  = event.get("score_t",  _live_match["score_t"])
+                _live_match["score_ct"] = event.get("score_ct", _live_match["score_ct"])
+                if event.get("map"):    _live_match["map"]    = event["map"]
+                if event.get("server"): _live_match["server"] = event["server"]
+                if not _live_match["started_at"]:
+                    _live_match["started_at"] = datetime.utcnow()
+                if not _live_match["channel_id"]:
+                    _live_match["channel_id"] = NOTIFICATIONS_CHANNEL_ID
+
+                # New round starting — clear kill feed
+                _round_kills.clear()
+
+                players = event.get("players", [])
+                fields  = event.get("fields",  [])
+                embed   = _build_live_embed(players=players, fields=fields)
+                # Store latest player data for match end summary
+                _live_match["last_players"] = players
+                _live_match["last_fields"]  = fields
+
+                edited = False
+                if _live_match["message_id"]:
+                    try:
+                        msg = await channel.fetch_message(_live_match["message_id"])
+                        await msg.edit(embed=embed)
+                        edited = True
+                        print(f"[EVENTS] 🔄 Round {_live_match['round']} — "
+                              f"CT {_live_match['score_ct']} : {_live_match['score_t']} T")
+                    except discord.NotFound:
+                        pass
+                if not edited:
+                    msg = await channel.send(embed=embed)
+                    _live_match["message_id"] = msg.id
+                    print(f"[EVENTS] 📤 New live embed sent (msg {msg.id})")
+
+            # ── Kill feed — edit live embed to append kill ────────────────────
+            elif etype == "kill":
+                killer = event.get("killer", "?")
+                victim = event.get("victim", "?")
+                weapon = event.get("weapon", "")
+                entry  = f"{killer} → {victim}" + (f" `{weapon}`" if weapon else "")
+                _round_kills.append(entry)
+                # Edit the live embed to show updated kill feed
+                if _live_match["message_id"] and _live_match["active"]:
+                    try:
+                        embed = _build_live_embed(
+                            players=_live_match.get("last_players"),
+                            fields =_live_match.get("last_fields"),
+                        )
+                        msg = await channel.fetch_message(_live_match["message_id"])
+                        await msg.edit(embed=embed)
+                    except discord.NotFound:
+                        pass
+
+            # ── Match end ─────────────────────────────────────────────────────
+            elif etype == "match_end":
+                # Grey out the live embed
+                if _live_match["message_id"]:
+                    try:
+                        msg = await channel.fetch_message(_live_match["message_id"])
+                        await msg.edit(embed=discord.Embed(
+                            title=f"⚫  Match Ended — {_live_match['map'] or '?'}",
+                            description="Match concluded. See summary below ↓",
+                            color=0x333333,
+                        ))
+                    except discord.NotFound:
+                        pass
+                # Post final summary
+                embed = _build_match_end_embed(
+                    players=_live_match.get("last_players"),
+                    fields =_live_match.get("last_fields"),
+                )
+                await channel.send(embed=embed)
+                _live_match.update({"active": False, "message_id": None})
+                _round_kills.clear()
+                print(f"[EVENTS] 🏆 Match end summary posted")
+
+            # ── Player connect ────────────────────────────────────────────────
+            elif etype == "connect":
+                embed = discord.Embed(
+                    description=f"🟢  **{event['player']}** connected",
+                    color=0x2ECC71,
+                    timestamp=datetime.utcnow(),
+                )
+                if _live_match.get("map"):
+                    embed.set_footer(text=f"Map: {_live_match['map']}")
+                await channel.send(embed=embed)
+
+            # ── Player disconnect ─────────────────────────────────────────────
+            elif etype == "disconnect":
+                embed = discord.Embed(
+                    description=f"🔴  **{event['player']}** disconnected",
+                    color=0x95A5A6,
+                    timestamp=datetime.utcnow(),
+                )
+                await channel.send(embed=embed)
+
+        except Exception as e:
+            print(f"[EVENTS] ❌ Error handling event '{etype}': {e}")
+            import traceback; traceback.print_exc()
+
+        _event_queue.task_done()
+
+
 @tasks.loop(minutes=10)
 async def update_status_message():
     if not STATUS_CHANNEL_ID:
@@ -1139,6 +1500,8 @@ async def on_ready():
     
     update_server_stats.start()
     update_status_message.start()
+    process_log_events.start()
+    print("✓ Live log events task started")
 
 @bot.event
 async def on_message(message):
