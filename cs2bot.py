@@ -41,12 +41,51 @@ _match_state = {
 _kill_feed: deque = deque(maxlen=20)   # last 20 kills
 _sse_clients: list = []                # connected browser SSE clients
 
-# Bot keywords defined early so log handler can use them without forward-ref
+# Maps accountid (str) → {name, steamid, team} — built from every log line
+_player_registry: dict = {}
+
+# Bot keywords defined early so all helpers below can use them
 _BOT_KEYWORDS = ["CSTV", "BOT", "GOTV", "SourceTV"]
 
 def _is_bot_name(name: str) -> bool:
     u = name.upper()
     return any(kw in u for kw in _BOT_KEYWORDS)
+
+# Regex to extract every "name<slot><steamid><team>" actor token in a log line
+_ACTOR_RE = re.compile(
+    r'"(?P<n>[^"<]+)<\d+><(?P<steamid>[^>]+)><(?P<team>[^>]*)>"'
+)
+
+def _update_registry(line: str):
+    """
+    Parse all actor tokens in a log line and upsert into _player_registry.
+    CS2 log format: "PlayerName<slot><[U:1:ACCOUNTID]><team>"
+    Example:        "dnt<3><[U:1:423808471]><TERRORIST>"
+    We use accountid as the key since names can change but IDs don't.
+    """
+    for m in _ACTOR_RE.finditer(line):
+        name    = m.group("n").strip()
+        steamid = m.group("steamid").strip()
+        team    = m.group("team").strip()
+        if _is_bot_name(name) or steamid in ("", "BOT"):
+            continue
+        acct_m = re.search(r"U:1:(\d+)", steamid)
+        if not acct_m:
+            continue
+        accountid = acct_m.group(1)
+        existing  = _player_registry.get(accountid, {})
+        # Keep team if the new value is more specific
+        if team and team not in ("", "Unassigned"):
+            resolved_team = team
+        else:
+            resolved_team = existing.get("team", "")
+        _player_registry[accountid] = {
+            "name":      name,
+            "steamid":   steamid,
+            "accountid": accountid,
+            "team":      resolved_team,
+        }
+        print(f"[REG] {name} | {steamid} | {resolved_team or '—'}")
 
 # Regex to strip the "L MM/DD/YYYY - HH:MM:SS: " prefix MatchZy adds to every line
 _LOG_PREFIX_RE = re.compile(r'^L \d{2}/\d{2}/\d{4} - \d{2}:\d{2}:\d{2}: ?')
@@ -126,6 +165,10 @@ async def handle_log_post(request):
 
         raw_lines = text.splitlines()
 
+        # ── Update player registry from EVERY line first ─────────────────────
+        for line in raw_lines:
+            _update_registry(_strip_prefix(line))
+
         # ── MatchZy round_stats block ────────────────────────────────────────
         block = _parse_matchzy_block(raw_lines)
         if block:
@@ -137,14 +180,27 @@ async def handle_log_post(request):
             players_raw = block.get("players", {})
             fields      = [f.strip() for f in block.get("fields", "").split(",")]
 
-            # Parse player rows
+            # Parse player rows and enrich with real names from registry
             players = []
             for pval in players_raw.values():
                 vals = [v.strip() for v in pval.split(",")]
                 if len(vals) == len(fields):
                     row = dict(zip(fields, vals))
-                    if row.get("accountid","0").strip() != "0":
-                        players.append(row)
+                    acct = row.get("accountid", "0").strip()
+                    if acct == "0":
+                        continue
+                    # Look up real name + steamid from registry
+                    reg = _player_registry.get(acct, {})
+                    row["name"]    = reg.get("name",    acct)   # fallback to acct id
+                    row["steamid"] = reg.get("steamid", "")
+                    # Registry team is more up-to-date than block (block uses 2/3 codes)
+                    if not row.get("team") or row["team"] in ("2", "3"):
+                        reg_team = reg.get("team", "")
+                        if "CT" in reg_team.upper():
+                            row["team"] = "3"
+                        elif "TERRORIST" in reg_team.upper():
+                            row["team"] = "2"
+                    players.append(row)
 
             _match_state.update({
                 "active":   True,
@@ -236,6 +292,14 @@ async def handle_log_post(request):
 
 async def handle_health_check(request):
     return web.Response(text='Bot is running')
+
+async def handle_api_state(request):
+    """GET /api/state — returns full match state + player registry as JSON."""
+    return web.Response(
+        text=json.dumps(_match_state_snapshot()),
+        content_type='application/json',
+        headers={"Access-Control-Allow-Origin": "*"},
+    )
 
 async def handle_log_get(request):
     """
@@ -334,7 +398,7 @@ async def handle_sse(request):
 
 
 def _match_state_snapshot() -> dict:
-    """Return current match state + kill feed for initial page load."""
+    """Return current match state + kill feed + player registry for initial page load."""
     elapsed = ""
     if _match_state.get("started_at"):
         try:
@@ -347,6 +411,7 @@ def _match_state_snapshot() -> dict:
         **_match_state,
         "elapsed":   elapsed,
         "kill_feed": list(_kill_feed),
+        "registry":  _player_registry,  # name/steamid lookup for the UI
     }
 
 
@@ -505,7 +570,12 @@ async def handle_live_page(request):
 
 <script>
 const $ = id => document.getElementById(id);
-let elapsedBase = null, elapsedOffset = 0, elapsedTimer = null;
+let elapsedTimer = null;
+let _registry = {};  // accountid → {name, steamid, team}
+
+function nameOf(accountid) {
+  return (_registry[accountid] && _registry[accountid].name) || accountid || '?';
+}
 
 function setStatus(label, cls) {
   const b = $('status-badge');
@@ -530,9 +600,10 @@ function renderPlayers(players) {
       const k   = parseInt(p.kills  || 0);
       const d   = parseInt(p.deaths || 0);
       const adr = parseFloat(p.adr  || 0).toFixed(0);
-      const id  = p.accountid || '?';
+      const name = p.name || p.accountid || '?';
+      const id   = p.accountid || '';
       return `<tr>
-        <td title="AccountID: ${id}">${id}</td>
+        <td title="${id}">${name}</td>
         <td>${k}</td><td>${d}</td><td>${adr}</td>
         <td>${fmtKD(k,d)}</td>
       </tr>`;
@@ -586,6 +657,7 @@ function startElapsed(isoStart) {
 }
 
 function applyState(s) {
+  if (s.registry) _registry = s.registry;
   $('map-name').textContent    = (s.map    || '—').toUpperCase();
   $('server-name').textContent = s.server  || '—';
   $('score-ct').textContent    = s.score_ct ?? 0;
@@ -659,6 +731,7 @@ async def start_http_server():
     app.router.add_post('/logs',   handle_log_post)
     app.router.add_get('/logs',    handle_log_get)
     app.router.add_get('/events',  handle_sse)
+    app.router.add_get('/api/state', handle_api_state)
     app.router.add_get('/',        handle_live_page)
     app.router.add_get('/health',  handle_health_check)
     
