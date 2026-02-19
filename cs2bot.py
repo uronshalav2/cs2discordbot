@@ -23,44 +23,133 @@ from discord.ui import Button, View
 # Track kill events from HTTP logs
 pending_kill_events = []
 
+# In-memory ring buffer of the last 200 raw log lines received (for GET /logs debug view)
+from collections import deque
+_recent_log_lines: deque = deque(maxlen=200)
+
 # ========== HTTP LOG ENDPOINT ==========
 async def handle_log_post(request):
     """
-    Receives logs from CS2 server via logaddress_add_http
-    Format: Plain text log lines sent via POST
+    Receives logs from CS2 server via logaddress_add_http / MatchZy remote log URL.
+    Prints ALL incoming data so you can see exactly what the server is sending.
     """
     global pending_kill_events
-    
+
     try:
-        text = await request.text()
-        
-        kill_pattern = re.compile(
-            r'"([^"<]+)<\d+><[^>]*><[^>]*>" killed '
-            r'"([^"<]+)<\d+><[^>]*><[^>]*>" with'
-        )
-        
+        # ── Store in ring buffer for GET /logs debug view ─────────────────────
+        ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        _recent_log_lines.append(f"[{ts}] from={remote} bytes={len(text)}")
         for line in text.splitlines():
-            if ' killed ' not in line:
-                continue
-            match = kill_pattern.search(line)
-            if match:
-                killer = match.group(1).strip()
-                victim = match.group(2).strip()
-                if not is_bot_player(killer) and not is_bot_player(victim):
-                    pending_kill_events.append((killer, victim))
-                    print(f"[LOG] Kill: {killer} → {victim}")
-        
+            if line.strip():
+                _recent_log_lines.append(f"  {line}")
+
+        # ── Show request metadata ──────────────────────────────────────────────
+        method      = request.method
+        path        = request.path
+        remote      = request.remote
+        headers     = dict(request.headers)
+        content_type = headers.get("Content-Type", "unknown")
+
+        text = await request.text()
+
+        # ── Pretty-print EVERYTHING arriving at /logs ──────────────────────────
+        separator = "=" * 70
+        print(f"\n{separator}")
+        print(f"[REMOTE LOG] {method} {path}  from {remote}")
+        print(f"[REMOTE LOG] Content-Type : {content_type}")
+        print(f"[REMOTE LOG] Headers      : {headers}")
+        print(f"[REMOTE LOG] Body ({len(text)} bytes):")
+        if text.strip():
+            for i, line in enumerate(text.splitlines(), 1):
+                print(f"  {i:>4}: {line}")
+        else:
+            print("  (empty body)")
+        print(separator)
+
+        # ── Detect format: JSON (MatchZy webhook) vs plain-text log lines ─────
+        if content_type and "json" in content_type.lower():
+            try:
+                payload = json.loads(text)
+                print(f"[REMOTE LOG] Parsed JSON payload:\n{json.dumps(payload, indent=2)}")
+                # MatchZy sends match/round events as JSON - no kill parsing needed
+                # MatchZy saves full stats to MySQL automatically.
+            except json.JSONDecodeError as je:
+                print(f"[REMOTE LOG] JSON parse error: {je}")
+        else:
+            # Plain-text CS2 log lines (logaddress_add_http)
+            kill_pattern = re.compile(
+                r'"([^"<]+)<\d+><[^>]*><[^>]*>" killed '
+                r'"([^"<]+)<\d+><[^>]*><[^>]*>" with'
+            )
+            for line in text.splitlines():
+                if not line.strip():
+                    continue
+                # Categorise lines for easier debugging
+                if ' killed ' in line:
+                    match = kill_pattern.search(line)
+                    if match:
+                        killer = match.group(1).strip()
+                        victim = match.group(2).strip()
+                        if not is_bot_player(killer) and not is_bot_player(victim):
+                            pending_kill_events.append((killer, victim))
+                            print(f"[REMOTE LOG] ✅ Kill parsed: {killer} → {victim}")
+                        else:
+                            print(f"[REMOTE LOG] 🤖 Bot kill skipped: {line.strip()}")
+                elif 'connected' in line.lower():
+                    print(f"[REMOTE LOG] 🟢 Connect event: {line.strip()}")
+                elif 'disconnected' in line.lower():
+                    print(f"[REMOTE LOG] 🔴 Disconnect event: {line.strip()}")
+                elif 'round_' in line.lower() or 'Round_' in line:
+                    print(f"[REMOTE LOG] 🔄 Round event: {line.strip()}")
+                elif 'match' in line.lower():
+                    print(f"[REMOTE LOG] 🏆 Match event: {line.strip()}")
+                else:
+                    print(f"[REMOTE LOG] ℹ️  Other: {line.strip()}")
+
         return web.Response(text='OK')
     except Exception as e:
-        print(f"Error processing log: {e}")
+        print(f"[REMOTE LOG] ❌ Error processing log: {e}")
+        import traceback
+        traceback.print_exc()
         return web.Response(text='Error', status=500)
 
 async def handle_health_check(request):
     return web.Response(text='Bot is running')
 
+async def handle_log_get(request):
+    """
+    GET /logs  — renders the last 200 received log lines as plain HTML.
+    Open https://worker-production-bb14.up.railway.app/logs in your browser
+    to see exactly what data the CS2 server is posting.
+    """
+    lines_html = "\n".join(
+        f"<div style='font-family:monospace;white-space:pre;font-size:13px;"
+        f"color:{'#4fc3f7' if line.startswith('  ') else '#a5d6a7'}'>"
+        f"{line.replace('&','&amp;').replace('<','&lt;').replace('>','&gt;')}</div>"
+        for line in _recent_log_lines
+    ) or "<div style='color:#888'>No log data received yet. Make sure logaddress_add_http (or MatchZy remote log URL) is set to this endpoint.</div>"
+
+    html = f"""<!DOCTYPE html>
+<html>
+<head>
+  <title>CS2 Remote Log Viewer</title>
+  <meta http-equiv="refresh" content="5">
+  <style>body{{background:#1e1e1e;color:#e0e0e0;margin:20px;font-family:monospace}}
+    h1{{color:#64b5f6}}p{{color:#9e9e9e}}#log{{background:#111;padding:12px;border-radius:6px;overflow:auto;max-height:90vh}}</style>
+</head>
+<body>
+  <h1>📡 CS2 Remote Log Viewer</h1>
+  <p>Endpoint: <b>POST /logs</b> — Last {len(_recent_log_lines)} lines (auto-refreshes every 5s)</p>
+  <div id="log">{lines_html}</div>
+</body>
+</html>"""
+    return web.Response(text=html, content_type='text/html')
+
+
 async def start_http_server():
     app = web.Application()
     app.router.add_post('/logs', handle_log_post)
+    app.router.add_get('/logs', handle_log_get)
     app.router.add_get('/health', handle_health_check)
     app.router.add_get('/', handle_health_check)
     
@@ -167,18 +256,10 @@ def init_database():
                  player_count INT,
                  map_name VARCHAR(128))''')
 
-    c.execute('''CREATE TABLE IF NOT EXISTS map_stats (
-                 map_name VARCHAR(128) PRIMARY KEY,
-                 times_played INT DEFAULT 0,
-                 total_players INT DEFAULT 0)''')
-
-    # Fallback player_stats table (used only when MatchZy tables are absent)
-    c.execute('''CREATE TABLE IF NOT EXISTS player_stats (
-                 player_name VARCHAR(255) PRIMARY KEY,
-                 kills INT DEFAULT 0,
-                 deaths INT DEFAULT 0,
-                 last_score INT DEFAULT 0,
-                 last_updated DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP)''')
+    # map_stats and player_stats are intentionally NOT created here.
+    # MatchZy writes matchzy_stats_maps, matchzy_stats_players, and
+    # matchzy_stats_matches to MySQL automatically when matches finish.
+    # The bot reads from those tables — it does not duplicate them.
 
     conn.commit()
     c.close()
@@ -1231,26 +1312,6 @@ async def cssreload(inter):
     resp = send_rcon("css_reloadplugins")
     await inter.response.send_message(resp, ephemeral=True)
 
-@bot.tree.command(name="setkd", description="Manually set kills/deaths for a player (fallback stats only)")
-@owner_only()
-async def setkd_cmd(inter: discord.Interaction, player_name: str, kills: int, deaths: int):
-    await inter.response.defer(ephemeral=True)
-    conn = get_db()
-    c = conn.cursor()
-    c.execute('''INSERT INTO player_stats (player_name, kills, deaths)
-                 VALUES (%s, %s, %s)
-                 ON DUPLICATE KEY UPDATE kills = %s, deaths = %s''',
-              (player_name, kills, deaths, kills, deaths))
-    conn.commit()
-    c.close()
-    conn.close()
-    kd_ratio = kills / deaths if deaths > 0 else kills
-    await inter.followup.send(
-        f"✅ **K/D Updated** (fallback table only — MatchZy data is read-only)\n"
-        f"Player: `{player_name}` • Kills: **{kills}** • Deaths: **{deaths}** • K/D: **{kd_ratio:.2f}**",
-        ephemeral=True
-    )
-
 @bot.tree.command(name="debugdb", description="Debug database + MatchZy connection")
 @owner_only()
 async def debugdb_cmd(inter: discord.Interaction):
@@ -1277,8 +1338,6 @@ async def debugdb_cmd(inter: discord.Interaction):
         lines.append(f"**Bot sessions:** {c.fetchone()[0]}")
         c.execute("SELECT COUNT(*) FROM server_snapshots")
         lines.append(f"**Snapshots:** {c.fetchone()[0]}")
-        c.execute("SELECT COUNT(*) FROM player_stats")
-        lines.append(f"**Fallback player_stats rows:** {c.fetchone()[0]}")
         
         c.close()
         conn.close()
