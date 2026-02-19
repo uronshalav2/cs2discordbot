@@ -3,6 +3,7 @@ python-a2s
 mcrcon
 requests
 pytz
+mysql-connector-python
 matplotlib
 psycopg2-binary
 aiohttp
