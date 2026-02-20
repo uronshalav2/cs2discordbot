@@ -388,8 +388,8 @@ function findDemo(endTimeStr, windowMs=10*60*1000) {
 function demoBtn(demo, small=false) {
   if (!demo || !demo.download_url) return '';
   const size = demo.size_formatted ? ` (${demo.size_formatted})` : '';
-  if (small) return `<a href="${demo.download_url}" target="_blank" onclick="event.stopPropagation()" style="display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border:1px solid rgba(255,85,0,.4);border-radius:2px;font-size:10px;font-family:'Rajdhani',sans-serif;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--orange);text-decoration:none;white-space:nowrap" title="${demo.name}">📥 Demo${size}</a>`;
-  return `<a href="${demo.download_url}" target="_blank" style="display:inline-flex;align-items:center;gap:6px;padding:6px 14px;border:1px solid var(--orange);border-radius:3px;font-size:12px;font-family:'Rajdhani',sans-serif;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--orange);background:var(--orange-glow);text-decoration:none" title="${demo.name}">📥 Download Demo${size}</a>`;
+  // small = match list row chip; full = match detail meta row chip
+  return `<a href="${demo.download_url}" target="_blank" onclick="event.stopPropagation()" style="display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border:1px solid rgba(255,85,0,.5);border-radius:2px;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--orange);background:var(--orange-glow);text-decoration:none;white-space:nowrap" title="${demo.name}">📥 Demo${size}</a>`;
 }
 
 // ── Matches ───────────────────────────────────────────────────────────────────
@@ -506,8 +506,8 @@ async function loadMatch(id) {
         <div class="meta-chip">Match <strong>#${meta.matchid||id}</strong></div>
         ${fmtDate(meta.end_time)?`<div class="meta-chip">${fmtDate(meta.end_time)}</div>`:''}
         ${won?`<div class="meta-chip"><span class="winner-tag">Winner: ${esc(won)}</span></div>`:''}
+        ${(()=>{const demo=findDemo(meta.end_time);return demo?`<div class="meta-chip">${demoBtn(demo)}</div>`:''})()}
       </div>
-      ${(()=>{const demo=findDemo(meta.end_time);return demo?`<div style="margin-top:12px">${demoBtn(demo)}</div>`:''})()}
     </div>
     ${mvpHtml}
     ${awardsHtml}
