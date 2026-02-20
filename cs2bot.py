@@ -462,66 +462,583 @@ async def handle_api_state(request):
         headers={"Access-Control-Allow-Origin": "*"},
     )
 
-async def handle_log_get(request):
-    """
-    GET /logs — live log viewer. All times UTC.
-    """
-    now_utc = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")
 
-    def fmt_line(line):
-        escaped = line.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-        css = "hdr" if not line.startswith("  ") else "ln"
-        return f"<div class='{css}'>{escaped}</div>"
 
-    lines_html = "\n".join(fmt_line(l) for l in _recent_log_lines) or (
-        "<div class='empty'>No log data received yet. "
-        "Make sure the MatchZy remote log URL is set to POST /logs on this endpoint.</div>"
+# ─────────────────────────────────────────────────────────────────────────────
+# STATS WEBSITE API ENDPOINTS
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _json_response(data):
+    return web.Response(
+        text=json.dumps(data, default=str),
+        content_type='application/json',
+        headers={"Access-Control-Allow-Origin": "*"},
     )
 
-    html = f"""<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <title>CS2 Remote Log Viewer</title>
-  <style>
-    body  {{ background:#1a1a2e; color:#e0e0e0; margin:0; padding:16px 20px; font-family:monospace; font-size:13px; }}
-    h1    {{ color:#64b5f6; margin:0 0 4px; font-size:18px; }}
-    .meta {{ color:#888; margin:0 0 10px; font-size:12px; }}
-    .meta b {{ color:#aaa; }}
-    #log  {{ background:#0d0d1a; padding:12px 14px; border-radius:6px; overflow:auto; max-height:88vh; border:1px solid #2a2a4a; }}
-    .hdr  {{ color:#a5d6a7; white-space:pre; padding-top:6px; }}
-    .ln   {{ color:#b0bec5; white-space:pre; }}
-    .empty{{ color:#555; }}
-    #clock{{ float:right; color:#546e7a; font-size:11px; }}
-  </style>
-</head>
-<body>
-  <h1>📡 CS2 Remote Log Viewer <span id="clock"></span></h1>
-  <p class="meta">
-    Endpoint: <b>POST /logs</b> &nbsp;|&nbsp;
-    Lines buffered: <b>{len(_recent_log_lines)}/500</b> &nbsp;|&nbsp;
-    Page loaded: <b>{now_utc}</b> &nbsp;|&nbsp;
-  </p>
-  <div id="log">{lines_html}</div>
-  <script>
-    var log = document.getElementById('log');
-    log.scrollTop = log.scrollHeight;
+async def handle_api_leaderboard(request):
+    """GET /api/leaderboard — top players from MatchZy"""
+    try:
+        limit = int(request.rel_url.query.get('limit', 50))
+        conn = get_db()
+        c = conn.cursor(dictionary=True)
+        c.execute(f"""
+            SELECT name, steamid64,
+                COUNT(DISTINCT matchid) AS matches,
+                SUM(kills) AS kills, SUM(deaths) AS deaths, SUM(assists) AS assists,
+                SUM(head_shot_kills) AS headshots,
+                SUM(damage) AS total_damage,
+                SUM(enemies5k) AS aces,
+                SUM(v1_wins) AS clutch_wins,
+                ROUND(SUM(kills)/NULLIF(SUM(deaths),0),2) AS kd,
+                ROUND(SUM(head_shot_kills)/NULLIF(SUM(kills),0)*100,1) AS hs_pct,
+                ROUND(SUM(damage)/NULLIF(COUNT(DISTINCT CONCAT(matchid,mapnumber)),0)/30,1) AS adr
+            FROM {MATCHZY_TABLES['players']}
+            WHERE steamid64 != '0' AND steamid64 != ''
+            GROUP BY steamid64, name
+            ORDER BY kills DESC
+            LIMIT %s
+        """, (limit,))
+        rows = c.fetchall()
+        c.close(); conn.close()
+        return _json_response(rows)
+    except Exception as e:
+        return _json_response({"error": str(e)})
 
-    function utcClock() {{
-      var d = new Date();
-      var p = n => String(n).padStart(2,'0');
-      document.getElementById('clock').textContent =
-        d.getUTCFullYear()+'-'+p(d.getUTCMonth()+1)+'-'+p(d.getUTCDate())+' '+
-        p(d.getUTCHours())+':'+p(d.getUTCMinutes())+':'+p(d.getUTCSeconds())+' UTC';
-    }}
-    utcClock();
-    setInterval(utcClock, 1000);
-  </script>
-</body>
-</html>"""
+async def handle_api_player(request):
+    """GET /api/player/{name} — full career stats for a player"""
+    name = request.match_info.get('name', '')
+    try:
+        conn = get_db()
+        c = conn.cursor(dictionary=True)
+        # Career totals
+        c.execute(f"""
+            SELECT name, steamid64,
+                COUNT(DISTINCT matchid) AS matches,
+                SUM(kills) AS kills, SUM(deaths) AS deaths, SUM(assists) AS assists,
+                SUM(head_shot_kills) AS headshots, SUM(damage) AS total_damage,
+                SUM(enemies5k) AS aces, SUM(enemies4k) AS quads,
+                SUM(v1_wins) AS clutch_1v1, SUM(v2_wins) AS clutch_1v2,
+                SUM(entry_wins) AS entry_wins, SUM(entry_count) AS entry_attempts,
+                SUM(flash_successes) AS flashes_thrown,
+                ROUND(SUM(kills)/NULLIF(SUM(deaths),0),2) AS kd,
+                ROUND(SUM(head_shot_kills)/NULLIF(SUM(kills),0)*100,1) AS hs_pct,
+                ROUND(SUM(damage)/NULLIF(COUNT(DISTINCT CONCAT(matchid,mapnumber)),0)/30,1) AS adr
+            FROM {MATCHZY_TABLES['players']}
+            WHERE name = %s AND steamid64 != '0'
+            GROUP BY steamid64, name
+        """, (name,))
+        career = c.fetchone()
+        if not career:
+            c.close(); conn.close()
+            return _json_response({"error": "Player not found"})
+        # Recent matches
+        c.execute(f"""
+            SELECT p.matchid, p.mapnumber, p.team,
+                p.kills, p.deaths, p.assists, p.damage, p.head_shot_kills,
+                p.enemies5k, p.v1_wins,
+                m.mapname, m.winner, m.team1_score, m.team2_score,
+                mm.team1_name, mm.team2_name,
+                ROUND(p.damage/30,1) AS adr,
+                ROUND(p.head_shot_kills/NULLIF(p.kills,0)*100,1) AS hs_pct
+            FROM {MATCHZY_TABLES['players']} p
+            LEFT JOIN {MATCHZY_TABLES['maps']} m ON p.matchid=m.matchid AND p.mapnumber=m.mapnumber
+            LEFT JOIN {MATCHZY_TABLES['matches']} mm ON p.matchid=mm.matchid
+            WHERE p.name = %s AND p.steamid64 != '0'
+            ORDER BY p.matchid DESC, p.mapnumber DESC
+            LIMIT 20
+        """, (name,))
+        recent = c.fetchall()
+        c.close(); conn.close()
+        return _json_response({"career": career, "recent_matches": recent})
+    except Exception as e:
+        return _json_response({"error": str(e)})
+
+async def handle_api_matches(request):
+    """GET /api/matches — recent matches with full scoreboard"""
+    try:
+        limit = int(request.rel_url.query.get('limit', 20))
+        conn = get_db()
+        c = conn.cursor(dictionary=True)
+        c.execute(f"""
+            SELECT mm.matchid, mm.team1_name, mm.team2_name,
+                mm.team1_score, mm.team2_score, mm.winner,
+                mm.start_time, mm.end_time,
+                m.mapname, m.mapnumber
+            FROM {MATCHZY_TABLES['matches']} mm
+            LEFT JOIN {MATCHZY_TABLES['maps']} m ON mm.matchid=m.matchid
+            WHERE mm.end_time IS NOT NULL
+            ORDER BY mm.end_time DESC
+            LIMIT %s
+        """, (limit,))
+        matches = c.fetchall()
+        c.close(); conn.close()
+        return _json_response(matches)
+    except Exception as e:
+        return _json_response({"error": str(e)})
+
+async def handle_api_match(request):
+    """GET /api/match/{matchid} — full scoreboard for a match"""
+    matchid = request.match_info.get('matchid', '')
+    try:
+        conn = get_db()
+        c = conn.cursor(dictionary=True)
+        # Match meta
+        c.execute(f"SELECT * FROM {MATCHZY_TABLES['matches']} WHERE matchid=%s", (matchid,))
+        meta = c.fetchone()
+        # Map(s)
+        c.execute(f"SELECT * FROM {MATCHZY_TABLES['maps']} WHERE matchid=%s ORDER BY mapnumber", (matchid,))
+        maps = c.fetchall()
+        # All players
+        c.execute(f"""
+            SELECT p.*,
+                ROUND(p.head_shot_kills/NULLIF(p.kills,0)*100,1) AS hs_pct,
+                ROUND(p.damage/30,1) AS adr
+            FROM {MATCHZY_TABLES['players']} p
+            WHERE p.matchid=%s
+            ORDER BY p.mapnumber, p.team, p.kills DESC
+        """, (matchid,))
+        players = c.fetchall()
+        c.close(); conn.close()
+        return _json_response({"meta": meta, "maps": maps, "players": players})
+    except Exception as e:
+        return _json_response({"error": str(e)})
+
+async def handle_stats_page(request):
+    """GET /stats — main stats website (SPA)"""
+    html = _build_stats_html()
     return web.Response(text=html, content_type='text/html')
 
+def _build_stats_html() -> str:
+    return """<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CS2 Stats</title>
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0d0f13;--surface:#141720;--surface2:#1a1f2e;--border:#212535;--border2:#2d3347;
+  --orange:#ff5500;--orange2:#ff7733;--orange-glow:rgba(255,85,0,.15);
+  --ct:#5bc4f5;--t:#f0a842;--win:#22c55e;--loss:#ef4444;
+  --text:#bcc4d0;--white:#eef1f6;--muted:#4b5568;--muted2:#6b7a94;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;font-size:13px}
 
+/* NAV */
+nav{background:var(--surface);border-bottom:2px solid var(--border);display:flex;align-items:center;padding:0 20px;height:50px;position:sticky;top:0;z-index:200;gap:0}
+.logo{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:18px;letter-spacing:2px;color:var(--orange);text-transform:uppercase;margin-right:28px;white-space:nowrap}
+.tabs{display:flex;gap:0;height:100%}
+.tab{height:100%;padding:0 16px;display:flex;align-items:center;font-family:'Rajdhani',sans-serif;font-weight:600;font-size:12px;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted2);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-2px;transition:all .18s}
+.tab:hover{color:var(--text);background:rgba(255,255,255,.03)}
+.tab.active{color:var(--orange);border-bottom-color:var(--orange)}
+.nav-right{margin-left:auto;display:flex;gap:8px}
+.btn-sm{padding:5px 12px;border:1px solid var(--border2);border-radius:3px;font-size:11px;font-family:'Rajdhani',sans-serif;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:var(--muted2);cursor:pointer;transition:all .18s;white-space:nowrap}
+.btn-sm:hover{border-color:var(--orange);color:var(--orange)}
+.btn-sm.active-btn{border-color:var(--orange);color:var(--orange);background:var(--orange-glow)}
+
+/* LAYOUT */
+#app{max-width:1100px;margin:0 auto;padding:20px 16px}
+.page-title{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:20px;letter-spacing:1px;text-transform:uppercase;color:var(--white);margin-bottom:16px;display:flex;align-items:center;gap:10px}
+.page-title .sub{font-size:11px;color:var(--muted2);font-weight:500;letter-spacing:.5px;text-transform:none;font-family:'Inter',sans-serif}
+
+/* CARDS */
+.card{background:var(--surface);border:1px solid var(--border);border-radius:4px;overflow:hidden}
+
+/* LEADERBOARD */
+.lb-wrap{overflow-x:auto}
+.lb-table{width:100%;border-collapse:collapse;min-width:680px}
+.lb-table thead tr{background:rgba(0,0,0,.4)}
+.lb-table th{padding:8px 12px;text-align:right;font-family:'Rajdhani',sans-serif;font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--muted2);border-bottom:1px solid var(--border);white-space:nowrap}
+.lb-table th:first-child,.lb-table th:nth-child(2){text-align:left}
+.lb-table td{padding:9px 12px;text-align:right;border-bottom:1px solid var(--border);font-size:13px;white-space:nowrap}
+.lb-table td:first-child{text-align:center;width:40px;font-family:'Rajdhani',sans-serif;font-weight:700;color:var(--muted)}
+.lb-table td:nth-child(2){text-align:left}
+.lb-table tbody tr{cursor:pointer;transition:background .12s}
+.lb-table tbody tr:hover td{background:rgba(255,85,0,.04)}
+.lb-table tbody tr:last-child td{border-bottom:none}
+.rank-gold td:first-child{color:#f5b942}
+.rank-silver td:first-child{color:#a0aec0}
+.rank-bronze td:first-child{color:#b87333}
+.pname{font-weight:600;color:var(--white);font-family:'Rajdhani',sans-serif;font-size:15px;letter-spacing:.5px}
+.pname:hover{color:var(--orange)}
+.kd-num{font-family:'Rajdhani',sans-serif;font-weight:600;font-size:15px}
+.kd-g{color:var(--win)}.kd-n{color:var(--text)}.kd-b{color:var(--loss)}
+.hs-bar-wrap{display:flex;align-items:center;gap:6px;justify-content:flex-end}
+.hs-bar{height:4px;background:var(--border2);border-radius:2px;width:50px;overflow:hidden;flex-shrink:0}
+.hs-bar-fill{height:100%;background:var(--orange);border-radius:2px;transition:width .4s}
+.hs-val{font-size:11px;color:var(--orange);width:34px;text-align:right}
+
+/* MVP CARD */
+.mvp-card{background:linear-gradient(135deg,#141c2e 0%,#1a1030 50%,#0d1a1a 100%);border:1px solid var(--border);border-radius:4px;padding:20px 24px;display:flex;align-items:center;gap:24px;margin-bottom:12px;position:relative;overflow:hidden}
+.mvp-card::before{content:'MVP';position:absolute;right:20px;top:16px;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:13px;letter-spacing:3px;color:var(--orange);border:1px solid var(--orange);padding:2px 10px;border-radius:2px}
+.mvp-avatar{width:64px;height:64px;border-radius:50%;background:linear-gradient(135deg,var(--orange),var(--orange2));display:flex;align-items:center;justify-content:center;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:24px;color:#000;flex-shrink:0;border:2px solid rgba(255,85,0,.4)}
+.mvp-info{flex:1}
+.mvp-name{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:22px;color:var(--white);letter-spacing:.5px;margin-bottom:4px}
+.mvp-stats{display:flex;gap:20px;flex-wrap:wrap}
+.mvp-stat{display:flex;flex-direction:column}
+.mvp-val{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:20px;color:var(--white);line-height:1}
+.mvp-lbl{font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--muted2);margin-top:2px}
+
+/* AWARD CARDS */
+.awards-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px}
+.award-card{background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:12px 14px;display:flex;align-items:center;gap:12px}
+.award-avatar{width:36px;height:36px;border-radius:50%;background:var(--surface);border:1px solid var(--border2);display:flex;align-items:center;justify-content:center;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:14px;color:var(--text);flex-shrink:0}
+.award-name{font-family:'Rajdhani',sans-serif;font-weight:600;font-size:14px;color:var(--white)}
+.award-val{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:22px;color:var(--white);margin-left:auto;line-height:1}
+.award-lbl{font-size:10px;color:var(--muted2);text-align:right;margin-top:1px}
+
+/* MATCH SCOREBOARD */
+.match-header-card{background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:18px 22px;margin-bottom:12px}
+.match-score-row{display:flex;align-items:center;gap:12px;margin-bottom:6px}
+.team-block{flex:1}
+.team-nm{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:17px;letter-spacing:.5px;text-transform:uppercase}
+.team-sc{font-family:'Rajdhani',sans-serif;font-weight:800;font-size:52px;line-height:1}
+.score-mid{display:flex;flex-direction:column;align-items:center;gap:2px;padding:0 12px}
+.score-colon{font-family:'Rajdhani',sans-serif;font-size:32px;color:var(--muted)}
+.match-meta-row{display:flex;gap:16px;margin-top:8px}
+.meta-chip{font-size:11px;color:var(--muted2);display:flex;align-items:center;gap:5px}
+.meta-chip strong{color:var(--text)}
+.winner-tag{display:inline-block;padding:2px 10px;border:1px solid var(--win);border-radius:2px;font-family:'Rajdhani',sans-serif;font-weight:600;font-size:11px;letter-spacing:1px;text-transform:uppercase;color:var(--win);background:rgba(34,197,94,.08)}
+
+/* TEAM TABLE FILTER */
+.filter-bar{display:flex;gap:6px;margin-bottom:10px;align-items:center}
+.f-btn{padding:4px 12px;border:1px solid var(--border2);border-radius:2px;font-size:11px;font-family:'Rajdhani',sans-serif;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:var(--muted2);cursor:pointer;transition:all .15s}
+.f-btn:hover{color:var(--text);border-color:var(--border2)}
+.f-btn.on{color:var(--orange);border-color:var(--orange);background:var(--orange-glow)}
+
+/* SCOREBOARD TABLE */
+.sb-table{width:100%;border-collapse:collapse;min-width:620px}
+.sb-table th{padding:7px 10px;text-align:right;font-family:'Rajdhani',sans-serif;font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--muted2);background:rgba(0,0,0,.35);border-bottom:1px solid var(--border);white-space:nowrap}
+.sb-table th:first-child{text-align:left}
+.sb-table td{padding:9px 10px;text-align:right;border-bottom:1px solid var(--border);font-size:13px}
+.sb-table td:first-child{text-align:left;color:var(--white);font-family:'Rajdhani',sans-serif;font-weight:600;font-size:14px;cursor:pointer;letter-spacing:.3px}
+.sb-table td:first-child:hover{color:var(--orange)}
+.sb-table tbody tr:last-child td{border-bottom:none}
+.sb-table tbody tr:hover td{background:rgba(255,255,255,.02)}
+.team-divider td{padding:5px 10px;background:rgba(0,0,0,.3);font-family:'Rajdhani',sans-serif;font-weight:700;font-size:11px;letter-spacing:2px;text-transform:uppercase}
+.ct-div td{color:var(--ct);border-top:2px solid rgba(91,196,245,.2)}
+.t-div td{color:var(--t);border-top:2px solid rgba(240,168,66,.2)}
+.kda-cell{font-family:'Rajdhani',sans-serif;font-weight:600;font-size:14px}
+.adr-highlight{color:var(--orange)}
+
+/* MATCHES LIST */
+.matches-list .match-item{display:flex;align-items:center;gap:14px;padding:12px 16px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .13s}
+.matches-list .match-item:hover{background:rgba(255,85,0,.03)}
+.matches-list .match-item:last-child{border-bottom:none}
+.m-id{font-size:11px;color:var(--muted);width:42px;font-family:'Rajdhani',sans-serif;font-weight:600}
+.m-map{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:16px;color:var(--white);width:110px}
+.m-teams{flex:1}
+.m-teams-str{font-size:12px;color:var(--muted2);margin-bottom:2px}
+.m-score{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:20px;color:var(--white)}
+.m-winner{padding:2px 8px;border:1px solid rgba(34,197,94,.3);border-radius:2px;font-size:10px;font-family:'Rajdhani',sans-serif;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--win);background:rgba(34,197,94,.07)}
+.m-date{font-size:11px;color:var(--muted);text-align:right;white-space:nowrap}
+
+/* PROFILE */
+.profile-top{background:linear-gradient(135deg,var(--surface) 0%,#141c28 100%);border:1px solid var(--border);border-radius:4px;padding:22px 24px;margin-bottom:12px;display:flex;align-items:center;gap:20px}
+.p-avatar{width:68px;height:68px;border-radius:4px;background:linear-gradient(135deg,var(--orange),#c43a00);display:flex;align-items:center;justify-content:center;font-family:'Rajdhani',sans-serif;font-weight:800;font-size:26px;color:#000;flex-shrink:0}
+.p-name{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:28px;color:var(--white);letter-spacing:.5px;line-height:1;margin-bottom:4px}
+.p-sub{font-size:11px;color:var(--muted2)}
+.stats-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:1px;background:var(--border);border-top:1px solid var(--border)}
+@media(max-width:600px){.stats-grid{grid-template-columns:repeat(3,1fr)}}
+.stat-box{background:var(--surface);padding:14px 16px}
+.stat-val{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:22px;line-height:1;color:var(--white);margin-bottom:3px}
+.stat-lbl{font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--muted2)}
+
+/* PLAYER MATCH HISTORY */
+.ph-table{width:100%;border-collapse:collapse;min-width:560px}
+.ph-table th{padding:7px 10px;text-align:right;font-family:'Rajdhani',sans-serif;font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--muted2);background:rgba(0,0,0,.3);border-bottom:1px solid var(--border)}
+.ph-table th:first-child{text-align:left}
+.ph-table td{padding:9px 10px;text-align:right;border-bottom:1px solid var(--border);font-size:13px}
+.ph-table td:first-child{text-align:left;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:14px;color:var(--white)}
+.ph-table tbody tr{cursor:pointer;transition:background .12s}
+.ph-table tbody tr:hover td{background:rgba(255,85,0,.03)}
+.ph-table tbody tr:last-child td{border-bottom:none}
+.side-ct{display:inline-block;padding:1px 6px;border-radius:2px;font-size:10px;font-family:'Rajdhani',sans-serif;font-weight:700;letter-spacing:1px;background:rgba(91,196,245,.1);color:var(--ct);border:1px solid rgba(91,196,245,.25)}
+.side-t{display:inline-block;padding:1px 6px;border-radius:2px;font-size:10px;font-family:'Rajdhani',sans-serif;font-weight:700;letter-spacing:1px;background:rgba(240,168,66,.1);color:var(--t);border:1px solid rgba(240,168,66,.25)}
+
+/* BACK */
+.back-btn{display:inline-flex;align-items:center;gap:5px;padding:5px 12px;border:1px solid var(--border2);border-radius:3px;font-size:11px;color:var(--muted2);cursor:pointer;margin-bottom:14px;font-family:'Rajdhani',sans-serif;font-weight:600;letter-spacing:1px;text-transform:uppercase;transition:all .18s}
+.back-btn:hover{color:var(--orange);border-color:var(--orange)}
+
+/* UTIL */
+.loading{padding:48px;text-align:center;color:var(--muted2)}
+.spin{display:inline-block;width:18px;height:18px;border:2px solid var(--border2);border-top-color:var(--orange);border-radius:50%;animation:spin .6s linear infinite;margin-bottom:8px}
+@keyframes spin{to{transform:rotate(360deg)}}
+.empty{padding:40px;text-align:center;color:var(--muted2)}
+.ovx{overflow-x:auto}
+</style>
+</head>
+<body>
+<nav>
+  <div class="logo">⚡ CS2 Stats</div>
+  <div class="tabs">
+    <div class="tab active" data-p="lb">Leaderboard</div>
+    <div class="tab" data-p="matches">Matches</div>
+  </div>
+  <div class="nav-right">
+    <div class="btn-sm" onclick="location.href='/'">◉ Live</div>
+  </div>
+</nav>
+
+<div id="app">
+  <div id="p-lb"></div>
+  <div id="p-matches" style="display:none"></div>
+  <div id="p-player" style="display:none"></div>
+  <div id="p-match" style="display:none"></div>
+</div>
+
+<script>
+// ── Router ────────────────────────────────────────────────────────────────────
+let _back = null;
+function go(page, params={}, back=null) {
+  ['lb','matches','player','match'].forEach(p => {
+    document.getElementById('p-'+p).style.display = (p===page)?'':'none';
+  });
+  document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active',t.dataset.p===page));
+  _back = back;
+  if(page==='lb')      loadLB();
+  if(page==='matches') loadMatches();
+  if(page==='player')  loadPlayer(params.name);
+  if(page==='match')   loadMatch(params.id);
+}
+document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',()=>go(t.dataset.p)));
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+const esc = s=>String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+const num = n=>n!=null?Number(n).toLocaleString():'-';
+const kdc = v=>{const f=parseFloat(v);return f>=1.3?'kd-g':f>=0.9?'kd-n':'kd-b'};
+const kdf = v=>{const f=parseFloat(v);return f>=1.3?'win':f>=0.9?'text':'loss'};
+const fmtDate = s=>{if(!s)return'-';const d=new Date(s);return d.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'})};
+const initials = n=>(n||'?').split(/[ _]/).slice(0,2).map(w=>w[0]||'').join('').toUpperCase().slice(0,2)||'?';
+function spin(id){document.getElementById(id).innerHTML='<div class="loading"><div class="spin"></div><br>Loading…</div>'}
+
+// ── Leaderboard ───────────────────────────────────────────────────────────────
+async function loadLB() {
+  spin('p-lb');
+  const data = await fetch('/api/leaderboard?limit=50').then(r=>r.json()).catch(()=>[]);
+  if(!data.length){document.getElementById('p-lb').innerHTML='<div class="empty">No stats yet — play a completed match first.</div>';return}
+  const rows = data.map((p,i)=>{
+    const rc = i===0?'rank-gold':i===1?'rank-silver':i===2?'rank-bronze':'';
+    const hs = Math.min(parseFloat(p.hs_pct||0),100);
+    return `<tr class="${rc}" onclick="go('player',{name:'${esc(p.name)}'},'lb')">
+      <td>${i+1}</td>
+      <td><span class="pname">${esc(p.name)}</span></td>
+      <td>${p.matches||0}</td>
+      <td>${p.kills||0}</td><td>${p.deaths||0}</td><td>${p.assists||0}</td>
+      <td class="kd-num ${kdc(p.kd)}">${p.kd||'—'}</td>
+      <td>${p.adr||'—'}</td>
+      <td><div class="hs-bar-wrap"><div class="hs-bar"><div class="hs-bar-fill" style="width:${hs}%"></div></div><span class="hs-val">${p.hs_pct||0}%</span></div></td>
+      <td>${p.aces||0}</td>
+    </tr>`;
+  }).join('');
+  document.getElementById('p-lb').innerHTML = `
+    <div class="page-title">Leaderboard <span class="sub">${data.length} players</span></div>
+    <div class="card"><div class="lb-wrap">
+    <table class="lb-table">
+      <thead><tr>
+        <th>#</th><th>Player</th><th>M</th><th>K</th><th>D</th><th>A</th>
+        <th>K/D</th><th>ADR</th><th>HS%</th><th>Aces</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+    </div></div>`;
+}
+
+// ── Matches ───────────────────────────────────────────────────────────────────
+async function loadMatches() {
+  spin('p-matches');
+  const data = await fetch('/api/matches?limit=30').then(r=>r.json()).catch(()=>[]);
+  if(!data.length){document.getElementById('p-matches').innerHTML='<div class="empty">No completed matches yet.</div>';return}
+  const items = data.map(m=>`
+    <div class="match-item" onclick="go('match',{id:'${m.matchid}'},'matches')">
+      <div class="m-id">#${m.matchid}</div>
+      <div class="m-map">${esc(m.mapname||'—')}</div>
+      <div class="m-teams">
+        <div class="m-teams-str">${esc(m.team1_name||'Team 1')} vs ${esc(m.team2_name||'Team 2')}</div>
+        <div class="m-score">${m.team1_score??0} : ${m.team2_score??0}</div>
+      </div>
+      ${m.winner?`<div class="m-winner">${esc(m.winner)}</div>`:''}
+      <div class="m-date">${fmtDate(m.end_time)}</div>
+    </div>`).join('');
+  document.getElementById('p-matches').innerHTML = `
+    <div class="page-title">Match History <span class="sub">${data.length} matches</span></div>
+    <div class="card matches-list">${items}</div>`;
+}
+
+// ── Match Detail ──────────────────────────────────────────────────────────────
+async function loadMatch(id) {
+  spin('p-match');
+  const d = await fetch('/api/match/'+id).then(r=>r.json()).catch(()=>({error:'fetch failed'}));
+  if(d.error){document.getElementById('p-match').innerHTML=`<div class="empty">${d.error}</div>`;return}
+  const meta=d.meta||{}, maps=d.maps||[], players=d.players||[];
+
+  // Find MVP = highest kills overall
+  const mvp = players.reduce((best,p)=>(!best||parseInt(p.kills||0)>parseInt(best.kills||0)?p:best),null);
+
+  // Awards
+  const byKills=[...players].sort((a,b)=>parseInt(b.kills||0)-parseInt(a.kills||0));
+  const byDmg=[...players].sort((a,b)=>parseInt(b.damage||0)-parseInt(a.damage||0));
+
+  const mvpHtml = mvp ? `
+    <div class="mvp-card">
+      <div class="mvp-avatar">${initials(mvp.name)}</div>
+      <div class="mvp-info">
+        <div class="mvp-name">${esc(mvp.name)}</div>
+        <div class="mvp-stats">
+          <div class="mvp-stat"><div class="mvp-val">${mvp.kills||0} / ${mvp.deaths||0} / ${mvp.assists||0}</div><div class="mvp-lbl">K / D / A</div></div>
+          <div class="mvp-stat"><div class="mvp-val">${mvp.adr||'—'}</div><div class="mvp-lbl">ADR</div></div>
+          <div class="mvp-stat"><div class="mvp-val">${mvp.hs_pct||0}%</div><div class="mvp-lbl">HS%</div></div>
+          <div class="mvp-stat"><div class="mvp-val" style="color:var(--${kdf(mvp.kills&&mvp.deaths?(mvp.kills/mvp.deaths).toFixed(2):'0')})">${mvp.kills&&mvp.deaths?(mvp.kills/mvp.deaths).toFixed(2):'—'}</div><div class="mvp-lbl">K/D</div></div>
+        </div>
+      </div>
+    </div>` : '';
+
+  const awardsHtml = `<div class="awards-grid">
+    ${byKills[0]?`<div class="award-card"><div class="award-avatar">${initials(byKills[0].name)}</div><div><div class="award-name">${esc(byKills[0].name)}</div><div style="font-size:10px;color:var(--muted2)">Most Kills</div></div><div style="margin-left:auto;text-align:right"><div class="award-val">${byKills[0].kills}</div></div></div>`:''}
+    ${byDmg[0]?`<div class="award-card"><div class="award-avatar">${initials(byDmg[0].name)}</div><div><div class="award-name">${esc(byDmg[0].name)}</div><div style="font-size:10px;color:var(--muted2)">Most Damage</div></div><div style="margin-left:auto;text-align:right"><div class="award-val">${num(byDmg[0].damage)}</div></div></div>`:''}
+  </div>`;
+
+  // Scoreboard per map
+  const mapsHtml = maps.map(m=>{
+    const mp = players.filter(p=>p.mapnumber===m.mapnumber);
+    const ct = mp.filter(p=>p.team==='CT');
+    const t  = mp.filter(p=>p.team==='TERRORIST');
+    return `
+      <div style="margin-bottom:14px">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+          <div style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:15px;letter-spacing:1px;text-transform:uppercase;color:var(--white)">${esc(m.mapname||'Map '+m.mapnumber)}</div>
+          <div style="font-size:12px;color:var(--muted2)">${m.team1_score??0} : ${m.team2_score??0}</div>
+        </div>
+        <div class="card ovx">
+          <table class="sb-table">
+            <thead><tr>
+              <th>Player</th><th>K</th><th>D</th><th>A</th>
+              <th>K/D</th><th>ADR</th><th>HS%</th><th>Dmg</th><th>5K</th><th>Clutch</th>
+            </tr></thead>
+            <tbody>
+              <tr class="team-divider ct-div"><td colspan="10">🔵 Counter-Terrorists</td></tr>
+              ${sbRows(ct)}
+              <tr class="team-divider t-div"><td colspan="10">🔴 Terrorists</td></tr>
+              ${sbRows(t)}
+            </tbody>
+          </table>
+        </div>
+      </div>`;
+  }).join('');
+
+  const t1=meta.team1_name||'Team 1', t2=meta.team2_name||'Team 2';
+  const s1=meta.team1_score??0, s2=meta.team2_score??0;
+  const won = s1>s2?t1:s2>s1?t2:null;
+
+  document.getElementById('p-match').innerHTML = `
+    <div class="back-btn" onclick="go(_back||'matches')">← Back</div>
+    <div class="match-header-card" style="margin-bottom:12px">
+      <div class="match-score-row">
+        <div class="team-block">
+          <div class="team-nm" style="color:var(--ct)">${esc(t1)}</div>
+          <div class="team-sc" style="color:var(--ct)">${s1}</div>
+        </div>
+        <div class="score-mid"><div class="score-colon">:</div></div>
+        <div class="team-block" style="text-align:right">
+          <div class="team-nm" style="color:var(--t);text-align:right">${esc(t2)}</div>
+          <div class="team-sc" style="color:var(--t)">${s2}</div>
+        </div>
+      </div>
+      <div class="match-meta-row">
+        <div class="meta-chip">Match <strong>#${meta.matchid||id}</strong></div>
+        ${fmtDate(meta.end_time)?`<div class="meta-chip">${fmtDate(meta.end_time)}</div>`:''}
+        ${won?`<div class="meta-chip"><span class="winner-tag">Winner: ${esc(won)}</span></div>`:''}
+      </div>
+    </div>
+    ${mvpHtml}
+    ${awardsHtml}
+    <div class="page-title" style="font-size:16px;margin-bottom:10px">Scoreboard</div>
+    ${mapsHtml}`;
+}
+
+function sbRows(arr) {
+  if(!arr.length) return '<tr><td colspan="10" style="text-align:center;color:var(--muted);padding:12px">—</td></tr>';
+  return [...arr].sort((a,b)=>parseInt(b.kills||0)-parseInt(a.kills||0)).map(p=>{
+    const kd = p.deaths>0?(p.kills/p.deaths).toFixed(2):parseFloat(p.kills||0).toFixed(2);
+    return `<tr>
+      <td onclick="go('player',{name:'${esc(p.name)}'},'match')">${esc(p.name)}</td>
+      <td class="kda-cell">${p.kills||0}</td>
+      <td class="kda-cell">${p.deaths||0}</td>
+      <td class="kda-cell">${p.assists||0}</td>
+      <td class="kda-cell ${kdc(kd)}">${kd}</td>
+      <td class="adr-highlight">${p.adr||0}</td>
+      <td>${p.hs_pct||0}%</td>
+      <td>${num(p.damage)}</td>
+      <td>${p.enemies5k||0}</td>
+      <td>${p.v1_wins||0}</td>
+    </tr>`;
+  }).join('');
+}
+
+// ── Player Profile ────────────────────────────────────────────────────────────
+async function loadPlayer(name) {
+  spin('p-player');
+  const d = await fetch('/api/player/'+encodeURIComponent(name)).then(r=>r.json()).catch(()=>({error:'fetch failed'}));
+  if(d.error){document.getElementById('p-player').innerHTML=`<div class="empty">${d.error}</div>`;return}
+  const c=d.career, matches=d.recent_matches||[];
+  const kd=c.kd||'0.00';
+
+  const statsGrid = [
+    [c.kills,'Kills'],[c.deaths,'Deaths'],
+    [c.kd,'K/D Ratio',kdc(kd)],[`${c.hs_pct||0}%`,'HS%',''],
+    [c.adr,'ADR','adr-highlight'],[c.assists,'Assists'],
+    [c.matches,'Matches'],[c.aces,'Aces'],
+    [c.clutch_1v1,'1v1 Wins'],[c.entry_wins,'Entry Wins'],
+    [num(c.total_damage),'Total Dmg'],[c.headshots,'Headshots'],
+  ].map(([v,l,cls=''])=>`<div class="stat-box"><div class="stat-val ${cls}">${v??'-'}</div><div class="stat-lbl">${l}</div></div>`).join('');
+
+  const matchRows = matches.map(m=>{
+    const kd2=m.deaths>0?(m.kills/m.deaths).toFixed(2):parseFloat(m.kills||0).toFixed(2);
+    const side=m.team==='CT'?'<span class="side-ct">CT</span>':'<span class="side-t">T</span>';
+    return `<tr onclick="go('match',{id:'${m.matchid}'},'player')">
+      <td>${esc(m.mapname||'—')}</td>
+      <td>${side}</td>
+      <td>${m.kills||0}</td><td>${m.deaths||0}</td><td>${m.assists||0}</td>
+      <td class="${kdc(kd2)}">${kd2}</td>
+      <td>${m.hs_pct||0}%</td>
+      <td class="adr-highlight">${m.adr||0}</td>
+      <td>${(m.team1_score??0)} : ${(m.team2_score??0)}</td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('p-player').innerHTML = `
+    <div class="back-btn" onclick="go(_back||'lb')">← Back</div>
+    <div class="profile-top">
+      <div class="p-avatar">${initials(c.name)}</div>
+      <div>
+        <div class="p-name">${esc(c.name)}</div>
+        <div class="p-sub">SteamID64: ${c.steamid64||'N/A'} &nbsp;·&nbsp; ${c.matches||0} matches played</div>
+      </div>
+    </div>
+    <div class="card" style="margin-bottom:14px">
+      <div class="stats-grid">${statsGrid}</div>
+    </div>
+    <div class="page-title" style="font-size:16px;margin-bottom:8px">Match History</div>
+    <div class="card ovx">
+      <table class="ph-table">
+        <thead><tr>
+          <th>Map</th><th>Side</th><th>K</th><th>D</th><th>A</th>
+          <th>K/D</th><th>HS%</th><th>ADR</th><th>Score</th>
+        </tr></thead>
+        <tbody>${matchRows||'<tr><td colspan="9" style="text-align:center;color:var(--muted);padding:14px">No matches yet</td></tr>'}</tbody>
+      </table>
+    </div>`;
+}
+
+// Check for ?match= URL param to deep-link
+const urlParams = new URLSearchParams(location.search);
+if(urlParams.get('match')) go('match',{id:urlParams.get('match')});
+else go('lb');
+</script>
+</body>
+</html>"""
 async def handle_sse(request):
     """
     GET /events — Server-Sent Events stream.
@@ -983,12 +1500,16 @@ connect();
 
 async def start_http_server():
     app = web.Application()
-    app.router.add_post('/logs',   handle_log_post)
-    app.router.add_get('/logs',    handle_log_get)
-    app.router.add_get('/events',  handle_sse)
-    app.router.add_get('/api/state', handle_api_state)
-    app.router.add_get('/',        handle_live_page)
-    app.router.add_get('/health',  handle_health_check)
+    app.router.add_post('/logs',          handle_log_post)
+    app.router.add_get('/events',         handle_sse)
+    app.router.add_get('/api/state',      handle_api_state)
+    app.router.add_get('/api/leaderboard', handle_api_leaderboard)
+    app.router.add_get('/api/player/{name}', handle_api_player)
+    app.router.add_get('/api/matches',    handle_api_matches)
+    app.router.add_get('/api/match/{matchid}', handle_api_match)
+    app.router.add_get('/stats',          handle_stats_page)
+    app.router.add_get('/',               handle_live_page)
+    app.router.add_get('/health',         handle_health_check)
     
     port = int(os.getenv('PORT', 8080))
     runner = web.AppRunner(app)
@@ -1794,6 +2315,38 @@ async def recentmatches_cmd(inter: discord.Interaction):
             inline=False
         )
     await inter.followup.send(embed=embed, ephemeral=True)
+
+@bot.tree.command(name="match", description="Get link to match stats page")
+async def match_cmd(inter: discord.Interaction, match_id: str):
+    await inter.response.defer(ephemeral=True)
+    # Verify match exists
+    conn = get_db()
+    c = conn.cursor(dictionary=True)
+    c.execute(f"SELECT matchid, team1_name, team2_name, team1_score, team2_score, mapname FROM {MATCHZY_TABLES['matches']} mm LEFT JOIN {MATCHZY_TABLES['maps']} mp ON mm.matchid=mp.matchid WHERE mm.matchid=%s LIMIT 1", (match_id,))
+    row = c.fetchone()
+    c.close(); conn.close()
+    if not row:
+        return await inter.followup.send(f"❌ Match `#{match_id}` not found.", ephemeral=True)
+    # Build URL
+    base_url = os.getenv("RAILWAY_PUBLIC_DOMAIN", "")
+    if base_url:
+        url = f"https://{base_url}/stats?match={match_id}"
+    else:
+        port = os.getenv("PORT", "8080")
+        url = f"http://localhost:{port}/stats?match={match_id}"
+    t1 = row.get("team1_name","Team 1")
+    t2 = row.get("team2_name","Team 2")
+    s1 = row.get("team1_score",0)
+    s2 = row.get("team2_score",0)
+    mapname = row.get("mapname","?")
+    embed = discord.Embed(
+        title=f"🏟️ Match #{match_id} — {mapname}",
+        description=f"**{t1}** `{s1} : {s2}` **{t2}**",
+        color=0xff5500,
+        url=url
+    )
+    embed.add_field(name="📊 Stats Page", value=f"[View Full Scoreboard]({url})", inline=False)
+    await inter.followup.send(embed=embed, ephemeral=False)
 
 @bot.tree.command(name="demos", description="View server demos")
 async def demos_cmd(inter: discord.Interaction):
