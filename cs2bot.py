@@ -936,6 +936,60 @@ def fetch_demos(offset=0, limit=5):
     except Exception as e:
         return {"demos": [f"Error: {str(e)}"], "has_more": False}
 
+# Demo filename format: YYYY-MM-DD_HH-MM-SS_<matchnum>_<mapname>_<team1>_vs_<team2>.dem
+DEMO_TS_RE = re.compile(r'^(\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2})')
+
+def fetch_all_demos_raw():
+    """Return the raw list of demo dicts from fshost, sorted newest first."""
+    if not DEMOS_JSON_URL:
+        return []
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'Accept': 'application/json',
+        'Referer': 'https://fshost.me/'
+    }
+    try:
+        r = requests.get(DEMOS_JSON_URL, headers=headers, timeout=15)
+        r.raise_for_status()
+        demos = r.json().get("demos", [])
+        return sorted(demos, key=lambda x: x.get("modified_at", ""), reverse=True)
+    except Exception:
+        return []
+
+def find_demo_for_match(end_time, window_minutes=10):
+    """
+    Try to match a demo file to a match by comparing the demo's embedded
+    timestamp (from its filename) with the match's end_time.
+    Returns (name, download_url) or (None, None).
+    """
+    if not end_time:
+        return None, None
+    if not isinstance(end_time, datetime):
+        return None, None
+    # Make end_time timezone-aware (UTC) if it isn't already
+    if end_time.tzinfo is None:
+        end_time = end_time.replace(tzinfo=pytz.utc)
+    demos = fetch_all_demos_raw()
+    best = None
+    best_delta = None
+    for demo in demos:
+        name = demo.get("name", "")
+        m = DEMO_TS_RE.match(name)
+        if not m:
+            continue
+        try:
+            demo_dt = datetime.strptime(m.group(1), "%Y-%m-%d_%H-%M-%S").replace(tzinfo=pytz.utc)
+        except ValueError:
+            continue
+        delta = abs((demo_dt - end_time).total_seconds())
+        if delta <= window_minutes * 60:
+            if best_delta is None or delta < best_delta:
+                best = demo
+                best_delta = delta
+    if best:
+        return best.get("name"), best.get("download_url", "#")
+    return None, None
+
 STATUS_NAME_RE = re.compile(r'^#\s*\d+\s+"(?P<n>.*?)"\s+')
 CSS_LIST_RE = re.compile(r'^\s*•\s*\[#\d+\]\s*"(?P<n>[^"]*)"')
 
@@ -1274,6 +1328,31 @@ async def recentmatches_cmd(inter: discord.Interaction):
             "❌ No match data found. Make sure MatchZy is configured with your MySQL DB.",
             ephemeral=True
         )
+    # Pre-fetch all demos once so we don't hammer fshost per match
+    all_demos_raw = fetch_all_demos_raw()
+
+    def _find_demo(end_time, window_minutes=10):
+        if not end_time or not isinstance(end_time, datetime):
+            return None, None
+        et = end_time.replace(tzinfo=pytz.utc) if end_time.tzinfo is None else end_time
+        best, best_delta = None, None
+        for demo in all_demos_raw:
+            name = demo.get("name", "")
+            dm = DEMO_TS_RE.match(name)
+            if not dm:
+                continue
+            try:
+                demo_dt = datetime.strptime(dm.group(1), "%Y-%m-%d_%H-%M-%S").replace(tzinfo=pytz.utc)
+            except ValueError:
+                continue
+            delta = abs((demo_dt - et).total_seconds())
+            if delta <= window_minutes * 60:
+                if best_delta is None or delta < best_delta:
+                    best, best_delta = demo, delta
+        if best:
+            return best.get("name"), best.get("download_url", "#")
+        return None, None
+
     embed = discord.Embed(title="🏟️ Recent Matches", color=0x3498DB)
     for m in matches:
         t1       = m.get("team1_name", "Team 1")
@@ -1287,6 +1366,9 @@ async def recentmatches_cmd(inter: discord.Interaction):
         result   = f"**{t1}** {s1} : {s2} **{t2}**"
         if winner:
             result += f" — 🏆 **{winner}**"
+        demo_name, demo_url = _find_demo(end_time)
+        if demo_url and demo_url != "#":
+            result += f"\n📥 [Download Demo](<{demo_url}>)"
         embed.add_field(
             name=f"🗺️ {mapname} — {date_str}",
             value=result,
@@ -1300,7 +1382,7 @@ async def match_cmd(inter: discord.Interaction, match_id: str):
     # Verify match exists
     conn = get_db()
     c = conn.cursor(dictionary=True)
-    c.execute(f"SELECT matchid, team1_name, team2_name, team1_score, team2_score, mapname FROM {MATCHZY_TABLES['matches']} mm LEFT JOIN {MATCHZY_TABLES['maps']} mp ON mm.matchid=mp.matchid WHERE mm.matchid=%s LIMIT 1", (match_id,))
+    c.execute(f"SELECT matchid, team1_name, team2_name, team1_score, team2_score, mapname, end_time FROM {MATCHZY_TABLES['matches']} mm LEFT JOIN {MATCHZY_TABLES['maps']} mp ON mm.matchid=mp.matchid WHERE mm.matchid=%s LIMIT 1", (match_id,))
     row = c.fetchone()
     c.close(); conn.close()
     if not row:
@@ -1324,6 +1406,12 @@ async def match_cmd(inter: discord.Interaction, match_id: str):
         url=url
     )
     embed.add_field(name="📊 Stats Page", value=f"[View Full Scoreboard]({url})", inline=False)
+    # Try to find a matching demo by end_time
+    end_time = row.get("end_time")
+    if end_time:
+        demo_name, demo_url = find_demo_for_match(end_time)
+        if demo_url and demo_url != "#":
+            embed.add_field(name="📥 Demo", value=f"[Download Demo](<{demo_url}>)", inline=False)
     await inter.followup.send(embed=embed, ephemeral=False)
 
 @bot.tree.command(name="demos", description="View server demos")
