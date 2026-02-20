@@ -41,8 +41,12 @@ _match_state = {
 _kill_feed: deque = deque(maxlen=20)   # last 20 kills
 _sse_clients: list = []                # connected browser SSE clients
 
-# Maps accountid (str) → {name, steamid, team} — built from every log line
+# Maps accountid (str) → {name, steamid, team, kills, deaths} — built from log lines
 _player_registry: dict = {}
+
+# In-memory kill/death counter keyed by player name (reset each round)
+# name → {"kills": int, "deaths": int}
+_round_kd: dict = {}
 
 # Bot keywords defined early so all helpers below can use them
 _BOT_KEYWORDS = ["CSTV", "BOT", "GOTV", "SourceTV"]
@@ -380,6 +384,9 @@ async def handle_log_post(request):
                 }
                 _kill_feed.appendleft(entry)
                 pending_kill_events.append((killer, victim))
+                # Track kills/deaths in memory for live player table
+                _round_kd.setdefault(killer, {"kills": 0, "deaths": 0})["kills"] += 1
+                _round_kd.setdefault(victim, {"kills": 0, "deaths": 0})["deaths"] += 1
                 print(f"[LOG] kill  {killer_disp}({side}) → {victim_disp} [{weapon}]")
                 _sse_broadcast("kill", entry)
 
@@ -392,15 +399,18 @@ async def handle_log_post(request):
                 team_code = "3" if "CT" in team.upper() else ("2" if "TERRORIST" in team.upper() else "")
                 if not team_code:
                     continue
+                pname = p["name"]
+                # Merge in-memory kill/death counts (updated on every kill line)
+                kd = _round_kd.get(pname, {"kills": 0, "deaths": 0})
                 live_players.append({
                     "accountid": acct,
-                    "name":      ("🤖 " + p["name"]) if p.get("is_bot") else p["name"],
+                    "name":      ("🤖 " + pname) if p.get("is_bot") else pname,
                     "steamid":   p.get("steamid", ""),
                     "team":      team_code,
-                    "kills":     p.get("kills",   "0"),
-                    "deaths":    p.get("deaths",  "0"),
-                    "assists":   p.get("assists", "0"),
-                    "adr":       p.get("adr",     "0"),
+                    "kills":     str(kd["kills"]),
+                    "deaths":    str(kd["deaths"]),
+                    "assists":   "0",
+                    "adr":       "0",
                 })
             if live_players:
                 _sse_broadcast("players", {"players": live_players})
@@ -416,6 +426,7 @@ async def handle_log_post(request):
                                      "score_t": 0, "score_ct": 0, "round": 0,
                                      "started_at": datetime.utcnow().isoformat()})
                 _kill_feed.clear()
+                _round_kd.clear()
                 print(f"[LOG] match_start  map={mn}")
                 _sse_broadcast("match_start", {"map": mn})
 
