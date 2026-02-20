@@ -20,448 +20,11 @@ from aiohttp import web
 # Discord UI components
 from discord.ui import Button, View
 
-# Track kill events from HTTP logs
-pending_kill_events = []
 
-# In-memory ring buffer — last 500 lines for the browser debug viewer
-from collections import deque
-_recent_log_lines: deque = deque(maxlen=500)
-
-# ========== LIVE MATCH STATE (for HLTV-style page) ==========
-_match_state = {
-    "active":    False,
-    "map":       "—",
-    "server":    "—",
-    "round":     0,
-    "score_t":   0,
-    "score_ct":  0,
-    "started_at": None,
-    "warmup":    False,
-}
-_kill_feed: deque = deque(maxlen=20)   # last 20 kills
-_sse_clients: list = []                # connected browser SSE clients
-
-# Maps accountid (str) → {name, steamid, team, kills, deaths} — built from log lines
-_player_registry: dict = {}
-
-# In-memory kill/death counter keyed by player name (reset each round)
-# name → {"kills": int, "deaths": int}
-_round_kd: dict = {}
-
-# Bot keywords defined early so all helpers below can use them
-_BOT_KEYWORDS = ["CSTV", "BOT", "GOTV", "SourceTV"]
-
-def _is_bot_name(name: str) -> bool:
-    u = name.upper()
-    return any(kw in u for kw in _BOT_KEYWORDS)
 
 # Regex to extract every "name<slot><steamid><team>" actor token in a log line
-_ACTOR_RE = re.compile(
-    r'"(?P<n>[^"<]+)<\d+><(?P<steamid>[^>]+)><(?P<team>[^>]*)>"'
-)
-
-def _update_registry(line: str):
-    """
-    Parse all actor tokens in a log line and upsert into _player_registry.
-    Includes bots (steamid == "BOT"), keyed by "BOT_<name>" so they appear in team tables.
-    Real players keyed by accountid from [U:1:ACCOUNTID].
-    """
-    for m in _ACTOR_RE.finditer(line):
-        name    = m.group("n").strip()
-        steamid = m.group("steamid").strip()
-        team    = m.group("team").strip()
-        is_bot  = (steamid == "BOT")
-
-        if is_bot:
-            # Key bots by name so each bot is unique
-            accountid = f"BOT_{name}"
-        else:
-            acct_m = re.search(r"U:1:(\d+)", steamid)
-            if not acct_m:
-                continue
-            accountid = acct_m.group(1)
-
-        existing = _player_registry.get(accountid, {})
-        if team and team not in ("", "Unassigned"):
-            resolved_team = team
-        else:
-            resolved_team = existing.get("team", "")
-
-        _player_registry[accountid] = {
-            "name":      name,
-            "steamid":   steamid,
-            "accountid": accountid,
-            "team":      resolved_team,
-            "is_bot":    is_bot,
-            "kills":     existing.get("kills",   "0"),
-            "deaths":    existing.get("deaths",  "0"),
-            "assists":   existing.get("assists", "0"),
-            "adr":       existing.get("adr",     "0"),
-        }
-        print(f"[REG] {'🤖' if is_bot else '👤'} {name} | {steamid} | {resolved_team or '—'}")
-
-# Regex to strip the "L MM/DD/YYYY - HH:MM:SS: " prefix MatchZy adds to every line
-_LOG_PREFIX_RE = re.compile(r'^L \d{2}/\d{2}/\d{4} - \d{2}:\d{2}:\d{2}: ?')
-
-def _strip_prefix(line: str) -> str:
-    return _LOG_PREFIX_RE.sub('', line)
-
-def _parse_matchzy_block(raw_lines: list) -> dict | None:
-    """
-    MatchZy sends round stats wrapped in log lines like:
-        L date - time: JSON_BEGIN{
-        L date - time: "name": "round_stats",
-        ...
-        L date - time: }}JSON_END
-    Strip the log prefix from each line, reassemble, fix the wrapper so it
-    becomes valid JSON, then parse it.
-    """
-    in_block = False
-    block_lines = []
-    for line in raw_lines:
-        stripped = _strip_prefix(line.strip())
-        if stripped.startswith('JSON_BEGIN{'):
-            in_block = True
-            # Replace JSON_BEGIN{ with just {
-            block_lines = ['{']
-            continue
-        if stripped.startswith('}}JSON_END'):
-            in_block = False
-            block_lines.append('}')
-            break
-        if in_block:
-            block_lines.append(stripped)
-    if not block_lines:
-        return None
-    try:
-        return json.loads('\n'.join(block_lines))
-    except json.JSONDecodeError:
-        return None
-
-# ========== SSE BROADCAST ==========
-
-def _sse_broadcast(event_type: str, data: dict):
-    """Push a JSON event to all connected SSE browser clients."""
-    payload = f"event: {event_type}\ndata: {json.dumps(data)}\n\n"
-    dead = []
-    for q in _sse_clients:
-        try:
-            q.put_nowait(payload)
-        except asyncio.QueueFull:
-            dead.append(q)
-    for q in dead:
-        try:
-            _sse_clients.remove(q)
-        except ValueError:
-            pass
-
-# ========== HTTP LOG ENDPOINT ==========
-
-async def handle_log_post(request):
-    """
-    Receives two types of POST from MatchZy:
-      1. Plain text log lines (prefixed with "L date - time:")
-         Contains kills, round_stats block, match events, player actions.
-      2. Raw JSON webhook body ({"reason":8,"winner":...,"event":"round_end"})
-         Sent by MatchZy after each round — has full player stats with names.
-    """
-    global pending_kill_events
-
-    try:
-        remote       = request.remote
-        content_type = request.headers.get("Content-Type", "")
-        text         = await request.text()
-
-        if not text.strip():
-            return web.Response(text="OK")
-
-        # Ring buffer for /logs debug viewer
-        ts = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")
-        _recent_log_lines.append(f"── {ts}  {remote}  ({len(text)} bytes) ──")
-        for ln in text.splitlines():
-            if ln.strip():
-                _recent_log_lines.append(f"  {ln}")
-
-        # ════════════════════════════════════════════════════════════════════
-        # PATH A: MatchZy JSON round_end webhook
-        # Body starts with { and contains "event":"round_end"
-        # ════════════════════════════════════════════════════════════════════
-        stripped_text = text.strip()
-        if stripped_text.startswith("{"):
-            try:
-                wh = json.loads(stripped_text)
-            except json.JSONDecodeError:
-                wh = None
-
-            if wh and wh.get("event") == "round_end":
-                rnd      = wh.get("round_number", 0)
-                map_num  = wh.get("map_number",   0)
-                matchid  = wh.get("matchid",      -1)
-                winner   = wh.get("winner", {})
-                t1       = wh.get("team1", {})
-                t2       = wh.get("team2", {})
-
-                # Scores: team1 is always CT side in MatchZy JSON
-                score_ct = t1.get("score", _match_state["score_ct"])
-                score_t  = t2.get("score", _match_state["score_t"])
-
-                # Build enriched player list from webhook (has real names!)
-                players = []
-                for team_data, team_code in [(t1, "3"), (t2, "2")]:
-                    for p in team_data.get("players", []):
-                        steamid64 = str(p.get("steamid", ""))
-                        name      = p.get("name", "?")
-                        stats     = p.get("stats", {})
-                        # Derive accountid from steamid64
-                        # steamid64 = 76561197960265728 + accountid
-                        try:
-                            acct = str(int(steamid64) - 76561197960265728)
-                        except (ValueError, TypeError):
-                            acct = steamid64
-
-                        # Update registry with authoritative name
-                        if acct not in ("0", ""):
-                            existing = _player_registry.get(acct, {})
-                            _player_registry[acct] = {
-                                "name":      name,
-                                "steamid":   f"[U:1:{acct}]",
-                                "accountid": acct,
-                                "team":      "CT" if team_code == "3" else "TERRORIST",
-                            }
-
-                        players.append({
-                            "accountid": acct,
-                            "name":      name,
-                            "steamid":   steamid64,
-                            "team":      team_code,
-                            "kills":     str(stats.get("kills",   0)),
-                            "deaths":    str(stats.get("deaths",  0)),
-                            "assists":   str(stats.get("assists", 0)),
-                            "dmg":       str(stats.get("damage",  0)),
-                            "hsp":       str(round(stats.get("headshot_kills", 0) /
-                                           max(stats.get("kills", 1), 1) * 100, 1)),
-                            "adr":       str(round(stats.get("damage", 0) /
-                                           max(rnd, 1), 1)),
-                            "mvp":       str(stats.get("mvp", 0)),
-                        })
-
-                _match_state.update({
-                    "active":   True,
-                    "warmup":   False,
-                    "round":    rnd,
-                    "score_ct": score_ct,
-                    "score_t":  score_t,
-                })
-                if not _match_state["started_at"]:
-                    _match_state["started_at"] = datetime.utcnow().isoformat()
-
-                print(f"[WH] round_end  round={rnd}  CT:{score_ct} T:{score_t}  "
-                      f"winner={winner.get('team','?')}  players={len(players)}")
-
-                _sse_broadcast("round_stats", {
-                    "round":    rnd,
-                    "score_t":  score_t,
-                    "score_ct": score_ct,
-                    "map":      _match_state["map"],
-                    "server":   _match_state["server"],
-                    "players":  players,
-                })
-            return web.Response(text="OK")
-
-        # ════════════════════════════════════════════════════════════════════
-        # PATH B: Plain text log lines
-        # ════════════════════════════════════════════════════════════════════
-        raw_lines = text.splitlines()
-
-        # Update player registry from every line
-        for line in raw_lines:
-            _update_registry(_strip_prefix(line))
-
-        # ── MatchZy round_stats block (JSON_BEGIN…JSON_END) ──────────────────
-        block = _parse_matchzy_block(raw_lines)
-        if block:
-            rnd      = int(block.get("round_number", 0) or 0)
-            score_t  = int(block.get("score_t",  0) or 0)
-            score_ct = int(block.get("score_ct", 0) or 0)
-            map_name = block.get("map",    _match_state["map"])
-            server   = block.get("server", _match_state["server"])
-            players_raw = block.get("players", {})
-            fields      = [f.strip() for f in block.get("fields", "").split(",")]
-
-            players = []
-            for pval in players_raw.values():
-                vals = [v.strip() for v in pval.split(",")]
-                if len(vals) != len(fields):
-                    continue
-                row  = dict(zip(fields, vals))
-                acct = row.get("accountid", "0").strip()
-                if acct == "0":
-                    continue
-                reg = _player_registry.get(acct, {})
-                row["name"]    = reg.get("name", acct)
-                row["steamid"] = reg.get("steamid", "")
-                # Normalise team code using registry (more reliable)
-                reg_team = reg.get("team", "")
-                if "CT" in reg_team.upper():
-                    row["team"] = "3"
-                elif "TERRORIST" in reg_team.upper():
-                    row["team"] = "2"
-                players.append(row)
-
-            _match_state.update({
-                "active":   True,
-                "warmup":   False,
-                "map":      map_name,
-                "server":   server,
-                "round":    rnd,
-                "score_t":  score_t,
-                "score_ct": score_ct,
-            })
-            if not _match_state["started_at"]:
-                _match_state["started_at"] = datetime.utcnow().isoformat()
-
-            print(f"[LOG] round_stats  round={rnd}  {map_name}  T:{score_t} CT:{score_ct}  players={len(players)}")
-            _sse_broadcast("round_stats", {
-                "round":    rnd,
-                "score_t":  score_t,
-                "score_ct": score_ct,
-                "map":      map_name,
-                "server":   server,
-                "players":  players,
-            })
-
-        # ── Parse MatchStatus score lines as fallback score source ────────────
-        # "MatchStatus: Score: 9:2 on map "de_dust2" RoundsPlayed: 11"
-        score_re = re.compile(r'MatchStatus: Score: (\d+):(\d+) on map "([^"]+)"')
-        for line in raw_lines:
-            c = _strip_prefix(line).strip()
-            sm = score_re.search(c)
-            if sm:
-                s_ct = int(sm.group(1))
-                s_t  = int(sm.group(2))
-                mn   = sm.group(3)
-                # Only update if score actually changed (avoid stale repeated lines)
-                if (s_ct != _match_state["score_ct"] or
-                    s_t  != _match_state["score_t"]  or
-                    mn   != _match_state["map"]):
-                    _match_state["score_ct"] = s_ct
-                    _match_state["score_t"]  = s_t
-                    _match_state["map"]      = mn
-                    _match_state["active"]   = True
-                    print(f"[LOG] score  CT:{s_ct} T:{s_t}  map={mn}")
-                    _sse_broadcast("score", {"score_ct": s_ct, "score_t": s_t, "map": mn})
-
-        # ── Kill lines ────────────────────────────────────────────────────────
-        kill_re = re.compile(
-            r'"([^"<]+)<\d+><[^>]*><([^>]*)>" \[.*?\] killed '
-            r'"([^"<]+)<\d+><[^>]*><[^>]*>" \[.*?\] with "([^"]+)"'
-        )
-        for line in raw_lines:
-            c = _strip_prefix(line).strip()
-            if " killed " not in c:
-                continue
-            km = kill_re.search(c)
-            if not km:
-                # Fallback simpler pattern (no coords)
-                km = re.search(
-                    r'"([^"<]+)<\d+><[^>]*><([^>]*)>" killed '
-                    r'"([^"<]+)<\d+><[^>]*><[^>]*>" with "([^"]+)"', c)
-            if km:
-                killer      = km.group(1).strip()
-                killer_team = km.group(2).strip()
-                victim      = km.group(3).strip()
-                weapon      = km.group(4).strip()
-                side        = "CT" if "CT" in killer_team.upper() else "T"
-                # Label bots with 🤖 prefix for display, but still show them
-                killer_disp = f"🤖 {killer}" if _is_bot_name(killer) else killer
-                victim_disp = f"🤖 {victim}" if _is_bot_name(victim) else victim
-                entry = {
-                    "killer": killer_disp,
-                    "victim": victim_disp,
-                    "weapon": weapon,
-                    "side":   side,
-                    "ts":     datetime.utcnow().strftime("%H:%M:%S"),
-                }
-                _kill_feed.appendleft(entry)
-                pending_kill_events.append((killer, victim))
-                # Track kills/deaths in memory for live player table
-                _round_kd.setdefault(killer, {"kills": 0, "deaths": 0})["kills"] += 1
-                _round_kd.setdefault(victim, {"kills": 0, "deaths": 0})["deaths"] += 1
-                print(f"[LOG] kill  {killer_disp}({side}) → {victim_disp} [{weapon}]")
-                _sse_broadcast("kill", entry)
-
-        # ── Broadcast live player list from registry after each log batch ─────
-        # This populates team tables in real-time without waiting for round_stats
-        if _player_registry:
-            live_players = []
-            for acct, p in _player_registry.items():
-                team = p.get("team", "")
-                team_code = "3" if "CT" in team.upper() else ("2" if "TERRORIST" in team.upper() else "")
-                if not team_code:
-                    continue
-                pname = p["name"]
-                # Merge in-memory kill/death counts (updated on every kill line)
-                kd = _round_kd.get(pname, {"kills": 0, "deaths": 0})
-                live_players.append({
-                    "accountid": acct,
-                    "name":      ("🤖 " + pname) if p.get("is_bot") else pname,
-                    "steamid":   p.get("steamid", ""),
-                    "team":      team_code,
-                    "kills":     str(kd["kills"]),
-                    "deaths":    str(kd["deaths"]),
-                    "assists":   "0",
-                    "adr":       "0",
-                })
-            if live_players:
-                _sse_broadcast("players", {"players": live_players})
-
-        # ── Match lifecycle events ────────────────────────────────────────────
-        for line in raw_lines:
-            c = _strip_prefix(line).strip()
-
-            if "Match_Start" in c:
-                map_m = re.search(r'on "([^"]+)"', c)
-                mn    = map_m.group(1) if map_m else _match_state["map"]
-                _match_state.update({"active": True, "warmup": False, "map": mn,
-                                     "score_t": 0, "score_ct": 0, "round": 0,
-                                     "started_at": datetime.utcnow().isoformat()})
-                _kill_feed.clear()
-                _round_kd.clear()
-                print(f"[LOG] match_start  map={mn}")
-                _sse_broadcast("match_start", {"map": mn})
-
-            elif "Match_Over" in c or "Game_Over" in c:
-                _match_state["active"] = False
-                print(f"[LOG] match_over  CT:{_match_state['score_ct']} T:{_match_state['score_t']}")
-                _sse_broadcast("match_end", {
-                    "score_t":  _match_state["score_t"],
-                    "score_ct": _match_state["score_ct"],
-                    "map":      _match_state["map"],
-                })
-
-            elif "Warmup_Start" in c:
-                _match_state["warmup"] = True
-                _sse_broadcast("warmup", {})
-
-        return web.Response(text="OK")
-
-    except Exception as e:
-        print(f"[LOG] ❌ Error: {e}")
-        import traceback; traceback.print_exc()
-        return web.Response(text="Error", status=500)
-
-
 async def handle_health_check(request):
     return web.Response(text='Bot is running')
-
-async def handle_api_state(request):
-    """GET /api/state — returns full match state + player registry as JSON."""
-    return web.Response(
-        text=json.dumps(_match_state_snapshot()),
-        content_type='application/json',
-        headers={"Access-Control-Allow-Origin": "*"},
-    )
-
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -474,35 +37,6 @@ def _json_response(data):
         content_type='application/json',
         headers={"Access-Control-Allow-Origin": "*"},
     )
-
-async def handle_api_leaderboard(request):
-    """GET /api/leaderboard — top players from MatchZy"""
-    try:
-        limit = int(request.rel_url.query.get('limit', 50))
-        conn = get_db()
-        c = conn.cursor(dictionary=True)
-        c.execute(f"""
-            SELECT name, steamid64,
-                COUNT(DISTINCT matchid) AS matches,
-                SUM(kills) AS kills, SUM(deaths) AS deaths, SUM(assists) AS assists,
-                SUM(head_shot_kills) AS headshots,
-                SUM(damage) AS total_damage,
-                SUM(enemies5k) AS aces,
-                SUM(v1_wins) AS clutch_wins,
-                ROUND(SUM(kills)/NULLIF(SUM(deaths),0),2) AS kd,
-                ROUND(SUM(head_shot_kills)/NULLIF(SUM(kills),0)*100,1) AS hs_pct,
-                ROUND(SUM(damage)/NULLIF(COUNT(DISTINCT CONCAT(matchid,mapnumber)),0)/30,1) AS adr
-            FROM {MATCHZY_TABLES['players']}
-            WHERE steamid64 != '0' AND steamid64 != ''
-            GROUP BY steamid64, name
-            ORDER BY kills DESC
-            LIMIT %s
-        """, (limit,))
-        rows = c.fetchall()
-        c.close(); conn.close()
-        return _json_response(rows)
-    except Exception as e:
-        return _json_response({"error": str(e)})
 
 async def handle_api_player(request):
     """GET /api/player/{name} — full career stats for a player"""
@@ -772,19 +306,14 @@ nav{background:var(--surface);border-bottom:2px solid var(--border);display:flex
 </head>
 <body>
 <nav>
-  <div class="logo">⚡ CS2 Stats</div>
+  <div class="logo">5v5 Stats</div>
   <div class="tabs">
-    <div class="tab active" data-p="lb">Leaderboard</div>
-    <div class="tab" data-p="matches">Matches</div>
-  </div>
-  <div class="nav-right">
-    <div class="btn-sm" onclick="location.href='/'">◉ Live</div>
+    <div class="tab active" data-p="matches">Matches</div>
   </div>
 </nav>
 
 <div id="app">
-  <div id="p-lb"></div>
-  <div id="p-matches" style="display:none"></div>
+  <div id="p-matches"></div>
   <div id="p-player" style="display:none"></div>
   <div id="p-match" style="display:none"></div>
 </div>
@@ -793,12 +322,11 @@ nav{background:var(--surface);border-bottom:2px solid var(--border);display:flex
 // ── Router ────────────────────────────────────────────────────────────────────
 let _back = null;
 function go(page, params={}, back=null) {
-  ['lb','matches','player','match'].forEach(p => {
+  ['matches','player','match'].forEach(p => {
     document.getElementById('p-'+p).style.display = (p===page)?'':'none';
   });
   document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active',t.dataset.p===page));
   _back = back;
-  if(page==='lb')      loadLB();
   if(page==='matches') loadMatches();
   if(page==='player')  loadPlayer(params.name);
   if(page==='match')   loadMatch(params.id);
@@ -814,38 +342,6 @@ const fmtDate = s=>{if(!s)return'-';const d=new Date(s);return d.toLocaleDateStr
 const initials = n=>(n||'?').split(/[ _]/).slice(0,2).map(w=>w[0]||'').join('').toUpperCase().slice(0,2)||'?';
 function spin(id){document.getElementById(id).innerHTML='<div class="loading"><div class="spin"></div><br>Loading…</div>'}
 
-// ── Leaderboard ───────────────────────────────────────────────────────────────
-async function loadLB() {
-  spin('p-lb');
-  const data = await fetch('/api/leaderboard?limit=50').then(r=>r.json()).catch(()=>[]);
-  if(!data.length){document.getElementById('p-lb').innerHTML='<div class="empty">No stats yet — play a completed match first.</div>';return}
-  const rows = data.map((p,i)=>{
-    const rc = i===0?'rank-gold':i===1?'rank-silver':i===2?'rank-bronze':'';
-    const hs = Math.min(parseFloat(p.hs_pct||0),100);
-    return `<tr class="${rc}" onclick="go('player',{name:'${esc(p.name)}'},'lb')">
-      <td>${i+1}</td>
-      <td><span class="pname">${esc(p.name)}</span></td>
-      <td>${p.matches||0}</td>
-      <td>${p.kills||0}</td><td>${p.deaths||0}</td><td>${p.assists||0}</td>
-      <td class="kd-num ${kdc(p.kd)}">${p.kd||'—'}</td>
-      <td>${p.adr||'—'}</td>
-      <td><div class="hs-bar-wrap"><div class="hs-bar"><div class="hs-bar-fill" style="width:${hs}%"></div></div><span class="hs-val">${p.hs_pct||0}%</span></div></td>
-      <td>${p.aces||0}</td>
-    </tr>`;
-  }).join('');
-  document.getElementById('p-lb').innerHTML = `
-    <div class="page-title">Leaderboard <span class="sub">${data.length} players</span></div>
-    <div class="card"><div class="lb-wrap">
-    <table class="lb-table">
-      <thead><tr>
-        <th>#</th><th>Player</th><th>M</th><th>K</th><th>D</th><th>A</th>
-        <th>K/D</th><th>ADR</th><th>HS%</th><th>Aces</th>
-      </tr></thead>
-      <tbody>${rows}</tbody>
-    </table>
-    </div></div>`;
-}
-
 // ── Matches ───────────────────────────────────────────────────────────────────
 async function loadMatches() {
   spin('p-matches');
@@ -854,12 +350,12 @@ async function loadMatches() {
   const items = data.map(m=>`
     <div class="match-item" onclick="go('match',{id:'${m.matchid}'},'matches')">
       <div class="m-id">#${m.matchid}</div>
-      <div class="m-map">${esc(m.mapname||'—')}</div>
       <div class="m-teams">
-        <div class="m-teams-str">${esc(m.team1_name||'Team 1')} vs ${esc(m.team2_name||'Team 2')}</div>
+        <div class="m-teams-str">${esc(m.team1_name||'Team 1')} <span style="color:var(--muted2)">vs</span> ${esc(m.team2_name||'Team 2')}</div>
         <div class="m-score">${m.team1_score??0} : ${m.team2_score??0}</div>
       </div>
-      ${m.winner?`<div class="m-winner">${esc(m.winner)}</div>`:''}
+      <div class="m-map">${esc(m.mapname||'—')}</div>
+      ${m.winner?`<div class="m-winner">W: ${esc(m.winner)}</div>`:''}
       <div class="m-date">${fmtDate(m.end_time)}</div>
     </div>`).join('');
   document.getElementById('p-matches').innerHTML = `
@@ -918,9 +414,9 @@ async function loadMatch(id) {
               <th>K/D</th><th>ADR</th><th>HS%</th><th>Dmg</th><th>5K</th><th>Clutch</th>
             </tr></thead>
             <tbody>
-              <tr class="team-divider ct-div"><td colspan="10">🔵 Counter-Terrorists</td></tr>
+              <tr class="team-divider ct-div"><td colspan="10">Counter-Terrorists</td></tr>
               ${sbRows(ct)}
-              <tr class="team-divider t-div"><td colspan="10">🔴 Terrorists</td></tr>
+              <tr class="team-divider t-div"><td colspan="10">Terrorists</td></tr>
               ${sbRows(t)}
             </tbody>
           </table>
@@ -1009,7 +505,7 @@ async function loadPlayer(name) {
   }).join('');
 
   document.getElementById('p-player').innerHTML = `
-    <div class="back-btn" onclick="go(_back||'lb')">← Back</div>
+    <div class="back-btn" onclick="go(_back||'matches')">← Back</div>
     <div class="profile-top">
       <div class="p-avatar">${initials(c.name)}</div>
       <div>
@@ -1035,481 +531,18 @@ async function loadPlayer(name) {
 // Check for ?match= URL param to deep-link
 const urlParams = new URLSearchParams(location.search);
 if(urlParams.get('match')) go('match',{id:urlParams.get('match')});
-else go('lb');
+else go('matches');
 </script>
 </body>
 </html>"""
-async def handle_sse(request):
-    """
-    GET /events — Server-Sent Events stream.
-    Browsers connect here and receive live match updates without polling.
-    """
-    q = asyncio.Queue(maxsize=50)
-    _sse_clients.append(q)
-    # Send current state immediately on connect
-    q.put_nowait(f"event: state\ndata: {json.dumps(_match_state_snapshot())}\n\n")
-
-    resp = web.StreamResponse(headers={
-        "Content-Type":  "text/event-stream",
-        "Cache-Control": "no-cache",
-        "X-Accel-Buffering": "no",
-        "Access-Control-Allow-Origin": "*",
-    })
-    await resp.prepare(request)
-
-    try:
-        while True:
-            try:
-                msg = await asyncio.wait_for(q.get(), timeout=25)
-                await resp.write(msg.encode())
-            except asyncio.TimeoutError:
-                # Heartbeat so the connection stays alive
-                await resp.write(b": heartbeat\n\n")
-    except (ConnectionResetError, asyncio.CancelledError):
-        pass
-    finally:
-        try:
-            _sse_clients.remove(q)
-        except ValueError:
-            pass
-    return resp
-
-
-def _match_state_snapshot() -> dict:
-    """Return current match state + kill feed + player registry for initial page load."""
-    elapsed = ""
-    if _match_state.get("started_at"):
-        try:
-            start = datetime.fromisoformat(_match_state["started_at"])
-            secs  = int((datetime.utcnow() - start).total_seconds())
-            elapsed = f"{secs // 60}:{secs % 60:02d}"
-        except Exception:
-            pass
-    return {
-        **_match_state,
-        "elapsed":   elapsed,
-        "kill_feed": list(_kill_feed),
-        "registry":  _player_registry,  # name/steamid lookup for the UI
-    }
-
-
-async def handle_live_page(request):
-    """GET / — HLTV-style live match tracker page."""
-    html = r"""<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>CS2 Live</title>
-<style>
-  :root {
-    --bg:     #0f1117;
-    --panel:  #181c24;
-    --border: #252a35;
-    --accent: #e8a020;
-    --ct:     #5b9bd5;
-    --t:      #d4863a;
-    --green:  #4caf50;
-    --red:    #e53935;
-    --text:   #d0d6e0;
-    --muted:  #5a6072;
-    --kill-bg:#1a1f2b;
-  }
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', system-ui, sans-serif;
-         font-size: 14px; min-height: 100vh; }
-
-  /* ── Header ── */
-  header { background: var(--panel); border-bottom: 1px solid var(--border);
-            padding: 10px 20px; display: flex; align-items: center; gap: 16px; }
-  .logo  { font-size: 18px; font-weight: 700; letter-spacing: 1px; color: var(--accent); }
-  #conn-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted);
-               transition: background .3s; margin-left: auto; }
-  #conn-dot.live { background: var(--green); box-shadow: 0 0 6px var(--green); }
-  #conn-label { font-size: 11px; color: var(--muted); }
-
-  /* ── Scoreboard ── */
-  #scoreboard { background: var(--panel); border: 1px solid var(--border); border-radius: 6px;
-                 margin: 16px; padding: 20px; text-align: center; }
-  #map-name   { font-size: 11px; color: var(--muted); text-transform: uppercase;
-                 letter-spacing: 2px; margin-bottom: 8px; }
-  #server-name{ font-size: 12px; color: var(--muted); margin-bottom: 16px; }
-  .score-row  { display: flex; align-items: center; justify-content: center; gap: 0; }
-  .team-block { flex: 1; }
-  .team-name  { font-size: 11px; text-transform: uppercase; letter-spacing: 1px;
-                 font-weight: 600; margin-bottom: 4px; }
-  .team-score { font-size: 64px; font-weight: 800; line-height: 1; }
-  .ct .team-name  { color: var(--ct); }
-  .ct .team-score { color: var(--ct); }
-  .t  .team-name  { color: var(--t); }
-  .t  .team-score { color: var(--t); }
-  .divider    { font-size: 32px; color: var(--muted); padding: 0 24px; font-weight: 300; }
-  #round-info { margin-top: 14px; font-size: 12px; color: var(--muted); }
-  #round-info span { color: var(--text); font-weight: 600; }
-  #status-badge { display: inline-block; padding: 3px 10px; border-radius: 20px;
-                   font-size: 11px; font-weight: 700; letter-spacing: 1px;
-                   text-transform: uppercase; margin-top: 10px; }
-  .badge-live    { background: #1b3a1b; color: var(--green); border: 1px solid var(--green); }
-  .badge-warmup  { background: #3a2e0a; color: var(--accent); border: 1px solid var(--accent); }
-  .badge-waiting { background: #1e1e1e; color: var(--muted); border: 1px solid var(--muted); }
-  .badge-ended   { background: #2a1a1a; color: var(--red); border: 1px solid var(--red); }
-
-  /* ── Player tables ── */
-  .tables-row { display: flex; gap: 12px; margin: 0 16px 16px; }
-  .team-table { flex: 1; background: var(--panel); border: 1px solid var(--border);
-                 border-radius: 6px; overflow: hidden; }
-  .team-table h3 { padding: 10px 14px; font-size: 11px; font-weight: 700;
-                    text-transform: uppercase; letter-spacing: 1px; }
-  .team-table.ct-table h3 { color: var(--ct); border-bottom: 1px solid var(--border); }
-  .team-table.t-table  h3 { color: var(--t);  border-bottom: 1px solid var(--border); }
-  table { width: 100%; border-collapse: collapse; }
-  th { padding: 6px 10px; text-align: right; font-size: 10px; color: var(--muted);
-        text-transform: uppercase; letter-spacing: .5px; font-weight: 600; }
-  th:first-child { text-align: left; }
-  td { padding: 7px 10px; text-align: right; border-top: 1px solid var(--border); font-size: 13px; }
-  td:first-child { text-align: left; }
-  tr:hover td { background: rgba(255,255,255,.03); }
-  .kd-good { color: var(--green); }
-  .kd-bad  { color: var(--red); }
-
-  /* ── Kill feed ── */
-  #killfeed-wrap { margin: 0 16px 16px; background: var(--panel);
-                    border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
-  #killfeed-wrap h3 { padding: 10px 14px; font-size: 11px; font-weight: 700;
-                       text-transform: uppercase; letter-spacing: 1px; color: var(--muted);
-                       border-bottom: 1px solid var(--border); display: flex;
-                       align-items: center; justify-content: space-between; }
-  #round-kill-count { font-size: 10px; color: var(--muted); font-weight: 400; }
-  #killfeed { padding: 4px 0; position: relative; }
-  .kf-row {
-    display: flex; align-items: center; gap: 8px; padding: 6px 14px;
-    font-size: 13px; transition: opacity 0.5s ease, transform 0.3s ease;
-    border-bottom: 1px solid rgba(255,255,255,0.03);
-  }
-  .kf-row[data-age="0"] { opacity: 1;    background: rgba(255,255,255,0.05); }
-  .kf-row[data-age="1"] { opacity: 0.85; }
-  .kf-row[data-age="2"] { opacity: 0.70; }
-  .kf-row[data-age="3"] { opacity: 0.55; }
-  .kf-row[data-age="4"] { opacity: 0.40; }
-  .kf-row[data-age="5"] { opacity: 0.28; }
-  .kf-row[data-age="6"] { opacity: 0.18; }
-  .kf-row[data-age="7"] { opacity: 0.10; }
-  .kf-row[data-age="8"] { opacity: 0.06; }
-  .kf-row[data-age="9"] { opacity: 0.03; }
-  @keyframes killpop {
-    0%   { opacity: 0; transform: translateY(-8px) scale(0.97); }
-    60%  { opacity: 1; transform: translateY(2px)  scale(1.01); }
-    100% { opacity: 1; transform: translateY(0)    scale(1);    }
-  }
-  .kf-new { animation: killpop 0.35s cubic-bezier(.22,.68,0,1.2) forwards; }
-  @keyframes roundclear {
-    to { opacity: 0; transform: translateY(6px); }
-  }
-  .kf-clearing { animation: roundclear 0.4s ease forwards; }
-  .kf-killer { font-weight: 700; }
-  .kf-killer.ct { color: var(--ct); }
-  .kf-killer.t  { color: var(--t); }
-  .kf-arrow  { color: var(--muted); font-size: 9px; flex-shrink: 0; }
-  .kf-victim { color: var(--text); flex: 1; }
-  .kf-weapon { margin-left: auto; font-size: 11px; color: var(--muted);
-                background: var(--border); padding: 1px 7px; border-radius: 10px; }
-  .kf-time   { font-size: 10px; color: var(--muted); width: 48px; }
-  .kf-empty  { padding: 16px 14px; color: var(--muted); font-size: 12px; }
-
-  /* ── Responsive ── */
-  @media (max-width: 640px) {
-    .tables-row { flex-direction: column; }
-    .team-score { font-size: 44px; }
-  }
-</style>
-</head>
-<body>
-
-<header>
-  <div class="logo">⚡ CS2 LIVE</div>
-  <div id="conn-dot"></div>
-  <div id="conn-label">Connecting…</div>
-</header>
-
-<div id="scoreboard">
-  <div id="map-name">—</div>
-  <div id="server-name">—</div>
-  <div class="score-row">
-    <div class="team-block ct">
-      <div class="team-name">CT</div>
-      <div class="team-score" id="score-ct">0</div>
-    </div>
-    <div class="divider">:</div>
-    <div class="team-block t">
-      <div class="team-score" id="score-t">0</div>
-      <div class="team-name">T</div>
-    </div>
-  </div>
-  <div id="round-info">Round <span id="round-num">—</span> &nbsp;·&nbsp; <span id="elapsed">—</span></div>
-  <div id="status-badge" class="badge-waiting">Waiting</div>
-</div>
-
-<div class="tables-row">
-  <div class="team-table ct-table">
-    <h3>🔵 Counter-Terrorists</h3>
-    <table><thead><tr>
-      <th>Player</th><th>K</th><th>D</th><th>ADR</th><th>K/D</th>
-    </tr></thead><tbody id="ct-body"><tr><td colspan="5" style="color:var(--muted);text-align:center;padding:16px">—</td></tr></tbody></table>
-  </div>
-  <div class="team-table t-table">
-    <h3>🔴 Terrorists</h3>
-    <table><thead><tr>
-      <th>Player</th><th>K</th><th>D</th><th>ADR</th><th>K/D</th>
-    </tr></thead><tbody id="t-body"><tr><td colspan="5" style="color:var(--muted);text-align:center;padding:16px">—</td></tr></tbody></table>
-  </div>
-</div>
-
-<div id="killfeed-wrap">
-  <h3>💀 Kill Feed <span id="round-kill-count"></span></h3>
-  <div id="killfeed"><div class="kf-empty">No kills yet this round</div></div>
-</div>
-
-<script>
-const $ = id => document.getElementById(id);
-let elapsedTimer = null;
-let _registry = {};  // accountid → {name, steamid, team}
-
-function nameOf(accountid) {
-  return (_registry[accountid] && _registry[accountid].name) || accountid || '?';
-}
-
-function setStatus(label, cls) {
-  const b = $('status-badge');
-  b.textContent = label;
-  b.className   = 'badge-' + cls;
-}
-
-function fmtKD(k, d) {
-  const v = d > 0 ? (k / d).toFixed(2) : k.toFixed(2);
-  const cls = parseFloat(v) >= 1 ? 'kd-good' : 'kd-bad';
-  return `<span class="${cls}">${v}</span>`;
-}
-
-function renderPlayers(players) {
-  const ct = players.filter(p => p.team === '3');
-  const t  = players.filter(p => p.team === '2');
-  const sort = arr => arr.sort((a,b) => (parseInt(b.kills)||0) - (parseInt(a.kills)||0));
-
-  function rows(arr) {
-    if (!arr.length) return '<tr><td colspan="5" style="color:var(--muted);text-align:center;padding:14px">—</td></tr>';
-    return sort(arr).map(p => {
-      const k    = parseInt(p.kills  || 0);
-      const d    = parseInt(p.deaths || 0);
-      const adr  = parseFloat(p.adr  || 0).toFixed(0);
-      const name = p.name || p.accountid || '?';
-      const isBot = name.startsWith('🤖');
-      const nameStyle = isBot ? 'color:var(--muted);font-style:italic;' : '';
-      const id   = p.accountid || '';
-      return `<tr style="${isBot ? 'opacity:0.6' : ''}">
-        <td title="${id}" style="${nameStyle}">${name}</td>
-        <td>${k}</td><td>${d}</td><td>${adr}</td>
-        <td>${fmtKD(k,d)}</td>
-      </tr>`;
-    }).join('');
-  }
-  $('ct-body').innerHTML = rows(ct);
-  $('t-body').innerHTML  = rows(t);
-}
-
-const MAX_KILLS_PER_ROUND = 10;  // 5v5: max 5 kills per side
-
-function weaponIcon(w) {
-  const icons = {
-    ak47:'🔫', m4a1:'🔫', m4a4:'🔫', awp:'🎯', deagle:'🔫',
-    glock:'🔫', usp_silencer:'🔫', p250:'🔫', knife:'🔪',
-    he_grenade:'💣', molotov:'🔥', incgrenade:'🔥', flashbang:'💡',
-    sg556:'🔫', aug:'🔫', famas:'🔫', galil:'🔫', mp9:'🔫',
-    mac10:'🔫', ump45:'🔫', p90:'🔫', nova:'🔫', xm1014:'🔫',
-    ssg08:'🎯', g3sg1:'🎯', scar20:'🎯'
-  };
-  const key = (w||'').toLowerCase().replace('-','_').replace(' ','_');
-  return icons[key] || '🔫';
-}
-
-function updateAgeAttributes() {
-  const rows = $('killfeed').querySelectorAll('.kf-row');
-  rows.forEach((row, i) => {
-    row.setAttribute('data-age', Math.min(i, 9));
-  });
-  // Update counter
-  const cnt = $('round-kill-count');
-  if (cnt) cnt.textContent = rows.length > 0 ? rows.length + '/' + MAX_KILLS_PER_ROUND : '';
-}
-
-function renderKillFeed(kills) {
-  if (!kills || !kills.length) {
-    $('killfeed').innerHTML = '<div class="kf-empty">No kills yet this round</div>';
-    const cnt = $('round-kill-count'); if (cnt) cnt.textContent = '';
-    return;
-  }
-  $('killfeed').innerHTML = kills.slice(0, MAX_KILLS_PER_ROUND).map((k, i) =>
-    `<div class="kf-row" data-age="${Math.min(i, 9)}">
-      <span class="kf-killer ${(k.side||'').toLowerCase()}">${k.killer}</span>
-      <span class="kf-arrow">›</span>
-      <span class="kf-victim">${k.victim}</span>
-      <span class="kf-weapon">${weaponIcon(k.weapon)} ${k.weapon||''}</span>
-    </div>`
-  ).join('');
-  updateAgeAttributes();
-}
-
-function addKill(k) {
-  const feed = $('killfeed');
-  const empty = feed.querySelector('.kf-empty');
-  if (empty) feed.innerHTML = '';
-
-  // Remove oldest if at max
-  while (feed.children.length >= MAX_KILLS_PER_ROUND)
-    feed.removeChild(feed.lastChild);
-
-  const row = document.createElement('div');
-  row.className = 'kf-row kf-new';
-  row.setAttribute('data-age', '0');
-  row.innerHTML =
-    `<span class="kf-killer ${(k.side||'').toLowerCase()}">${k.killer}</span>` +
-    `<span class="kf-arrow">›</span>` +
-    `<span class="kf-victim">${k.victim}</span>` +
-    `<span class="kf-weapon">${weaponIcon(k.weapon)} ${k.weapon||''}</span>`;
-
-  feed.insertBefore(row, feed.firstChild);
-
-  // Remove animation class after it finishes so transition CSS takes over
-  setTimeout(() => row.classList.remove('kf-new'), 400);
-
-  // Update ages for all rows
-  updateAgeAttributes();
-}
-
-function clearKillFeedAnimated(msg) {
-  const rows = $('killfeed').querySelectorAll('.kf-row');
-  rows.forEach((r, i) => {
-    r.style.transitionDelay = (i * 30) + 'ms';
-    r.classList.add('kf-clearing');
-  });
-  setTimeout(() => {
-    $('killfeed').innerHTML = `<div class="kf-empty">${msg}</div>`;
-    const cnt = $('round-kill-count'); if (cnt) cnt.textContent = '';
-  }, 450);
-}
-
-function startElapsed(isoStart) {
-  if (elapsedTimer) clearInterval(elapsedTimer);
-  if (!isoStart) return;
-  const base = new Date(isoStart).getTime();
-  elapsedTimer = setInterval(() => {
-    const s = Math.floor((Date.now() - base) / 1000);
-    $('elapsed').textContent = Math.floor(s/60) + ':' + String(s%60).padStart(2,'0');
-  }, 1000);
-}
-
-function applyState(s) {
-  if (s.registry) _registry = s.registry;
-  $('map-name').textContent    = (s.map    || '—').toUpperCase();
-  $('server-name').textContent = s.server  || '—';
-  $('score-ct').textContent    = s.score_ct ?? 0;
-  $('score-t').textContent     = s.score_t  ?? 0;
-  $('round-num').textContent   = s.round   || '—';
-  if (s.warmup)        setStatus('Warmup',  'warmup');
-  else if (s.active)   setStatus('LIVE',    'live');
-  else                 setStatus('Waiting', 'waiting');
-  if (s.started_at) startElapsed(s.started_at);
-  if (s.kill_feed)  renderKillFeed(s.kill_feed);
-}
-
-// ── SSE connection ──────────────────────────────────────────────────────────
-function connect() {
-  const es = new EventSource('/events');
-
-  es.onopen = () => {
-    $('conn-dot').className   = 'live';
-    $('conn-label').textContent = 'Live';
-  };
-  es.onerror = () => {
-    $('conn-dot').className   = '';
-    $('conn-label').textContent = 'Reconnecting…';
-    setTimeout(connect, 3000);
-    es.close();
-  };
-
-  es.addEventListener('state', e => {
-    applyState(JSON.parse(e.data));
-  });
-  es.addEventListener('score', e => {
-    const d = JSON.parse(e.data);
-    $('score-ct').textContent = d.score_ct;
-    $('score-t').textContent  = d.score_t;
-    if (d.map) $('map-name').textContent = d.map.toUpperCase();
-    setStatus('LIVE', 'live');
-  });
-  es.addEventListener('round_stats', e => {
-    const d = JSON.parse(e.data);
-    $('score-ct').textContent  = d.score_ct;
-    $('score-t').textContent   = d.score_t;
-    $('round-num').textContent = d.round;
-    if (d.map)    $('map-name').textContent    = d.map.toUpperCase();
-    if (d.server) $('server-name').textContent = d.server;
-    setStatus('LIVE', 'live');
-    renderPlayers(d.players || []);
-    // Only clear kill feed on new round (round number changed)
-    const prevRound = parseInt($('round-num').dataset.round || '0');
-    if (d.round > prevRound) {
-      clearKillFeedAnimated('New round — ' + (d.round || '') + ' starting…');
-      $('round-num').dataset.round = d.round;
-    }
-  });
-  // Live player list from registry (fires on every log batch during warmup/game)
-  es.addEventListener('players', e => {
-    const d = JSON.parse(e.data);
-    renderPlayers(d.players || []);
-  });
-  es.addEventListener('kill', e => {
-    addKill(JSON.parse(e.data));
-  });
-  es.addEventListener('match_start', e => {
-    const d = JSON.parse(e.data);
-    $('map-name').textContent  = (d.map || '').toUpperCase();
-    $('score-ct').textContent  = 0;
-    $('score-t').textContent   = 0;
-    $('round-num').textContent = 0;
-    $('round-num').dataset.round = 0;
-    setStatus('LIVE', 'live');
-    clearKillFeedAnimated('Match started!');
-    startElapsed(new Date().toISOString());
-  });
-  es.addEventListener('match_end', e => {
-    const d = JSON.parse(e.data);
-    $('score-ct').textContent = d.score_ct;
-    $('score-t').textContent  = d.score_t;
-    setStatus('Ended', 'ended');
-    if (elapsedTimer) clearInterval(elapsedTimer);
-  });
-  es.addEventListener('warmup', () => setStatus('Warmup', 'warmup'));
-}
-
-connect();
-</script>
-</body>
-</html>"""
-    return web.Response(text=html, content_type='text/html')
-
-
 async def start_http_server():
     app = web.Application()
-    app.router.add_post('/logs',          handle_log_post)
-    app.router.add_get('/events',         handle_sse)
-    app.router.add_get('/api/state',      handle_api_state)
-    app.router.add_get('/api/leaderboard', handle_api_leaderboard)
     app.router.add_get('/api/player/{name}', handle_api_player)
-    app.router.add_get('/api/matches',    handle_api_matches)
+    app.router.add_get('/api/matches',       handle_api_matches)
     app.router.add_get('/api/match/{matchid}', handle_api_match)
-    app.router.add_get('/stats',          handle_stats_page)
-    app.router.add_get('/',               handle_live_page)
-    app.router.add_get('/health',         handle_health_check)
+    app.router.add_get('/stats',             handle_stats_page)
+    app.router.add_get('/',                  handle_stats_page)
+    app.router.add_get('/health',            handle_health_check)
     
     port = int(os.getenv('PORT', 8080))
     runner = web.AppRunner(app)
@@ -1519,15 +552,6 @@ async def start_http_server():
     
     print(f"✓ HTTP log endpoint started on port {port}")
     return runner
-
-try:
-    import matplotlib
-    matplotlib.use('Agg')
-    import matplotlib.pyplot as plt
-    import matplotlib.dates as mdates
-    HAS_MATPLOTLIB = True
-except ImportError:
-    HAS_MATPLOTLIB = False
 
 TOKEN = os.getenv("TOKEN")
 SERVER_IP = os.getenv("SERVER_IP", "127.0.0.1")
@@ -1548,8 +572,6 @@ MAP_WHITELIST = [
     "de_nuke", "de_ancient", "de_vertigo", "de_anubis"
 ]
 
-BOT_FILTER = ["CSTV", "BOT", "GOTV", "SourceTV"]
-log_file_position = 0
 
 intents = discord.Intents.default()
 intents.message_content = True
@@ -1715,50 +737,6 @@ def get_matchzy_player_stats(steamid64: str = None, player_name: str = None) -> 
         return None
     finally:
         conn.close()
-
-def get_matchzy_leaderboard(limit: int = 10) -> list[dict]:
-    """
-    Return top players by total kills from MatchZy tables.
-    Falls back to bot's own player_stats table if MatchZy unavailable.
-    """
-    conn = get_db()
-    try:
-        if not matchzy_tables_exist(conn):
-            return []
-
-        c = conn.cursor(dictionary=True)
-        placeholders = ",".join(["%s"] * len(BOT_FILTER))
-        table = MATCHZY_TABLES["players"]
-        c.execute(f'''
-            SELECT
-                name                                         AS player_name,
-                steamid64,
-                COUNT(DISTINCT matchid)                      AS matches_played,
-                SUM(kills)                                   AS kills,
-                SUM(deaths)                                  AS deaths,
-                ROUND(
-                    SUM(kills) / NULLIF(SUM(deaths), 0), 2
-                )                                            AS kd_ratio,
-                SUM(damage)                                  AS total_damage,
-                ROUND(
-                    SUM(head_shot_kills) / NULLIF(SUM(kills), 0) * 100, 1
-                )                                            AS hs_pct
-            FROM {table}
-            WHERE name NOT IN ({placeholders})
-            GROUP BY steamid64, name
-            ORDER BY kills DESC
-            LIMIT %s
-        ''', (*BOT_FILTER, limit))
-
-        rows = c.fetchall()
-        c.close()
-        return rows
-    except Exception as e:
-        print(f"[MatchZy] Leaderboard error: {e}")
-        return []
-    finally:
-        conn.close()
-
 
 def get_matchzy_recent_matches(limit: int = 5) -> list[dict]:
     """
