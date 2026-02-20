@@ -59,33 +59,42 @@ _ACTOR_RE = re.compile(
 def _update_registry(line: str):
     """
     Parse all actor tokens in a log line and upsert into _player_registry.
-    CS2 log format: "PlayerName<slot><[U:1:ACCOUNTID]><team>"
-    Example:        "dnt<3><[U:1:423808471]><TERRORIST>"
-    We use accountid as the key since names can change but IDs don't.
+    Includes bots (steamid == "BOT"), keyed by "BOT_<name>" so they appear in team tables.
+    Real players keyed by accountid from [U:1:ACCOUNTID].
     """
     for m in _ACTOR_RE.finditer(line):
         name    = m.group("n").strip()
         steamid = m.group("steamid").strip()
         team    = m.group("team").strip()
-        if _is_bot_name(name) or steamid in ("", "BOT"):
-            continue
-        acct_m = re.search(r"U:1:(\d+)", steamid)
-        if not acct_m:
-            continue
-        accountid = acct_m.group(1)
-        existing  = _player_registry.get(accountid, {})
-        # Keep team if the new value is more specific
+        is_bot  = (steamid == "BOT")
+
+        if is_bot:
+            # Key bots by name so each bot is unique
+            accountid = f"BOT_{name}"
+        else:
+            acct_m = re.search(r"U:1:(\d+)", steamid)
+            if not acct_m:
+                continue
+            accountid = acct_m.group(1)
+
+        existing = _player_registry.get(accountid, {})
         if team and team not in ("", "Unassigned"):
             resolved_team = team
         else:
             resolved_team = existing.get("team", "")
+
         _player_registry[accountid] = {
             "name":      name,
             "steamid":   steamid,
             "accountid": accountid,
             "team":      resolved_team,
+            "is_bot":    is_bot,
+            "kills":     existing.get("kills",   "0"),
+            "deaths":    existing.get("deaths",  "0"),
+            "assists":   existing.get("assists", "0"),
+            "adr":       existing.get("adr",     "0"),
         }
-        print(f"[REG] {name} | {steamid} | {resolved_team or '—'}")
+        print(f"[REG] {'🤖' if is_bot else '👤'} {name} | {steamid} | {resolved_team or '—'}")
 
 # Regex to strip the "L MM/DD/YYYY - HH:MM:SS: " prefix MatchZy adds to every line
 _LOG_PREFIX_RE = re.compile(r'^L \d{2}/\d{2}/\d{4} - \d{2}:\d{2}:\d{2}: ?')
@@ -354,19 +363,47 @@ async def handle_log_post(request):
                     r'"([^"<]+)<\d+><[^>]*><([^>]*)>" killed '
                     r'"([^"<]+)<\d+><[^>]*><[^>]*>" with "([^"]+)"', c)
             if km:
-                killer = km.group(1).strip()
-                team   = km.group(2).strip()
-                victim = km.group(3).strip()
-                weapon = km.group(4).strip()
-                if not _is_bot_name(killer) and not _is_bot_name(victim):
-                    side  = "CT" if "CT" in team.upper() else "T"
-                    entry = {"killer": killer, "victim": victim,
-                             "weapon": weapon, "side": side,
-                             "ts": datetime.utcnow().strftime("%H:%M:%S")}
-                    _kill_feed.appendleft(entry)
-                    pending_kill_events.append((killer, victim))
-                    print(f"[LOG] kill  {killer}({side}) → {victim} [{weapon}]")
-                    _sse_broadcast("kill", entry)
+                killer      = km.group(1).strip()
+                killer_team = km.group(2).strip()
+                victim      = km.group(3).strip()
+                weapon      = km.group(4).strip()
+                side        = "CT" if "CT" in killer_team.upper() else "T"
+                # Label bots with 🤖 prefix for display, but still show them
+                killer_disp = f"🤖 {killer}" if _is_bot_name(killer) else killer
+                victim_disp = f"🤖 {victim}" if _is_bot_name(victim) else victim
+                entry = {
+                    "killer": killer_disp,
+                    "victim": victim_disp,
+                    "weapon": weapon,
+                    "side":   side,
+                    "ts":     datetime.utcnow().strftime("%H:%M:%S"),
+                }
+                _kill_feed.appendleft(entry)
+                pending_kill_events.append((killer, victim))
+                print(f"[LOG] kill  {killer_disp}({side}) → {victim_disp} [{weapon}]")
+                _sse_broadcast("kill", entry)
+
+        # ── Broadcast live player list from registry after each log batch ─────
+        # This populates team tables in real-time without waiting for round_stats
+        if _player_registry:
+            live_players = []
+            for acct, p in _player_registry.items():
+                team = p.get("team", "")
+                team_code = "3" if "CT" in team.upper() else ("2" if "TERRORIST" in team.upper() else "")
+                if not team_code:
+                    continue
+                live_players.append({
+                    "accountid": acct,
+                    "name":      ("🤖 " + p["name"]) if p.get("is_bot") else p["name"],
+                    "steamid":   p.get("steamid", ""),
+                    "team":      team_code,
+                    "kills":     p.get("kills",   "0"),
+                    "deaths":    p.get("deaths",  "0"),
+                    "assists":   p.get("assists", "0"),
+                    "adr":       p.get("adr",     "0"),
+                })
+            if live_players:
+                _sse_broadcast("players", {"players": live_players})
 
         # ── Match lifecycle events ────────────────────────────────────────────
         for line in raw_lines:
@@ -733,13 +770,15 @@ function renderPlayers(players) {
   function rows(arr) {
     if (!arr.length) return '<tr><td colspan="5" style="color:var(--muted);text-align:center;padding:14px">—</td></tr>';
     return sort(arr).map(p => {
-      const k   = parseInt(p.kills  || 0);
-      const d   = parseInt(p.deaths || 0);
-      const adr = parseFloat(p.adr  || 0).toFixed(0);
+      const k    = parseInt(p.kills  || 0);
+      const d    = parseInt(p.deaths || 0);
+      const adr  = parseFloat(p.adr  || 0).toFixed(0);
       const name = p.name || p.accountid || '?';
+      const isBot = name.startsWith('🤖');
+      const nameStyle = isBot ? 'color:var(--muted);font-style:italic;' : '';
       const id   = p.accountid || '';
-      return `<tr>
-        <td title="${id}">${name}</td>
+      return `<tr style="${isBot ? 'opacity:0.6' : ''}">
+        <td title="${id}" style="${nameStyle}">${name}</td>
         <td>${k}</td><td>${d}</td><td>${adr}</td>
         <td>${fmtKD(k,d)}</td>
       </tr>`;
@@ -894,6 +933,11 @@ function connect() {
       clearKillFeedAnimated('New round — ' + (d.round || '') + ' starting…');
       $('round-num').dataset.round = d.round;
     }
+  });
+  // Live player list from registry (fires on every log batch during warmup/game)
+  es.addEventListener('players', e => {
+    const d = JSON.parse(e.data);
+    renderPlayers(d.players || []);
   });
   es.addEventListener('kill', e => {
     addKill(JSON.parse(e.data));
