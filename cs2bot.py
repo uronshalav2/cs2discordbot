@@ -609,20 +609,43 @@ async def handle_live_page(request):
 
   /* ── Kill feed ── */
   #killfeed-wrap { margin: 0 16px 16px; background: var(--panel);
-                    border: 1px solid var(--border); border-radius: 6px; }
+                    border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
   #killfeed-wrap h3 { padding: 10px 14px; font-size: 11px; font-weight: 700;
                        text-transform: uppercase; letter-spacing: 1px; color: var(--muted);
-                       border-bottom: 1px solid var(--border); }
-  #killfeed { padding: 6px 0; }
-  .kf-row  { display: flex; align-items: center; gap: 8px; padding: 5px 14px;
-               animation: fadein .3s ease; font-size: 13px; }
-  .kf-row:hover { background: var(--kill-bg); }
-  @keyframes fadein { from { opacity:0; transform: translateY(-4px); } to { opacity:1; } }
-  .kf-killer { font-weight: 600; }
+                       border-bottom: 1px solid var(--border); display: flex;
+                       align-items: center; justify-content: space-between; }
+  #round-kill-count { font-size: 10px; color: var(--muted); font-weight: 400; }
+  #killfeed { padding: 4px 0; position: relative; }
+  .kf-row {
+    display: flex; align-items: center; gap: 8px; padding: 6px 14px;
+    font-size: 13px; transition: opacity 0.5s ease, transform 0.3s ease;
+    border-bottom: 1px solid rgba(255,255,255,0.03);
+  }
+  .kf-row[data-age="0"] { opacity: 1;    background: rgba(255,255,255,0.05); }
+  .kf-row[data-age="1"] { opacity: 0.85; }
+  .kf-row[data-age="2"] { opacity: 0.70; }
+  .kf-row[data-age="3"] { opacity: 0.55; }
+  .kf-row[data-age="4"] { opacity: 0.40; }
+  .kf-row[data-age="5"] { opacity: 0.28; }
+  .kf-row[data-age="6"] { opacity: 0.18; }
+  .kf-row[data-age="7"] { opacity: 0.10; }
+  .kf-row[data-age="8"] { opacity: 0.06; }
+  .kf-row[data-age="9"] { opacity: 0.03; }
+  @keyframes killpop {
+    0%   { opacity: 0; transform: translateY(-8px) scale(0.97); }
+    60%  { opacity: 1; transform: translateY(2px)  scale(1.01); }
+    100% { opacity: 1; transform: translateY(0)    scale(1);    }
+  }
+  .kf-new { animation: killpop 0.35s cubic-bezier(.22,.68,0,1.2) forwards; }
+  @keyframes roundclear {
+    to { opacity: 0; transform: translateY(6px); }
+  }
+  .kf-clearing { animation: roundclear 0.4s ease forwards; }
+  .kf-killer { font-weight: 700; }
   .kf-killer.ct { color: var(--ct); }
   .kf-killer.t  { color: var(--t); }
-  .kf-arrow  { color: var(--muted); font-size: 10px; }
-  .kf-victim { color: var(--text); }
+  .kf-arrow  { color: var(--muted); font-size: 9px; flex-shrink: 0; }
+  .kf-victim { color: var(--text); flex: 1; }
   .kf-weapon { margin-left: auto; font-size: 11px; color: var(--muted);
                 background: var(--border); padding: 1px 7px; border-radius: 10px; }
   .kf-time   { font-size: 10px; color: var(--muted); width: 48px; }
@@ -677,7 +700,7 @@ async def handle_live_page(request):
 </div>
 
 <div id="killfeed-wrap">
-  <h3>💀 Kill Feed</h3>
+  <h3>💀 Kill Feed <span id="round-kill-count"></span></h3>
   <div id="killfeed"><div class="kf-empty">No kills yet this round</div></div>
 </div>
 
@@ -726,37 +749,85 @@ function renderPlayers(players) {
   $('t-body').innerHTML  = rows(t);
 }
 
+const MAX_KILLS_PER_ROUND = 10;  // 5v5: max 5 kills per side
+
+function weaponIcon(w) {
+  const icons = {
+    ak47:'🔫', m4a1:'🔫', m4a4:'🔫', awp:'🎯', deagle:'🔫',
+    glock:'🔫', usp_silencer:'🔫', p250:'🔫', knife:'🔪',
+    he_grenade:'💣', molotov:'🔥', incgrenade:'🔥', flashbang:'💡',
+    sg556:'🔫', aug:'🔫', famas:'🔫', galil:'🔫', mp9:'🔫',
+    mac10:'🔫', ump45:'🔫', p90:'🔫', nova:'🔫', xm1014:'🔫',
+    ssg08:'🎯', g3sg1:'🎯', scar20:'🎯'
+  };
+  const key = (w||'').toLowerCase().replace('-','_').replace(' ','_');
+  return icons[key] || '🔫';
+}
+
+function updateAgeAttributes() {
+  const rows = $('killfeed').querySelectorAll('.kf-row');
+  rows.forEach((row, i) => {
+    row.setAttribute('data-age', Math.min(i, 9));
+  });
+  // Update counter
+  const cnt = $('round-kill-count');
+  if (cnt) cnt.textContent = rows.length > 0 ? rows.length + '/' + MAX_KILLS_PER_ROUND : '';
+}
+
 function renderKillFeed(kills) {
   if (!kills || !kills.length) {
     $('killfeed').innerHTML = '<div class="kf-empty">No kills yet this round</div>';
+    const cnt = $('round-kill-count'); if (cnt) cnt.textContent = '';
     return;
   }
-  $('killfeed').innerHTML = kills.map(k =>
-    `<div class="kf-row">
-      <span class="kf-time">${k.ts || ''}</span>
+  $('killfeed').innerHTML = kills.slice(0, MAX_KILLS_PER_ROUND).map((k, i) =>
+    `<div class="kf-row" data-age="${Math.min(i, 9)}">
       <span class="kf-killer ${(k.side||'').toLowerCase()}">${k.killer}</span>
-      <span class="kf-arrow">▶</span>
+      <span class="kf-arrow">›</span>
       <span class="kf-victim">${k.victim}</span>
-      <span class="kf-weapon">${k.weapon}</span>
+      <span class="kf-weapon">${weaponIcon(k.weapon)} ${k.weapon||''}</span>
     </div>`
   ).join('');
+  updateAgeAttributes();
 }
 
 function addKill(k) {
-  const empty = $('killfeed').querySelector('.kf-empty');
-  if (empty) $('killfeed').innerHTML = '';
+  const feed = $('killfeed');
+  const empty = feed.querySelector('.kf-empty');
+  if (empty) feed.innerHTML = '';
+
+  // Remove oldest if at max
+  while (feed.children.length >= MAX_KILLS_PER_ROUND)
+    feed.removeChild(feed.lastChild);
+
   const row = document.createElement('div');
-  row.className = 'kf-row';
-  row.innerHTML = `
-    <span class="kf-time">${k.ts || ''}</span>
-    <span class="kf-killer ${(k.side||'').toLowerCase()}">${k.killer}</span>
-    <span class="kf-arrow">▶</span>
-    <span class="kf-victim">${k.victim}</span>
-    <span class="kf-weapon">${k.weapon}</span>`;
-  $('killfeed').insertBefore(row, $('killfeed').firstChild);
-  // Keep max 20 rows
-  while ($('killfeed').children.length > 20)
-    $('killfeed').removeChild($('killfeed').lastChild);
+  row.className = 'kf-row kf-new';
+  row.setAttribute('data-age', '0');
+  row.innerHTML =
+    `<span class="kf-killer ${(k.side||'').toLowerCase()}">${k.killer}</span>` +
+    `<span class="kf-arrow">›</span>` +
+    `<span class="kf-victim">${k.victim}</span>` +
+    `<span class="kf-weapon">${weaponIcon(k.weapon)} ${k.weapon||''}</span>`;
+
+  feed.insertBefore(row, feed.firstChild);
+
+  // Remove animation class after it finishes so transition CSS takes over
+  setTimeout(() => row.classList.remove('kf-new'), 400);
+
+  // Update ages for all rows
+  updateAgeAttributes();
+}
+
+function clearKillFeedAnimated(msg) {
+  const rows = $('killfeed').querySelectorAll('.kf-row');
+  rows.forEach((r, i) => {
+    r.style.transitionDelay = (i * 30) + 'ms';
+    r.classList.add('kf-clearing');
+  });
+  setTimeout(() => {
+    $('killfeed').innerHTML = `<div class="kf-empty">${msg}</div>`;
+    const cnt = $('round-kill-count'); if (cnt) cnt.textContent = '';
+  }, 450);
 }
 
 function startElapsed(isoStart) {
@@ -820,7 +891,7 @@ function connect() {
     // Only clear kill feed on new round (round number changed)
     const prevRound = parseInt($('round-num').dataset.round || '0');
     if (d.round > prevRound) {
-      $('killfeed').innerHTML = '<div class="kf-empty">New round started</div>';
+      clearKillFeedAnimated('New round — ' + (d.round || '') + ' starting…');
       $('round-num').dataset.round = d.round;
     }
   });
@@ -835,7 +906,7 @@ function connect() {
     $('round-num').textContent = 0;
     $('round-num').dataset.round = 0;
     setStatus('LIVE', 'live');
-    $('killfeed').innerHTML = '<div class="kf-empty">Match started!</div>';
+    clearKillFeedAnimated('Match started!');
     startElapsed(new Date().toISOString());
   });
   es.addEventListener('match_end', e => {
@@ -894,8 +965,6 @@ DEMOS_JSON_URL = os.getenv("DEMOS_JSON_URL")
 GUILD_ID = int(os.getenv("GUILD_ID", "0") or "0")
 FACEIT_API_KEY = os.getenv("FACEIT_API_KEY")
 OWNER_ID = int(os.getenv("OWNER_ID", 0))
-STATUS_CHANNEL_ID = int(os.getenv("STATUS_CHANNEL_ID", 0))
-NOTIFICATIONS_CHANNEL_ID = int(os.getenv("NOTIFICATIONS_CHANNEL_ID", 0))
 SERVER_LOG_PATH = os.getenv("SERVER_LOG_PATH", "")
 FACEIT_GAME_ID = "cs2"
 MAP_WHITELIST = [
@@ -952,20 +1021,7 @@ def init_database():
     c = conn.cursor()
 
     # Bot-managed tables (session tracking, snapshots)
-    c.execute('''CREATE TABLE IF NOT EXISTS player_sessions (
-                 id INT AUTO_INCREMENT PRIMARY KEY,
-                 player_name VARCHAR(255) NOT NULL,
-                 steam_id VARCHAR(64),
-                 join_time DATETIME,
-                 leave_time DATETIME,
-                 duration_minutes INT,
-                 map_name VARCHAR(128))''')
 
-    c.execute('''CREATE TABLE IF NOT EXISTS server_snapshots (
-                 id INT AUTO_INCREMENT PRIMARY KEY,
-                 timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-                 player_count INT,
-                 map_name VARCHAR(128))''')
 
     # map_stats and player_stats are intentionally NOT created here.
     # MatchZy writes matchzy_stats_maps, matchzy_stats_players, and
@@ -1092,7 +1148,7 @@ def get_matchzy_leaderboard(limit: int = 10) -> list[dict]:
     conn = get_db()
     try:
         if not matchzy_tables_exist(conn):
-            return _fallback_leaderboard(conn, limit)
+            return []
 
         c = conn.cursor(dictionary=True)
         placeholders = ",".join(["%s"] * len(BOT_FILTER))
@@ -1123,34 +1179,10 @@ def get_matchzy_leaderboard(limit: int = 10) -> list[dict]:
         return rows
     except Exception as e:
         print(f"[MatchZy] Leaderboard error: {e}")
-        return _fallback_leaderboard(conn, limit)
+        return []
     finally:
         conn.close()
 
-def _fallback_leaderboard(conn, limit: int) -> list[dict]:
-    """Use bot's own player_stats table when MatchZy is absent."""
-    c = conn.cursor(dictionary=True)
-    c.execute('''
-        SELECT
-            ps.player_name,
-            NULL AS steamid64,
-            0    AS matches_played,
-            COALESCE(pst.kills, 0)  AS kills,
-            COALESCE(pst.deaths, 0) AS deaths,
-            ROUND(
-                COALESCE(pst.kills, 0) / NULLIF(COALESCE(pst.deaths, 0), 0), 2
-            )                       AS kd_ratio,
-            NULL AS total_damage,
-            NULL AS hs_pct
-        FROM player_sessions ps
-        LEFT JOIN player_stats pst ON ps.player_name = pst.player_name
-        GROUP BY ps.player_name
-        ORDER BY kills DESC
-        LIMIT %s
-    ''', (limit,))
-    rows = c.fetchall()
-    c.close()
-    return rows
 
 def get_matchzy_recent_matches(limit: int = 5) -> list[dict]:
     """
@@ -1273,7 +1305,6 @@ class DemosView(View):
             message_id=interaction.message.id, embed=embed, view=self
         )
 
-current_players = {}
 
 def owner_only():
     async def predicate(interaction: discord.Interaction):
@@ -1488,180 +1519,18 @@ async def get_enhanced_status_embed():
         embed.set_footer(text="Status check failed")
         return embed, None
 
-def generate_player_graph():
-    if not HAS_MATPLOTLIB:
-        return None
-    conn = get_db()
-    c = conn.cursor()
-    # MySQL uses NOW() / INTERVAL syntax
-    c.execute('''SELECT timestamp, player_count
-                 FROM server_snapshots
-                 WHERE timestamp > DATE_SUB(NOW(), INTERVAL 24 HOUR)
-                 ORDER BY timestamp''')
-    data = c.fetchall()
-    c.close()
-    conn.close()
-    if len(data) < 2:
-        return None
-    timestamps = [row[0] if isinstance(row[0], datetime) else datetime.fromisoformat(str(row[0])) for row in data]
-    counts = [row[1] for row in data]
-    plt.figure(figsize=(12, 6))
-    plt.plot(timestamps, counts, linewidth=2, color='#5865F2', marker='o')
-    plt.fill_between(timestamps, counts, alpha=0.3, color='#5865F2')
-    plt.title('Server Player Count (Last 24 Hours)', fontsize=16, fontweight='bold')
-    plt.xlabel('Time', fontsize=12)
-    plt.ylabel('Players', fontsize=12)
-    plt.grid(True, alpha=0.3)
-    plt.gcf().autofmt_xdate()
-    plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))
-    plt.gca().xaxis.set_major_locator(mdates.HourLocator(interval=2))
-    plt.tight_layout()
-    buf = io.BytesIO()
-    plt.savefig(buf, format='png', dpi=100, bbox_inches='tight')
-    buf.seek(0)
-    plt.close()
-    return buf
 
-def record_snapshot(player_count, map_name):
-    conn = get_db()
-    c = conn.cursor()
-    c.execute('INSERT INTO server_snapshots (player_count, map_name) VALUES (%s, %s)',
-              (player_count, map_name))
-    conn.commit()
-    c.close()
-    conn.close()
 
-def update_player_tracking(current_player_names, map_name):
-    global current_players
-    now = datetime.now()
-    notifications = []
-    conn = get_db()
-    c = conn.cursor()
-    for player_name in list(current_players.keys()):
-        if player_name not in current_player_names:
-            join_time = current_players[player_name]
-            duration = int((now - join_time).total_seconds() / 60)
-            hours = duration // 60
-            mins = duration % 60
-            time_str = f"{hours}h {mins}m" if hours > 0 else f"{mins}m"
-            c.execute('''INSERT INTO player_sessions
-                         (player_name, join_time, leave_time, duration_minutes, map_name)
-                         VALUES (%s, %s, %s, %s, %s)''',
-                      (player_name, join_time, now, duration, map_name))
-            notifications.append({'type': 'leave', 'player': player_name, 'duration': time_str})
-            del current_players[player_name]
-    for player_name in current_player_names:
-        if player_name not in current_players:
-            current_players[player_name] = now
-            notifications.append({'type': 'join', 'player': player_name, 'map': map_name})
-    conn.commit()
-    c.close()
-    conn.close()
-    return notifications
 
-def get_player_stats(player_name):
-    """
-    Combines session data (bot-tracked) with MatchZy K/D/stats.
-    Falls back to bot's own player_stats table if MatchZy unavailable.
-    """
-    conn = get_db()
-    c = conn.cursor()
-    
-    c.execute('''SELECT SUM(duration_minutes), COUNT(*)
-                 FROM player_sessions WHERE player_name = %s''', (player_name,))
-    result = c.fetchone()
-    total_minutes = result[0] or 0
-    total_sessions = result[1] or 0
-    
-    c.execute('''SELECT map_name, SUM(duration_minutes) as total
-                 FROM player_sessions WHERE player_name = %s
-                 GROUP BY map_name ORDER BY total DESC LIMIT 1''', (player_name,))
-    fav_map = c.fetchone()
-    favorite_map = fav_map[0] if fav_map else "N/A"
-    
-    c.execute('''SELECT leave_time FROM player_sessions
-                 WHERE player_name = %s ORDER BY leave_time DESC LIMIT 1''', (player_name,))
-    last_seen = c.fetchone()
-    last_seen_time = last_seen[0] if last_seen else None
-    c.close()
-    conn.close()
 
-    # Try MatchZy first for K/D
-    mz = get_matchzy_player_stats(player_name=player_name)
-    if mz:
-        kills        = int(mz.get("kills") or 0)
-        deaths       = int(mz.get("deaths") or 0)
-        assists      = int(mz.get("assists") or 0)
-        hs           = int(mz.get("headshots") or 0)
-        total_damage = int(mz.get("total_damage") or 0)
-        hs_pct       = mz.get("hs_pct")
-        aces         = int(mz.get("aces") or 0)
-        clutch_wins  = int(mz.get("clutch_wins") or 0)
-        entry_wins   = int(mz.get("entry_wins") or 0)
-        matches      = int(mz.get("matches_played") or 0)
-        kd_ratio     = kills / deaths if deaths > 0 else float(kills)
-    else:
-        # Fallback: bot's own table
-        conn2 = get_db()
-        c2 = conn2.cursor()
-        c2.execute('SELECT kills, deaths FROM player_stats WHERE player_name = %s', (player_name,))
-        kd_result = c2.fetchone()
-        c2.close()
-        conn2.close()
-        if kd_result:
-            kills, deaths = kd_result
-            kd_ratio = kills / deaths if deaths > 0 else float(kills)
-        else:
-            kills, deaths, kd_ratio = 0, 0, 0.0
-        assists = hs = total_damage = hs_pct = aces = clutch_wins = entry_wins = matches = None
-    
-    return {
-        'total_minutes': total_minutes,
-        'total_sessions': total_sessions,
-        'favorite_map': favorite_map,
-        'last_seen': last_seen_time,
-        'kills': kills,
-        'deaths': deaths,
-        'assists': assists,
-        'headshots': hs,
-        'kd_ratio': kd_ratio,
-        'total_damage': total_damage if mz else None,
-        'hs_pct': hs_pct,
-        'aces': aces if mz else None,
-        'clutch_wins': clutch_wins if mz else None,
-        'entry_wins': entry_wins if mz else None,
-        'matches_played': matches,
-        'source': 'matchzy' if mz else 'bot',
-    }
-
-def update_kd_stats(events):
-    """Update kill/death stats in fallback bot table."""
-    if not events:
-        return
-    conn = get_db()
-    c = conn.cursor()
-    for killer, victim in events:
-        c.execute('''INSERT INTO player_stats (player_name, kills, deaths)
-                     VALUES (%s, 1, 0)
-                     ON DUPLICATE KEY UPDATE kills = kills + 1''', (killer,))
-        c.execute('''INSERT INTO player_stats (player_name, kills, deaths)
-                     VALUES (%s, 0, 1)
-                     ON DUPLICATE KEY UPDATE deaths = deaths + 1''', (victim,))
-    conn.commit()
-    c.close()
-    conn.close()
-    print(f"Updated K/D stats: {len(events)} kill events processed")
 
 # ========== BACKGROUND TASKS ==========
 @tasks.loop(minutes=1)
 async def update_server_stats():
     try:
+        # Kill events are broadcast via SSE only — MatchZy handles all DB writes
         global pending_kill_events
-        if pending_kill_events:
-            events_to_process = pending_kill_events.copy()
-            pending_kill_events = []
-            update_kd_stats(events_to_process)
-            print(f"K/D: Processed {len(events_to_process)} kills from HTTP logs")
+        pending_kill_events = []  # clear without writing to DB
         
         addr = (SERVER_IP, SERVER_PORT)
         loop = asyncio.get_running_loop()
@@ -1686,50 +1555,10 @@ async def update_server_stats():
             player_names = []
         
         real_player_names = [name for name in player_names if not is_bot_player(name)]
-        record_snapshot(len(real_player_names), info.map_name)
-        notifications = update_player_tracking(real_player_names, info.map_name)
-        
-        if notifications and NOTIFICATIONS_CHANNEL_ID:
-            channel = bot.get_channel(NOTIFICATIONS_CHANNEL_ID)
-            if channel:
-                for notif in notifications:
-                    if notif['type'] == 'join':
-                        embed = discord.Embed(
-                            description=f"👋 **{notif['player']}** joined the server",
-                            color=0x2ECC71
-                        )
-                        embed.add_field(name="Current Map", value=f"`{notif['map']}`", inline=True)
-                        embed.set_footer(text=f"Players online: {len(real_player_names)}")
-                        await channel.send(embed=embed)
-                    elif notif['type'] == 'leave':
-                        embed = discord.Embed(
-                            description=f"👋 **{notif['player']}** left the server",
-                            color=0x95A5A6
-                        )
-                        embed.add_field(name="Session Duration", value=f"`{notif['duration']}`", inline=True)
-                        embed.set_footer(text=f"Players online: {len(real_player_names)}")
-                        await channel.send(embed=embed)
     except Exception as e:
         print(f"Error in update_server_stats: {e}")
 
 
-@tasks.loop(minutes=10)
-async def update_status_message():
-    if not STATUS_CHANNEL_ID:
-        return
-    try:
-        channel = bot.get_channel(STATUS_CHANNEL_ID)
-        if not channel:
-            return
-        embed, info = await get_enhanced_status_embed()
-        async for message in channel.history(limit=20):
-            if message.author == bot.user and message.embeds:
-                if "CS2 Server Status" in message.embeds[0].title:
-                    await message.edit(embed=embed)
-                    return
-        await channel.send(embed=embed)
-    except Exception as e:
-        print(f"Error updating status message: {e}")
 
 @bot.event
 async def on_ready():
@@ -1763,7 +1592,6 @@ async def on_ready():
         print(f"⚠️ Could not check MatchZy tables: {e}")
     
     update_server_stats.start()
-    update_status_message.start()
 
 @bot.event
 async def on_message(message):
@@ -1808,68 +1636,48 @@ async def status_cmd(inter: discord.Interaction):
     embed, _ = await get_enhanced_status_embed()
     await inter.followup.send(embed=embed, ephemeral=True)
 
-@bot.tree.command(name="graph", description="View player count graph (24h)")
-async def graph_cmd(inter: discord.Interaction):
-    await inter.response.defer(ephemeral=True)
-    if not HAS_MATPLOTLIB:
-        return await inter.followup.send("❌ Graph feature requires matplotlib.", ephemeral=True)
-    buf = generate_player_graph()
-    if buf is None:
-        return await inter.followup.send("❌ Not enough data yet (need 2+ snapshots).", ephemeral=True)
-    file = discord.File(buf, filename="player_graph.png")
-    embed = discord.Embed(title="📊 Player Count Analytics", color=0x5865F2)
-    embed.set_image(url="attachment://player_graph.png")
-    await inter.followup.send(embed=embed, file=file, ephemeral=True)
 
-@bot.tree.command(name="profile", description="View player statistics (pulls from MatchZy if available)")
+@bot.tree.command(name="profile", description="View player stats from MatchZy")
 async def profile_cmd(inter: discord.Interaction, player_name: str):
     await inter.response.defer(ephemeral=True)
-    stats = get_player_stats(player_name)
-    if stats['total_sessions'] == 0 and stats['kills'] == 0:
-        return await inter.followup.send(f"❌ No stats found for **{player_name}**", ephemeral=True)
-    
-    hours = stats['total_minutes'] / 60
-    avg_session = stats['total_minutes'] / stats['total_sessions'] if stats['total_sessions'] else 0
-    
-    source_label = "📊 MatchZy" if stats['source'] == 'matchzy' else "📋 Bot-tracked"
+    mz = get_matchzy_player_stats(player_name=player_name)
+    if not mz:
+        return await inter.followup.send(
+            f"❌ No MatchZy stats found for **{player_name}**\n"
+            f"Player must have completed at least one match.",
+            ephemeral=True
+        )
+    kills        = int(mz.get("kills") or 0)
+    deaths       = int(mz.get("deaths") or 0)
+    assists      = int(mz.get("assists") or 0)
+    hs           = int(mz.get("headshots") or 0)
+    total_damage = int(mz.get("total_damage") or 0)
+    hs_pct       = float(mz.get("hs_pct") or 0)
+    aces         = int(mz.get("aces") or 0)
+    clutch_wins  = int(mz.get("clutch_wins") or 0)
+    entry_wins   = int(mz.get("entry_wins") or 0)
+    matches      = int(mz.get("matches_played") or 0)
+    kd_ratio     = kills / deaths if deaths > 0 else float(kills)
+
     embed = discord.Embed(
-        title=f"👤 {player_name}",
-        description=f"Stats source: {source_label}",
+        title=f"👤 {mz.get('name', player_name)}",
+        description=f"📊 MatchZy Career Stats • {matches} match{'es' if matches != 1 else ''}",
         color=0x2ECC71
     )
-    embed.add_field(name="⏱️ Playtime", value=f"**{hours:.1f}h**", inline=True)
-    embed.add_field(name="🎮 Sessions", value=f"**{stats['total_sessions']}**", inline=True)
-    embed.add_field(name="⏰ Avg Session", value=f"**{avg_session:.0f}m**", inline=True)
-    embed.add_field(name="💀 Kills", value=f"**{stats['kills']}**", inline=True)
-    embed.add_field(name="☠️ Deaths", value=f"**{stats['deaths']}**", inline=True)
-    embed.add_field(name="📊 K/D", value=f"**{stats['kd_ratio']:.2f}**", inline=True)
-    
-    if stats.get('assists') is not None:
-        embed.add_field(name="🤝 Assists", value=f"**{stats['assists']}**", inline=True)
-    if stats.get('headshots') is not None and stats.get('kills', 0) > 0:
-        embed.add_field(name="🎯 Headshots", value=f"**{stats['headshots']}** ({stats.get('hs_pct') or 0:.1f}%)", inline=True)
-    if stats.get('total_damage') is not None:
-        embed.add_field(name="💥 Total Damage", value=f"**{stats['total_damage']:,}**", inline=True)
-    if stats.get('aces'):
-        embed.add_field(name="⭐ Aces (5K)", value=f"**{stats['aces']}**", inline=True)
-    if stats.get('clutch_wins'):
-        embed.add_field(name="🔥 1vX Wins", value=f"**{stats['clutch_wins']}**", inline=True)
-    if stats.get('entry_wins'):
-        embed.add_field(name="🚪 Entry Wins", value=f"**{stats['entry_wins']}**", inline=True)
-    if stats.get('matches_played'):
-        embed.add_field(name="🏆 Matches", value=f"**{stats['matches_played']}**", inline=True)
-    
-    embed.add_field(name="🗺️ Fav Map", value=f"`{stats['favorite_map']}`", inline=True)
-    
-    if stats['last_seen']:
-        last_seen_dt = stats['last_seen'] if isinstance(stats['last_seen'], datetime) \
-                       else datetime.fromisoformat(str(stats['last_seen']))
-        time_ago = datetime.now() - last_seen_dt
-        days = time_ago.days
-        hours_ago = time_ago.seconds // 3600
-        last_seen_str = f"{days}d {hours_ago}h ago" if days > 0 else f"{hours_ago}h ago"
-        embed.add_field(name="👁️ Last Seen", value=last_seen_str, inline=True)
-    
+    embed.add_field(name="💀 Kills",        value=f"**{kills}**",              inline=True)
+    embed.add_field(name="☠️ Deaths",       value=f"**{deaths}**",             inline=True)
+    embed.add_field(name="📊 K/D",          value=f"**{kd_ratio:.2f}**",       inline=True)
+    embed.add_field(name="🤝 Assists",      value=f"**{assists}**",             inline=True)
+    embed.add_field(name="🎯 Headshots",    value=f"**{hs}** ({hs_pct:.1f}%)", inline=True)
+    embed.add_field(name="💥 Total Damage", value=f"**{total_damage:,}**",      inline=True)
+    if aces:
+        embed.add_field(name="⭐ Aces (5K)",  value=f"**{aces}**",     inline=True)
+    if clutch_wins:
+        embed.add_field(name="🔥 1vX Wins",   value=f"**{clutch_wins}**", inline=True)
+    if entry_wins:
+        embed.add_field(name="🚪 Entry Wins", value=f"**{entry_wins}**", inline=True)
+
+    embed.set_footer(text=f"SteamID64: {mz.get('steamid64', 'N/A')}")
     await inter.followup.send(embed=embed, ephemeral=True)
 
 @bot.tree.command(name="leaderboard", description="Top players (MatchZy kills leaderboard)")
@@ -2045,11 +1853,6 @@ async def debugdb_cmd(inter: discord.Interaction):
             matches = c.fetchone()[0]
             lines.append(f"**MatchZy matches:** {matches}")
         
-        # Bot tables
-        c.execute("SELECT COUNT(*) FROM player_sessions")
-        lines.append(f"**Bot sessions:** {c.fetchone()[0]}")
-        c.execute("SELECT COUNT(*) FROM server_snapshots")
-        lines.append(f"**Snapshots:** {c.fetchone()[0]}")
         
         c.close()
         conn.close()
@@ -2058,24 +1861,6 @@ async def debugdb_cmd(inter: discord.Interaction):
     
     await inter.followup.send("\n".join(lines), ephemeral=True)
 
-@bot.tree.command(name="notifications", description="Toggle join/leave notifications")
-@owner_only()
-async def notifications_cmd(inter: discord.Interaction, enabled: bool,
-                             channel: discord.TextChannel = None):
-    await inter.response.defer(ephemeral=True)
-    if enabled:
-        if channel:
-            msg = f"✅ Notifications enabled in {channel.mention}\nSet `NOTIFICATIONS_CHANNEL_ID={channel.id}` in Railway to persist."
-        elif NOTIFICATIONS_CHANNEL_ID:
-            msg = f"✅ Notifications active in <#{NOTIFICATIONS_CHANNEL_ID}>"
-        else:
-            return await inter.followup.send(
-                "❌ Specify a channel: `/notifications enabled:True channel:#your-channel`",
-                ephemeral=True
-            )
-    else:
-        msg = "✅ Notifications disabled. Remove `NOTIFICATIONS_CHANNEL_ID` from Railway to persist."
-    await inter.followup.send(msg, ephemeral=True)
 
 if not TOKEN:
     raise SystemExit("TOKEN missing.")
