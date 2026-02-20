@@ -623,6 +623,7 @@ RCON_PORT = int(os.getenv("RCON_PORT", 27015))
 RCON_PASSWORD = os.getenv("RCON_PASSWORD", "")
 CHANNEL_ID = int(os.getenv("CHANNEL_ID", 0))
 SERVER_DEMOS_CHANNEL_ID = int(os.getenv("SERVER_DEMOS_CHANNEL_ID", 0))
+STATS_CHANNEL_ID = int(os.getenv("STATS_CHANNEL_ID", 0))  # Channel for stats commands like /profile
 DEMOS_JSON_URL = os.getenv("DEMOS_JSON_URL")
 GUILD_ID = int(os.getenv("GUILD_ID", "0") or "0")
 FACEIT_API_KEY = os.getenv("FACEIT_API_KEY")
@@ -633,6 +634,9 @@ MAP_WHITELIST = [
     "de_inferno", "de_mirage", "de_dust2", "de_overpass",
     "de_nuke", "de_ancient", "de_vertigo", "de_anubis"
 ]
+
+# Keywords to identify bot players (case-insensitive matching)
+BOT_FILTER = ["BOT", "GOTV"]
 
 
 intents = discord.Intents.default()
@@ -871,6 +875,46 @@ def get_matchzy_match_mvp(matchid: str, mapnumber: int = None) -> dict | None:
     finally:
         conn.close()
 
+def get_matchzy_leaderboard(limit: int = 10) -> list[dict]:
+    """
+    Return top players by kills from MatchZy stats.
+    Excludes bots (steamid64 = '0').
+    """
+    conn = get_db()
+    try:
+        if not matchzy_tables_exist(conn):
+            return []
+
+        c = conn.cursor(dictionary=True)
+        table = MATCHZY_TABLES["players"]
+        
+        c.execute(f'''
+            SELECT
+                name AS player_name,
+                steamid64,
+                COUNT(DISTINCT matchid) AS matches_played,
+                SUM(kills) AS kills,
+                SUM(deaths) AS deaths,
+                SUM(assists) AS assists,
+                SUM(head_shot_kills) AS headshots,
+                SUM(damage) AS total_damage,
+                ROUND(SUM(kills) / NULLIF(SUM(deaths), 0), 2) AS kd_ratio,
+                ROUND(SUM(head_shot_kills) / NULLIF(SUM(kills), 0) * 100, 1) AS hs_pct
+            FROM {table}
+            WHERE steamid64 != '0'
+            GROUP BY steamid64, name
+            ORDER BY kills DESC
+            LIMIT %s
+        ''', (limit,))
+        rows = c.fetchall()
+        c.close()
+        return rows
+    except Exception as e:
+        print(f"[MatchZy] Leaderboard error: {e}")
+        return []
+    finally:
+        conn.close()
+
 # ========== PAGINATION VIEW FOR DEMOS ==========
 class DemosView(View):
     def __init__(self, offset=0):
@@ -968,6 +1012,8 @@ def fetch_demos(offset=0, limit=5):
         response.raise_for_status()
         data = response.json()
         demos = data.get("demos", [])
+        # Filter to only include .dem files, excluding .json files
+        demos = [d for d in demos if d.get("name", "").endswith(".dem")]
         if not demos:
             return {"demos": ["No demos available"], "has_more": False}
         demos_sorted = sorted(demos, key=lambda x: x.get("modified_at", ""), reverse=True)
@@ -1001,8 +1047,62 @@ def fetch_demos(offset=0, limit=5):
 # Demo filename format: YYYY-MM-DD_HH-MM-SS_<matchnum>_<mapname>_<team1>_vs_<team2>.dem
 DEMO_TS_RE = re.compile(r'^(\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2})')
 
+def build_matchid_to_demo_map():
+    """
+    Build a mapping of matchid -> demo file by parsing .json metadata files.
+    Returns dict: {matchid: {"name": demo_name, "download_url": url}}
+    """
+    all_files = fetch_all_demos_raw()
+    matchid_map = {}
+    
+    # First pass: Parse all .json files to get match IDs
+    json_to_dem = {}  # maps json filename to potential demo filename
+    for file_obj in all_files:
+        name = file_obj.get("name", "")
+        if name.endswith(".json"):
+            # Download and parse the JSON file to get match ID
+            download_url = file_obj.get("download_url", "")
+            if not download_url:
+                continue
+            
+            try:
+                headers = {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                    'Referer': 'https://fshost.me/'
+                }
+                resp = requests.get(download_url, headers=headers, timeout=10)
+                resp.raise_for_status()
+                metadata = resp.json()
+                
+                # Extract match ID from the JSON metadata
+                matchid = metadata.get("matchid") or metadata.get("match_id")
+                if matchid:
+                    # The corresponding .dem file should have the same base name
+                    base_name = name.replace(".json", "")
+                    dem_name = f"{base_name}.dem"
+                    json_to_dem[name] = {"matchid": str(matchid), "dem_name": dem_name}
+            except Exception as e:
+                print(f"[Demo Map] Error parsing {name}: {e}")
+                continue
+    
+    # Second pass: Find the actual .dem files and map them by match ID
+    for file_obj in all_files:
+        name = file_obj.get("name", "")
+        if name.endswith(".dem"):
+            # Check if we have metadata for this demo
+            json_name = name.replace(".dem", ".json")
+            if json_name in json_to_dem:
+                info = json_to_dem[json_name]
+                matchid = info["matchid"]
+                matchid_map[matchid] = {
+                    "name": name,
+                    "download_url": file_obj.get("download_url", "#")
+                }
+    
+    return matchid_map
+
 def fetch_all_demos_raw():
-    """Return the raw list of demo dicts from fshost, sorted newest first."""
+    """Return the raw list of demo dicts from fshost, sorted newest first. Includes both .dem and .json files."""
     if not DEMOS_JSON_URL:
         return []
     headers = {
@@ -1018,20 +1118,40 @@ def fetch_all_demos_raw():
     except Exception:
         return []
 
-def find_demo_for_match(end_time, window_minutes=10):
+def find_demo_for_match(match_end_time_or_id, window_minutes=10):
     """
-    Try to match a demo file to a match by comparing the demo's embedded
-    timestamp (from its filename) with the match's end_time.
+    Try to match a demo file to a match.
+    Can accept either:
+    - A matchid string: will look for exact match in JSON metadata
+    - A datetime object: will use timestamp matching as fallback
     Returns (name, download_url) or (None, None).
     """
+    # If it's a string, treat it as a match ID and try exact matching first
+    if isinstance(match_end_time_or_id, str):
+        try:
+            matchid_map = build_matchid_to_demo_map()
+            if match_end_time_or_id in matchid_map:
+                demo = matchid_map[match_end_time_or_id]
+                return demo.get("name"), demo.get("download_url", "#")
+        except Exception as e:
+            print(f"[Demo Match] Error using matchid map: {e}")
+        return None, None
+    
+    # Otherwise, use timestamp matching (fallback for datetime objects)
+    end_time = match_end_time_or_id
     if not end_time:
         return None, None
     if not isinstance(end_time, datetime):
         return None, None
+    
     # Make end_time timezone-aware (UTC) if it isn't already
     if end_time.tzinfo is None:
         end_time = end_time.replace(tzinfo=pytz.utc)
+    
     demos = fetch_all_demos_raw()
+    # Filter to only .dem files for timestamp matching
+    demos = [d for d in demos if d.get("name", "").endswith(".dem")]
+    
     best = None
     best_delta = None
     for demo in demos:
@@ -1309,6 +1429,19 @@ async def status_cmd(inter: discord.Interaction):
 
 @bot.tree.command(name="profile", description="View player stats from MatchZy")
 async def profile_cmd(inter: discord.Interaction, player_name: str):
+    # Restrict to stats channel or server-logs channel
+    allowed_channels = []
+    if STATS_CHANNEL_ID:
+        allowed_channels.append(STATS_CHANNEL_ID)
+    if CHANNEL_ID:
+        allowed_channels.append(CHANNEL_ID)
+    
+    if allowed_channels and inter.channel_id not in allowed_channels:
+        return await inter.response.send_message(
+            "❌ This command can only be used in the designated stats channel!",
+            ephemeral=True
+        )
+    
     await inter.response.defer(ephemeral=True)
     mz = get_matchzy_player_stats(player_name=player_name)
     if not mz:
@@ -1350,37 +1483,6 @@ async def profile_cmd(inter: discord.Interaction, player_name: str):
     embed.set_footer(text=f"SteamID64: {mz.get('steamid64', 'N/A')}")
     await inter.followup.send(embed=embed, ephemeral=True)
 
-@bot.tree.command(name="leaderboard", description="Top players (MatchZy kills leaderboard)")
-async def leaderboard_cmd(inter: discord.Interaction):
-    await inter.response.defer(ephemeral=True)
-    leaderboard = get_matchzy_leaderboard(10)
-    if not leaderboard:
-        return await inter.followup.send("❌ No player data available yet.", ephemeral=True)
-    
-    embed = discord.Embed(
-        title="🏆 Top Players",
-        description="*Sorted by kills • Bots excluded*",
-        color=0xF1C40F
-    )
-    medals = ["🥇", "🥈", "🥉"]
-    for i, row in enumerate(leaderboard, 1):
-        name     = row.get("player_name", "Unknown")
-        kills    = int(row.get("kills") or 0)
-        deaths   = int(row.get("deaths") or 0)
-        kd       = row.get("kd_ratio")
-        damage   = row.get("total_damage")
-        hs_pct   = row.get("hs_pct")
-        matches  = row.get("matches_played")
-        medal    = medals[i-1] if i <= 3 else f"`{i}.`"
-        kd_str   = f"K/D: {kd:.2f}" if kd else f"K/D: {kills}/{deaths}"
-        extras   = []
-        if hs_pct: extras.append(f"HS: {hs_pct}%")
-        if matches: extras.append(f"{matches} matches")
-        value = f"**{kills} kills** • {kd_str}" + (f" • {' • '.join(extras)}" if extras else "")
-        embed.add_field(name=f"{medal} {name}", value=value, inline=False)
-    
-    await inter.followup.send(embed=embed, ephemeral=True)
-
 @bot.tree.command(name="recentmatches", description="Show recent MatchZy matches")
 async def recentmatches_cmd(inter: discord.Interaction):
     await inter.response.defer(ephemeral=True)
@@ -1390,10 +1492,27 @@ async def recentmatches_cmd(inter: discord.Interaction):
             "❌ No match data found. Make sure MatchZy is configured with your MySQL DB.",
             ephemeral=True
         )
-    # Pre-fetch all demos once so we don't hammer fshost per match
-    all_demos_raw = fetch_all_demos_raw()
+    
+    # Build matchid -> demo mapping once
+    try:
+        matchid_map = build_matchid_to_demo_map()
+        debug_lines = [f"📂 Demos with match IDs: **{len(matchid_map)}**"]
+    except Exception as e:
+        matchid_map = {}
+        debug_lines = [f"⚠️ Could not build matchid map: {e}"]
 
-    def _find_demo(end_time, window_minutes=10):
+    # Pre-fetch all demos for timestamp fallback
+    all_demos_raw = fetch_all_demos_raw()
+    all_demos_raw = [d for d in all_demos_raw if d.get("name", "").endswith(".dem")]
+
+    def _find_demo(matchid, end_time, window_minutes=10):
+        """Try matchid first, then fall back to timestamp matching"""
+        # Try exact match by matchid
+        if matchid and str(matchid) in matchid_map:
+            demo = matchid_map[str(matchid)]
+            return demo.get("name"), demo.get("download_url", "#")
+        
+        # Fallback: timestamp matching
         if not end_time or not isinstance(end_time, datetime):
             return None, None
         et = end_time.replace(tzinfo=pytz.utc) if end_time.tzinfo is None else end_time
@@ -1415,18 +1534,10 @@ async def recentmatches_cmd(inter: discord.Interaction):
             return best.get("name"), best.get("download_url", "#")
         return None, None
 
-    # Debug: show demo count and first match end_time vs first demo timestamp
-    debug_lines = [f"📂 Demos loaded from fshost: **{len(all_demos_raw)}**"]
-    if all_demos_raw:
-        first_demo = all_demos_raw[0].get("name", "?")
-        debug_lines.append(f"🎬 Newest demo: `{first_demo}`")
-    if matches:
-        first_end = matches[0].get("end_time")
-        debug_lines.append(f"🕐 Newest match end_time: `{first_end}` (type: {type(first_end).__name__})")
-
     embed = discord.Embed(title="🏟️ Recent Matches", color=0x3498DB)
     embed.set_footer(text=" | ".join(debug_lines))
     for m in matches:
+        matchid  = m.get("matchid")
         t1       = m.get("team1_name", "Team 1")
         t2       = m.get("team2_name", "Team 2")
         s1       = m.get("team1_score", 0)
@@ -1438,7 +1549,9 @@ async def recentmatches_cmd(inter: discord.Interaction):
         result   = f"**{t1}** {s1} : {s2} **{t2}**"
         if winner:
             result += f" — 🏆 **{winner}**"
-        demo_name, demo_url = _find_demo(end_time)
+        
+        # Try to find demo using matchid first, then timestamp
+        demo_name, demo_url = _find_demo(matchid, end_time)
         if demo_url and demo_url != "#":
             result += f"\n📥 [Download Demo](<{demo_url}>)"
         else:
@@ -1450,43 +1563,103 @@ async def recentmatches_cmd(inter: discord.Interaction):
         )
     await inter.followup.send(embed=embed, ephemeral=True)
 
-@bot.tree.command(name="match", description="Get link to match stats page")
-async def match_cmd(inter: discord.Interaction, match_id: str):
+@bot.tree.command(name="matches", description="Show recent matches with stats page links")
+async def matches_cmd(inter: discord.Interaction):
     await inter.response.defer(ephemeral=True)
-    # Verify match exists
+    
+    # Fetch last 5 matches
     conn = get_db()
     c = conn.cursor(dictionary=True)
-    c.execute(f"SELECT matchid, team1_name, team2_name, team1_score, team2_score, mapname, end_time FROM {MATCHZY_TABLES['matches']} mm LEFT JOIN {MATCHZY_TABLES['maps']} mp ON mm.matchid=mp.matchid WHERE mm.matchid=%s LIMIT 1", (match_id,))
-    row = c.fetchone()
-    c.close(); conn.close()
-    if not row:
-        return await inter.followup.send(f"❌ Match `#{match_id}` not found.", ephemeral=True)
-    # Build URL
+    c.execute(f"""
+        SELECT 
+            mm.matchid,
+            mm.team1_name,
+            mm.team2_name,
+            mm.team1_score,
+            mm.team2_score,
+            mm.winner,
+            mm.end_time,
+            mp.mapname,
+            mp.team1_score as map_team1_score,
+            mp.team2_score as map_team2_score
+        FROM {MATCHZY_TABLES['matches']} mm
+        LEFT JOIN {MATCHZY_TABLES['maps']} mp ON mm.matchid = mp.matchid
+        WHERE mm.end_time IS NOT NULL
+        ORDER BY mm.end_time DESC
+        LIMIT 5
+    """)
+    matches = c.fetchall()
+    c.close()
+    conn.close()
+    
+    if not matches:
+        return await inter.followup.send(
+            "❌ No matches found in the database.",
+            ephemeral=True
+        )
+    
+    # Build base URL for stats pages
     base_url = os.getenv("RAILWAY_PUBLIC_DOMAIN", "")
     if base_url:
-        url = f"https://{base_url}/stats?match={match_id}"
+        stats_base = f"https://{base_url}/stats?match="
     else:
         port = os.getenv("PORT", "8080")
-        url = f"http://localhost:{port}/stats?match={match_id}"
-    t1 = row.get("team1_name","Team 1")
-    t2 = row.get("team2_name","Team 2")
-    s1 = row.get("team1_score",0)
-    s2 = row.get("team2_score",0)
-    mapname = row.get("mapname","?")
+        stats_base = f"http://localhost:{port}/stats?match="
+    
+    # Build matchid -> demo mapping
+    try:
+        matchid_map = build_matchid_to_demo_map()
+    except:
+        matchid_map = {}
+    
     embed = discord.Embed(
-        title=f"🏟️ Match #{match_id} — {mapname}",
-        description=f"**{t1}** `{s1} : {s2}` **{t2}**",
-        color=0xff5500,
-        url=url
+        title="🏟️ Recent Matches",
+        description="Click the links below to view full match statistics",
+        color=0x3498DB
     )
-    embed.add_field(name="📊 Stats Page", value=f"[View Full Scoreboard]({url})", inline=False)
-    # Try to find a matching demo by end_time
-    end_time = row.get("end_time")
-    if end_time:
-        demo_name, demo_url = find_demo_for_match(end_time)
+    
+    for m in matches:
+        matchid = m.get("matchid")
+        t1 = m.get("team1_name", "Team 1")
+        t2 = m.get("team2_name", "Team 2")
+        s1 = m.get("team1_score", 0)
+        s2 = m.get("team2_score", 0)
+        mapname = m.get("mapname", "?")
+        winner = m.get("winner", "")
+        end_time = m.get("end_time")
+        
+        # Format date
+        date_str = end_time.strftime("%b %d, %H:%M") if isinstance(end_time, datetime) else str(end_time or "?")
+        
+        # Build stats URL
+        stats_url = f"{stats_base}{matchid}"
+        
+        # Build field value
+        result = f"**{t1}** `{s1} : {s2}` **{t2}**"
+        if winner:
+            result += f" — 🏆 **{winner}**"
+        result += f"\n📊 [View Full Stats](<{stats_url}>)"
+        
+        # Try to find demo
+        demo_name, demo_url = None, None
+        if str(matchid) in matchid_map:
+            demo = matchid_map[str(matchid)]
+            demo_name = demo.get("name")
+            demo_url = demo.get("download_url", "#")
+        elif end_time:
+            demo_name, demo_url = find_demo_for_match(end_time)
+        
         if demo_url and demo_url != "#":
-            embed.add_field(name="📥 Demo", value=f"[Download Demo](<{demo_url}>)", inline=False)
-    await inter.followup.send(embed=embed, ephemeral=False)
+            result += f"\n📥 [Download Demo](<{demo_url}>)"
+        
+        embed.add_field(
+            name=f"🗺️ {mapname} • Match #{matchid} • {date_str}",
+            value=result,
+            inline=False
+        )
+    
+    embed.set_footer(text=f"Showing {len(matches)} most recent matches")
+    await inter.followup.send(embed=embed, ephemeral=True)
 
 @bot.tree.command(name="demos", description="View server demos")
 async def demos_cmd(inter: discord.Interaction):
