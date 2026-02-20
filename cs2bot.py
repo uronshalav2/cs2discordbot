@@ -137,6 +137,29 @@ async def handle_api_match(request):
     except Exception as e:
         return _json_response({"error": str(e)})
 
+
+async def handle_api_demos(request):
+    """GET /api/demos — returns all demos from fshost with parsed timestamps"""
+    demos = fetch_all_demos_raw()
+    result = []
+    for d in demos:
+        name = d.get("name", "")
+        m = DEMO_TS_RE.match(name)
+        ts = None
+        if m:
+            try:
+                ts = datetime.strptime(m.group(1), "%Y-%m-%d_%H-%M-%S").isoformat()
+            except ValueError:
+                pass
+        result.append({
+            "name": name,
+            "download_url": d.get("download_url", ""),
+            "size_formatted": d.get("size_formatted", ""),
+            "modified_at": d.get("modified_at", ""),
+            "filename_ts": ts,
+        })
+    return _json_response(result)
+
 async def handle_stats_page(request):
     """GET /stats — main stats website (SPA)"""
     html = _build_stats_html()
@@ -342,12 +365,44 @@ const fmtDate = s=>{if(!s)return'-';const d=new Date(s);return d.toLocaleDateStr
 const initials = n=>(n||'?').split(/[ _]/).slice(0,2).map(w=>w[0]||'').join('').toUpperCase().slice(0,2)||'?';
 function spin(id){document.getElementById(id).innerHTML='<div class="loading"><div class="spin"></div><br>Loading…</div>'}
 
+// ── Demo helpers ─────────────────────────────────────────────────────────────
+let _demosCache = null;
+async function getDemos() {
+  if (_demosCache) return _demosCache;
+  _demosCache = await fetch('/api/demos').then(r=>r.json()).catch(()=>[]);
+  return _demosCache;
+}
+function findDemo(endTimeStr, windowMs=10*60*1000) {
+  if (!_demosCache || !endTimeStr) return null;
+  const matchEnd = new Date(endTimeStr).getTime();
+  if (isNaN(matchEnd)) return null;
+  let best = null, bestDelta = Infinity;
+  for (const d of _demosCache) {
+    if (!d.filename_ts) continue;
+    const demoTs = new Date(d.filename_ts).getTime();
+    const delta = Math.abs(demoTs - matchEnd);
+    if (delta <= windowMs && delta < bestDelta) { best = d; bestDelta = delta; }
+  }
+  return best;
+}
+function demoBtn(demo, small=false) {
+  if (!demo || !demo.download_url) return '';
+  const size = demo.size_formatted ? ` (${demo.size_formatted})` : '';
+  if (small) return `<a href="${demo.download_url}" target="_blank" onclick="event.stopPropagation()" style="display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border:1px solid rgba(255,85,0,.4);border-radius:2px;font-size:10px;font-family:'Rajdhani',sans-serif;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--orange);text-decoration:none;white-space:nowrap" title="${demo.name}">📥 Demo${size}</a>`;
+  return `<a href="${demo.download_url}" target="_blank" style="display:inline-flex;align-items:center;gap:6px;padding:6px 14px;border:1px solid var(--orange);border-radius:3px;font-size:12px;font-family:'Rajdhani',sans-serif;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--orange);background:var(--orange-glow);text-decoration:none" title="${demo.name}">📥 Download Demo${size}</a>`;
+}
+
 // ── Matches ───────────────────────────────────────────────────────────────────
 async function loadMatches() {
   spin('p-matches');
-  const data = await fetch('/api/matches?limit=30').then(r=>r.json()).catch(()=>[]);
+  const [data, ] = await Promise.all([
+    fetch('/api/matches?limit=30').then(r=>r.json()).catch(()=>[]),
+    getDemos()
+  ]);
   if(!data.length){document.getElementById('p-matches').innerHTML='<div class="empty">No completed matches yet.</div>';return}
-  const items = data.map(m=>`
+  const items = data.map(m=>{
+    const demo = findDemo(m.end_time);
+    return `
     <div class="match-item" onclick="go('match',{id:'${m.matchid}'},'matches')">
       <div class="m-id">#${m.matchid}</div>
       <div class="m-teams">
@@ -356,8 +411,10 @@ async function loadMatches() {
       </div>
       <div class="m-map">${esc(m.mapname||'—')}</div>
       ${m.winner?`<div class="m-winner">W: ${esc(m.winner)}</div>`:''}
+      ${demoBtn(demo, true)}
       <div class="m-date">${fmtDate(m.end_time)}</div>
-    </div>`).join('');
+    </div>`;
+  }).join('');
   document.getElementById('p-matches').innerHTML = `
     <div class="page-title">Match History <span class="sub">${data.length} matches</span></div>
     <div class="card matches-list">${items}</div>`;
@@ -366,7 +423,10 @@ async function loadMatches() {
 // ── Match Detail ──────────────────────────────────────────────────────────────
 async function loadMatch(id) {
   spin('p-match');
-  const d = await fetch('/api/match/'+id).then(r=>r.json()).catch(()=>({error:'fetch failed'}));
+  const [d, ] = await Promise.all([
+    fetch('/api/match/'+id).then(r=>r.json()).catch(()=>({error:'fetch failed'})),
+    getDemos()
+  ]);
   if(d.error){document.getElementById('p-match').innerHTML=`<div class="empty">${d.error}</div>`;return}
   const meta=d.meta||{}, maps=d.maps||[], players=d.players||[];
 
@@ -447,6 +507,7 @@ async function loadMatch(id) {
         ${fmtDate(meta.end_time)?`<div class="meta-chip">${fmtDate(meta.end_time)}</div>`:''}
         ${won?`<div class="meta-chip"><span class="winner-tag">Winner: ${esc(won)}</span></div>`:''}
       </div>
+      ${(()=>{const demo=findDemo(meta.end_time);return demo?`<div style="margin-top:12px">${demoBtn(demo)}</div>`:''})()}
     </div>
     ${mvpHtml}
     ${awardsHtml}
@@ -540,6 +601,7 @@ async def start_http_server():
     app.router.add_get('/api/player/{name}', handle_api_player)
     app.router.add_get('/api/matches',       handle_api_matches)
     app.router.add_get('/api/match/{matchid}', handle_api_match)
+    app.router.add_get('/api/demos',          handle_api_demos)
     app.router.add_get('/stats',             handle_stats_page)
     app.router.add_get('/',                  handle_stats_page)
     app.router.add_get('/health',            handle_health_check)
@@ -1353,7 +1415,17 @@ async def recentmatches_cmd(inter: discord.Interaction):
             return best.get("name"), best.get("download_url", "#")
         return None, None
 
+    # Debug: show demo count and first match end_time vs first demo timestamp
+    debug_lines = [f"📂 Demos loaded from fshost: **{len(all_demos_raw)}**"]
+    if all_demos_raw:
+        first_demo = all_demos_raw[0].get("name", "?")
+        debug_lines.append(f"🎬 Newest demo: `{first_demo}`")
+    if matches:
+        first_end = matches[0].get("end_time")
+        debug_lines.append(f"🕐 Newest match end_time: `{first_end}` (type: {type(first_end).__name__})")
+
     embed = discord.Embed(title="🏟️ Recent Matches", color=0x3498DB)
+    embed.set_footer(text=" | ".join(debug_lines))
     for m in matches:
         t1       = m.get("team1_name", "Team 1")
         t2       = m.get("team2_name", "Team 2")
@@ -1369,6 +1441,8 @@ async def recentmatches_cmd(inter: discord.Interaction):
         demo_name, demo_url = _find_demo(end_time)
         if demo_url and demo_url != "#":
             result += f"\n📥 [Download Demo](<{demo_url}>)"
+        else:
+            result += f"\n*(no demo matched)*"
         embed.add_field(
             name=f"🗺️ {mapname} — {date_str}",
             value=result,
