@@ -630,6 +630,7 @@ FACEIT_API_KEY = os.getenv("FACEIT_API_KEY")
 OWNER_ID = int(os.getenv("OWNER_ID", 0))
 SERVER_LOG_PATH = os.getenv("SERVER_LOG_PATH", "")
 FACEIT_GAME_ID = "cs2"
+STEAM_API_KEY = os.getenv("STEAM_API_KEY", "")
 MAP_WHITELIST = [
     "de_inferno", "de_mirage", "de_dust2", "de_overpass",
     "de_nuke", "de_ancient", "de_vertigo", "de_anubis"
@@ -1246,6 +1247,47 @@ async def fetch_faceit_stats_cs2(nickname: str) -> dict:
         "kd_ratio": stats.get("Average K/D Ratio"),
     }
 
+# ========== STEAM API HELPERS ==========
+
+def get_steam_player_info(steamid64: str) -> dict | None:
+    """
+    Fetch Steam profile info for a given SteamID64.
+    Returns dict with name, avatar, profile_url, country or None on failure.
+    Requires STEAM_API_KEY env var.
+    """
+    if not STEAM_API_KEY:
+        return None
+    if not steamid64 or steamid64 == "0":
+        return None
+    try:
+        url = (
+            "https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v2/"
+            f"?key={STEAM_API_KEY}&steamids={steamid64}"
+        )
+        r = requests.get(url, timeout=10)
+        r.raise_for_status()
+        players = r.json().get("response", {}).get("players", [])
+        if not players:
+            return None
+        p = players[0]
+        return {
+            "name":        p.get("personaname", "Unknown"),
+            "avatar":      p.get("avatarfull") or p.get("avatarmedium") or p.get("avatar"),
+            "profile_url": p.get("profileurl"),
+            "country":     p.get("loccountrycode"),        # e.g. "US", "SE"
+            "real_name":   p.get("realname"),              # may be empty/private
+            "visibility":  p.get("communityvisibilitystate"),  # 3 = public
+        }
+    except Exception as e:
+        print(f"[Steam API] Error for {steamid64}: {e}")
+        return None
+
+async def get_steam_player_info_async(steamid64: str) -> dict | None:
+    """Async wrapper so it doesn't block the event loop."""
+    loop = asyncio.get_running_loop()
+    return await loop.run_in_executor(None, get_steam_player_info, steamid64)
+
+
 async def get_enhanced_status_embed():
     addr = (SERVER_IP, SERVER_PORT)
     try:
@@ -1450,6 +1492,7 @@ async def profile_cmd(inter: discord.Interaction, player_name: str):
             f"Player must have completed at least one match.",
             ephemeral=True
         )
+
     kills        = int(mz.get("kills") or 0)
     deaths       = int(mz.get("deaths") or 0)
     assists      = int(mz.get("assists") or 0)
@@ -1461,12 +1504,35 @@ async def profile_cmd(inter: discord.Interaction, player_name: str):
     entry_wins   = int(mz.get("entry_wins") or 0)
     matches      = int(mz.get("matches_played") or 0)
     kd_ratio     = kills / deaths if deaths > 0 else float(kills)
+    steamid64    = mz.get("steamid64", "")
+
+    # ── Fetch Steam profile (avatar, current name, country) ──────────────────
+    steam = await get_steam_player_info_async(steamid64)
+
+    display_name = (steam or {}).get("name") or mz.get("name") or player_name
+    steam_avatar = (steam or {}).get("avatar")
+    steam_url    = (steam or {}).get("profile_url")
+    country_code = (steam or {}).get("country")
+    country_flag = flag(country_code) if country_code else ""
+    real_name    = (steam or {}).get("real_name") or ""
+
+    # Build description line
+    desc_parts = [f"📊 MatchZy Career Stats • {matches} match{'es' if matches != 1 else ''}"]
+    if real_name:
+        desc_parts.append(f"Real name: {real_name}")
+    if steam_url:
+        desc_parts.append(f"[Steam Profile]({steam_url})")
 
     embed = discord.Embed(
-        title=f"👤 {mz.get('name', player_name)}",
-        description=f"📊 MatchZy Career Stats • {matches} match{'es' if matches != 1 else ''}",
+        title=f"{country_flag} {display_name}".strip(),
+        description=" | ".join(desc_parts),
         color=0x2ECC71
     )
+
+    # Set Steam avatar as thumbnail if available
+    if steam_avatar:
+        embed.set_thumbnail(url=steam_avatar)
+
     embed.add_field(name="💀 Kills",        value=f"**{kills}**",              inline=True)
     embed.add_field(name="☠️ Deaths",       value=f"**{deaths}**",             inline=True)
     embed.add_field(name="📊 K/D",          value=f"**{kd_ratio:.2f}**",       inline=True)
@@ -1480,7 +1546,13 @@ async def profile_cmd(inter: discord.Interaction, player_name: str):
     if entry_wins:
         embed.add_field(name="🚪 Entry Wins", value=f"**{entry_wins}**", inline=True)
 
-    embed.set_footer(text=f"SteamID64: {mz.get('steamid64', 'N/A')}")
+    footer_text = f"SteamID64: {steamid64 or 'N/A'}"
+    if not steam and STEAM_API_KEY:
+        footer_text += " • (Steam profile unavailable)"
+    elif not STEAM_API_KEY:
+        footer_text += " • (Add STEAM_API_KEY for avatar & country)"
+    embed.set_footer(text=footer_text)
+
     await inter.followup.send(embed=embed, ephemeral=True)
 
 @bot.tree.command(name="recentmatches", description="Show recent MatchZy matches")
