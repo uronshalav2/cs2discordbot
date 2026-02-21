@@ -88,69 +88,82 @@ async def handle_api_player(request):
         return _json_response({"error": str(e)})
 
 async def handle_api_matches(request):
-    """GET /api/matches — DB for match list, fshost map for demo links."""
+    """
+    GET /api/matches
+    Primary source: fshost JSONs (all matches, correct round scores, correct dates).
+    Fallback: DB rows for any matchid not found in fshost JSONs.
+    """
     try:
-        limit = int(request.rel_url.query.get('limit', 30))
+        limit = int(request.rel_url.query.get('limit', 50))
+        loop  = asyncio.get_running_loop()
 
-        # ── DB: get match list with team names, scores, dates ─────────────────
-        conn = get_db()
-        c = conn.cursor(dictionary=True)
-        c.execute(f"""
-            SELECT mm.matchid, mm.team1_name, mm.team2_name,
-                   mm.winner,
-                   mm.start_time, mm.end_time,
-                   m.mapname, m.mapnumber,
-                   m.team1_score AS map_team1_score,
-                   m.team2_score AS map_team2_score
-            FROM {MATCHZY_TABLES['matches']} mm
-            LEFT JOIN {MATCHZY_TABLES['maps']} m ON mm.matchid = m.matchid
-            WHERE mm.end_time IS NOT NULL
-            ORDER BY mm.end_time DESC
-            LIMIT %s
-        """, (limit,))
-        rows = c.fetchall()
-        c.close(); conn.close()
-
-        if not rows:
-            return _json_response([])
-
-        # ── fshost: enrich each row with JSON data (scores, demo) ───────────────
-        loop = asyncio.get_running_loop()
+        # ── Build match list from fshost JSONs ────────────────────────────────
         matchid_map = await loop.run_in_executor(None, build_matchid_to_demo_map)
 
         results = []
-        for row in rows:
-            mid   = str(row.get('matchid', ''))
-            entry = matchid_map.get(mid, {})
-            meta  = entry.get('metadata') or {}
-            t1    = meta.get('team1', {})
-            t2    = meta.get('team2', {})
+        for mid, entry in matchid_map.items():
+            meta = entry.get('metadata') or {}
+            if not meta:
+                continue
+            t1 = meta.get('team1', {})
+            t2 = meta.get('team2', {})
 
-            # Use fshost round scores if available, fall back to DB map scores
-            if t1.get('score') is not None:
-                row['team1_score'] = t1.get('score', 0)
-                row['team2_score'] = t2.get('score', 0)
-            else:
-                row['team1_score'] = row.get('map_team1_score') or row.get('team1_score') or 0
-                row['team2_score'] = row.get('map_team2_score') or row.get('team2_score') or 0
+            # Parse date from JSON — format: "2026-02-21T21:46:19.4524841Z"
+            raw_date = meta.get('date', '')
+            results.append({
+                'matchid':     str(meta.get('match_id') or mid),
+                'team1_name':  t1.get('name', 'Team 1'),
+                'team2_name':  t2.get('name', 'Team 2'),
+                'team1_score': t1.get('score', 0),
+                'team2_score': t2.get('score', 0),
+                'winner':      meta.get('winner', ''),
+                'end_time':    raw_date,
+                'mapname':     meta.get('map', '?'),
+                'total_rounds':meta.get('total_rounds'),
+                'demo_url':    entry.get('download_url', ''),
+                'demo_size':   entry.get('size_formatted', ''),
+            })
 
-            # Use fshost team names if DB has generic ones (CT/T)
-            if t1.get('name') and 'COUNTER' not in str(row.get('team1_name','')).upper():
-                pass  # DB name is fine
-            elif t1.get('name'):
-                row['team1_name'] = t1['name']
-                row['team2_name'] = t2.get('name', row.get('team2_name', 'Team 2'))
+        # ── Merge any DB-only matches not in fshost ───────────────────────────
+        fshost_ids = {r['matchid'] for r in results}
+        try:
+            conn = get_db()
+            c = conn.cursor(dictionary=True)
+            c.execute(f"""
+                SELECT mm.matchid, mm.team1_name, mm.team2_name, mm.winner,
+                       mm.end_time, m.mapname,
+                       m.team1_score, m.team2_score
+                FROM {MATCHZY_TABLES['matches']} mm
+                LEFT JOIN {MATCHZY_TABLES['maps']} m ON mm.matchid = m.matchid
+                WHERE mm.end_time IS NOT NULL
+                ORDER BY mm.end_time DESC
+                LIMIT %s
+            """, (limit,))
+            for row in c.fetchall():
+                mid = str(row['matchid'])
+                if mid not in fshost_ids:
+                    results.append({
+                        'matchid':     mid,
+                        'team1_name':  row.get('team1_name', 'Team 1'),
+                        'team2_name':  row.get('team2_name', 'Team 2'),
+                        'team1_score': row.get('team1_score', 0),
+                        'team2_score': row.get('team2_score', 0),
+                        'winner':      row.get('winner', ''),
+                        'end_time':    str(row.get('end_time', '')),
+                        'mapname':     row.get('mapname', '?'),
+                        'demo_url':    '',
+                        'demo_size':   '',
+                    })
+            c.close(); conn.close()
+        except Exception as e:
+            print(f"[api/matches] DB fallback error: {e}")
 
-            # Winner from fshost (more reliable)
-            if meta.get('winner'):
-                row['winner'] = meta['winner']
-
-            row['demo_url']  = entry.get('download_url', '')
-            row['demo_size'] = entry.get('size_formatted', '')
-            row['mapname']   = meta.get('map') or row.get('mapname') or '?'
-            results.append(row)
-
-        return _json_response(results)
+        # Sort newest first — ISO date strings sort correctly lexicographically
+        def sort_key(r):
+            d = r.get('end_time') or ''
+            return str(d)
+        results.sort(key=sort_key, reverse=True)
+        return _json_response(results[:limit])
     except Exception as e:
         return _json_response({"error": str(e)})
 
@@ -185,16 +198,33 @@ async def handle_api_match(request):
             'total_rounds': data.get('total_rounds'),
         }]
         players = _players_from_fshost(data, matchid)
-        matchid_map = build_matchid_to_demo_map()
-        entry = matchid_map.get(str(matchid), {})
-        demo  = {'name': entry.get('name',''), 'url': entry.get('download_url',''), 'size': entry.get('size_formatted','')}
+
+        # Build demo info: prefer demo_filename from JSON, fall back to matchid map
+        demo_filename = data.get('demo_filename', '')
+        demo_url  = ''
+        demo_size = ''
+        if demo_filename:
+            # Construct download URL from the same base URL as DEMOS_JSON_URL
+            # fshost stores demos at the same host, just reference by filename
+            matchid_map = build_matchid_to_demo_map()
+            entry = matchid_map.get(str(matchid), {})
+            # If the map has it, use that URL; otherwise construct from filename
+            if entry.get('download_url'):
+                demo_url  = entry['download_url']
+                demo_size = entry.get('size_formatted', '')
+            else:
+                # Try to derive URL from DEMOS_JSON_URL base
+                if DEMOS_JSON_URL:
+                    base = DEMOS_JSON_URL.rsplit('/', 1)[0]
+                    demo_url = f"{base}/{demo_filename}"
+        demo = {'name': demo_filename, 'url': demo_url, 'size': demo_size}
         return _json_response({"meta": meta, "maps": maps, "players": players, "demo": demo})
     except Exception as e:
         return _json_response({"error": str(e)})
 
 
 def _players_from_fshost(data: dict, matchid: str) -> list:
-    """Flatten fshost team1/team2 players into a unified list."""
+    """Flatten fshost team1/team2 players into a unified list with all available fields."""
     players = []
     for team_key in ('team1', 'team2'):
         team_data = data.get(team_key, {})
@@ -223,18 +253,24 @@ def _players_from_fshost(data: dict, matchid: str) -> list:
                 'head_shot_kills':hs_kills,
                 'hs_pct':         hs_pct,
                 'adr':            fp.get('adr'),
+                # Multi-kills
                 'enemies5k':      int(fp.get('5k', 0) or 0),
                 'enemies4k':      int(fp.get('4k', 0) or 0),
+                'enemies3k':      int(fp.get('3k', 0) or 0),
+                # Clutches
                 'v1_wins':        cw(fp.get('1v1', 0)),
                 'v2_wins':        cw(fp.get('1v2', 0)),
+                'clutch_1v1':     fp.get('1v1', '0/0'),
+                'clutch_1v2':     fp.get('1v2', '0/0'),
+                # Rating / impact
                 'rating':         fp.get('rating'),
                 'kast':           fp.get('kast'),
                 'multi_kills':    fp.get('multi_kills'),
+                # Opening duels
                 'opening_kills':  fp.get('opening_kills'),
                 'opening_deaths': fp.get('opening_deaths'),
+                # Utility
                 'trade_kills':    fp.get('trade_kills'),
-                'clutch_1v1':     fp.get('1v1', '0/0'),
-                'clutch_1v2':     fp.get('1v2', '0/0'),
                 'flash_assists':  fp.get('flash_assists'),
                 'utility_damage': fp.get('utility_damage'),
             })
@@ -481,7 +517,14 @@ const esc = s=>String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(
 const num = n=>n!=null?Number(n).toLocaleString():'-';
 const kdc = v=>{const f=parseFloat(v);return f>=1.3?'kd-g':f>=0.9?'kd-n':'kd-b'};
 const kdf = v=>{const f=parseFloat(v);return f>=1.3?'win':f>=0.9?'text':'loss'};
-const fmtDate = s=>{if(!s)return'-';const d=new Date(s);return d.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'})};
+const fmtDate = s=>{
+  if(!s)return'-';
+  // Normalize ISO strings with >6 fractional seconds digits (e.g. "...4524841Z" → "...452Z")
+  const norm = String(s).replace(/(\.\d{3})\d*(Z?)$/, '$1$2');
+  const d = new Date(norm);
+  if(isNaN(d)) return String(s).replace('T',' ').slice(0,16);
+  return d.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});
+};
 const initials = n=>(n||'?').split(/[ _]/).slice(0,2).map(w=>w[0]||'').join('').toUpperCase().slice(0,2)||'?';
 function spin(id){document.getElementById(id).innerHTML='<div class="loading"><div class="spin"></div><br>Loading…</div>'}
 
@@ -526,8 +569,8 @@ async function loadMatches() {
            style="display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border:1px solid rgba(255,85,0,.5);border-radius:2px;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--orange);background:var(--orange-glow);text-decoration:none;white-space:nowrap">
            📥 Demo${m.demo_size?' ('+m.demo_size+')':''}</a>`
       : '';
-    // Clean winner name (remove "team_" prefix for display)
-    const winnerClean = (m.winner||'').replace(/^team_/i,'');
+    // Clean winner: strip "team_" prefix, show clean name
+    const winnerClean = (m.winner||'').replace(/^team_/i,'').toUpperCase();
     return `
     <div class="match-item" onclick="go('match',{id:'${m.matchid}'},'matches')">
       <div class="m-id">#${m.matchid}</div>
@@ -563,9 +606,10 @@ async function loadMatch(id) {
     return {t1, t2, n1, n2};
   }
 
-  const hasExtra = players.some(p=>p.rating!=null||p.kast!=null);
-  const colCount  = hasExtra ? 13 : 10;
-  const extraHdr  = hasExtra ? '<th>Rating</th><th>KAST</th><th title="Opening K/D">OK/OD</th>' : '';
+  // Always show full column set when data comes from fshost
+  const hasExtra = true;
+  const colCount  = 15;
+  const extraHdr  = '<th>Rating</th><th>KAST</th><th>3K</th><th>4K</th><th>OK/OD</th>';
 
   // MVP = highest rating, fallback to kills
   const mvp = players.reduce((b,p)=>{
@@ -614,14 +658,14 @@ async function loadMatch(id) {
           <table class="sb-table">
             <thead><tr>
               <th>Player</th><th>K</th><th>D</th><th>A</th>
-              <th>K/D</th><th>ADR</th><th>HS%</th><th>Dmg</th><th>5K</th><th>Clutch</th>
-              ${extraHdr}
+              <th>K/D</th><th>ADR</th><th>HS%</th><th>Dmg</th><th>5K</th><th>1vX</th>
+              <th>Rating</th><th>KAST</th><th>3K</th><th>4K</th><th title="Opening Kills / Deaths">OK/OD</th>
             </tr></thead>
             <tbody>
-              <tr class="team-divider ct-div"><td colspan="${colCount}">${esc(n1)}</td></tr>
-              ${sbRows(t1, hasExtra)}
-              <tr class="team-divider t-div"><td colspan="${colCount}">${esc(n2)}</td></tr>
-              ${sbRows(t2, hasExtra)}
+              <tr class="team-divider ct-div"><td colspan="15">${esc(n1)}</td></tr>
+              ${sbRows(t1)}
+              <tr class="team-divider t-div"><td colspan="15">${esc(n2)}</td></tr>
+              ${sbRows(t2)}
             </tbody>
           </table>
         </div>
@@ -667,24 +711,21 @@ async function loadMatch(id) {
     ${mapsHtml}`;
 }
 
-function sbRows(arr, hasExtra) {
-  const cols = hasExtra ? 13 : 10;
-  if (!arr.length) return `<tr><td colspan="${cols}" style="text-align:center;color:var(--muted);padding:12px">—</td></tr>`;
+function sbRows(arr) {
+  if (!arr.length) return `<tr><td colspan="15" style="text-align:center;color:var(--muted);padding:12px">—</td></tr>`;
   return [...arr].sort((a,b)=>{
     const sa = a.rating!=null?parseFloat(a.rating)*100:parseInt(a.kills||0);
-    const sb = b.rating!=null?parseFloat(b.rating)*100:parseInt(b.kills||0);
-    return sb-sa;
+    const sb2 = b.rating!=null?parseFloat(b.rating)*100:parseInt(b.kills||0);
+    return sb2-sa;
   }).map(p=>{
     const kd     = p.deaths>0?(p.kills/p.deaths).toFixed(2):parseFloat(p.kills||0).toFixed(2);
     const adrVal = p.adr!=null?parseFloat(p.adr).toFixed(1):'—';
     const hsVal  = p.hs_pct!=null?parseFloat(p.hs_pct).toFixed(1)+'%':'—';
-    const fiveK  = p.enemies5k ?? p['5k'] ?? 0;
-    const clutch = p.v1_wins ?? 0;
-    const ratingStyle = p.rating!=null?(parseFloat(p.rating)>=1.15?'style="color:#a78bfa"':parseFloat(p.rating)<0.85?'style="color:var(--loss)"':''):'';
-    const extraCols = hasExtra ? `
-      <td ${ratingStyle}>${p.rating!=null?parseFloat(p.rating).toFixed(2):'—'}</td>
-      <td style="color:var(--muted2);font-size:12px">${p.kast!=null?parseFloat(p.kast).toFixed(1)+'%':'—'}</td>
-      <td style="font-size:11px;color:var(--muted2)">${p.opening_kills??'—'}/${p.opening_deaths??'—'}</td>` : '';
+    const kastVal= p.kast!=null?parseFloat(p.kast).toFixed(1)+'%':'—';
+    const fiveK  = p.enemies5k??0;
+    const fourK  = p.enemies4k??0;
+    const threeK = p.enemies3k??0;
+    const rSty   = p.rating!=null?(parseFloat(p.rating)>=1.15?'style="color:#a78bfa;font-weight:700"':parseFloat(p.rating)<0.85?'style="color:var(--loss)"':''):'';
     return `<tr>
       <td onclick="go('player',{name:'${esc(p.name)}'},'match')">${esc(p.name)}</td>
       <td class="kda-cell">${p.kills??0}</td>
@@ -695,8 +736,12 @@ function sbRows(arr, hasExtra) {
       <td>${hsVal}</td>
       <td>${num(p.damage)}</td>
       <td>${fiveK}</td>
-      <td>${clutch}</td>
-      ${extraCols}
+      <td>${p.v1_wins??0}</td>
+      <td ${rSty}>${p.rating!=null?parseFloat(p.rating).toFixed(2):'—'}</td>
+      <td style="color:var(--muted2)">${kastVal}</td>
+      <td style="color:var(--muted2)">${threeK}</td>
+      <td style="color:var(--muted2)">${fourK}</td>
+      <td style="font-size:11px;color:var(--muted2)">${p.opening_kills??'—'}/${p.opening_deaths??'—'}</td>
     </tr>`;
   }).join('');
 }
