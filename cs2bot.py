@@ -305,6 +305,72 @@ async def handle_api_demos(request):
         })
     return _json_response(result)
 
+async def handle_api_leaderboard(request):
+    """GET /api/leaderboard — career stats aggregated from matchzy_stats_players"""
+    try:
+        conn = get_db()
+        c = conn.cursor(dictionary=True)
+        c.execute(f"""
+            SELECT
+                name,
+                steamid64,
+                COUNT(DISTINCT matchid)                                      AS matches,
+                SUM(kills)                                                   AS kills,
+                SUM(deaths)                                                  AS deaths,
+                SUM(assists)                                                 AS assists,
+                SUM(head_shot_kills)                                         AS headshots,
+                SUM(damage)                                                  AS damage,
+                SUM(enemies5k)                                               AS aces,
+                SUM(enemies4k)                                               AS quads,
+                SUM(enemies3k)                                               AS triples,
+                SUM(v1_wins)                                                 AS clutch_wins,
+                SUM(entry_wins)                                              AS entry_wins,
+                ROUND(SUM(kills)/NULLIF(SUM(deaths),0),2)                   AS kd,
+                ROUND(SUM(head_shot_kills)/NULLIF(SUM(kills),0)*100,1)      AS hs_pct,
+                ROUND(SUM(damage)/NULLIF(
+                    COUNT(DISTINCT CONCAT(matchid,'_',mapnumber)),0)/30,1)   AS adr
+            FROM {MATCHZY_TABLES['players']}
+            WHERE steamid64 != '0' AND name != '' AND name IS NOT NULL
+            GROUP BY steamid64, name
+            ORDER BY kills DESC
+        """)
+        rows = c.fetchall()
+        c.close(); conn.close()
+        return _json_response(rows)
+    except Exception as e:
+        return _json_response({"error": str(e)})
+
+async def handle_api_steam(request):
+    """GET /api/steam/{steamid64} — fetch Steam profile info via Steam Web API"""
+    steamid = request.match_info.get('steamid64', '')
+    if not steamid or not STEAM_API_KEY:
+        return _json_response({"error": "Steam API not configured"})
+    try:
+        loop = asyncio.get_running_loop()
+        def fetch():
+            url = (
+                f"https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v2/"
+                f"?key={STEAM_API_KEY}&steamids={steamid}"
+            )
+            r = requests.get(url, timeout=8)
+            r.raise_for_status()
+            players = r.json().get("response", {}).get("players", [])
+            if not players:
+                return {}
+            p = players[0]
+            return {
+                "steamid":     p.get("steamid"),
+                "name":        p.get("personaname"),
+                "avatar":      p.get("avatarfull"),
+                "profile_url": p.get("profileurl"),
+                "country":     p.get("loccountrycode", ""),
+                "real_name":   p.get("realname", ""),
+            }
+        data = await loop.run_in_executor(None, fetch)
+        return _json_response(data)
+    except Exception as e:
+        return _json_response({"error": str(e)})
+
 async def handle_stats_page(request):
     """GET /stats — main stats website (SPA)"""
     html = _build_stats_html()
@@ -477,11 +543,13 @@ nav{background:var(--surface);border-bottom:2px solid var(--border);display:flex
   <div class="logo">5v5 Stats</div>
   <div class="tabs">
     <div class="tab active" data-p="matches">Matches</div>
+    <div class="tab" data-p="leaderboard">Leaderboard</div>
   </div>
 </nav>
 
 <div id="app">
   <div id="p-matches"></div>
+  <div id="p-leaderboard" style="display:none"></div>
   <div id="p-player" style="display:none"></div>
   <div id="p-match" style="display:none"></div>
 </div>
@@ -490,14 +558,15 @@ nav{background:var(--surface);border-bottom:2px solid var(--border);display:flex
 // ── Router ────────────────────────────────────────────────────────────────────
 let _back = null;
 function go(page, params={}, back=null) {
-  ['matches','player','match'].forEach(p => {
+  ['matches','leaderboard','player','match'].forEach(p => {
     document.getElementById('p-'+p).style.display = (p===page)?'':'none';
   });
   document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active',t.dataset.p===page));
   _back = back;
-  if(page==='matches') loadMatches();
-  if(page==='player')  loadPlayer(params.name);
-  if(page==='match')   loadMatch(params.id);
+  if(page==='matches')     loadMatches();
+  if(page==='leaderboard') loadLeaderboard();
+  if(page==='player')      loadPlayer(params.name);
+  if(page==='match')       loadMatch(params.id);
 }
 document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',()=>go(t.dataset.p)));
 
@@ -735,6 +804,220 @@ function sbRows(arr) {
   }).join('');
 }
 
+// ── Player Profile ────────────────────────────────────────────────────────────
+async function loadPlayer(name) {
+  spin('p-player');
+  const [data, ] = await Promise.all([
+    fetch('/api/player/'+encodeURIComponent(name)).then(r=>r.json()).catch(()=>({})),
+  ]);
+  if (data.error) {
+    document.getElementById('p-player').innerHTML = `<div class="empty">${data.error}</div>`;
+    return;
+  }
+  const c = data.career || {};
+  const recent = data.recent_matches || [];
+
+  // Fetch Steam profile if steamid64 available
+  let steam = {};
+  if (c.steamid64 && c.steamid64 !== '0') {
+    steam = await fetch('/api/steam/'+c.steamid64).then(r=>r.json()).catch(()=>({}));
+  }
+
+  const kd = parseFloat(c.kd ?? 0);
+  const kdCls = kd>=1.3?'kd-g':kd>=0.9?'kd-n':'kd-b';
+
+  // Avatar: Steam photo or initials fallback
+  const avatarHtml = steam.avatar
+    ? `<img src="${steam.avatar}" style="width:68px;height:68px;border-radius:4px;object-fit:cover;border:2px solid var(--border2)" alt="${esc(name)}">`
+    : `<div class="p-avatar">${initials(name)}</div>`;
+
+  const profileLink = steam.profile_url
+    ? `<a href="${steam.profile_url}" target="_blank" style="color:var(--orange);text-decoration:none;font-size:11px">View Steam Profile ↗</a>`
+    : '';
+
+  const countryFlag = steam.country
+    ? String.fromCodePoint(...[...steam.country.toUpperCase()].map(c=>c.charCodeAt(0)+127397)) + ' '
+    : '';
+
+  const statsGrid = [
+    {label:'Kills',    val: num(c.kills)},
+    {label:'Deaths',   val: num(c.deaths)},
+    {label:'Assists',  val: num(c.assists)},
+    {label:'K/D',      val: `<span class="${kdCls}">${kd.toFixed(2)}</span>`},
+    {label:'ADR',      val: c.adr ?? '—'},
+    {label:'HS%',      val: c.hs_pct!=null ? c.hs_pct+'%' : '—'},
+    {label:'Matches',  val: num(c.matches)},
+    {label:'Damage',   val: num(c.total_damage)},
+    {label:'Aces (5K)',val: num(c.aces)},
+    {label:'Clutches', val: num(c.clutch_1v1)},
+    {label:'Entry Wins',val:num(c.entry_wins)},
+    {label:'Headshots',val: num(c.headshots)},
+  ].map(s=>`<div class="stat-box"><div class="stat-val">${s.val}</div><div class="stat-lbl">${s.label}</div></div>`).join('');
+
+  const recentRows = recent.map(m => {
+    const won = m.winner && (m.winner.toLowerCase().includes(m.team?.toLowerCase() ?? ''));
+    const result = won ? `<span style="color:var(--win)">W</span>` : `<span style="color:var(--loss)">L</span>`;
+    const kd2 = m.deaths>0?(m.kills/m.deaths).toFixed(2):parseFloat(m.kills||0).toFixed(2);
+    return `<tr onclick="go('match',{id:'${m.matchid}'},'player')">
+      <td>${result} <span style="color:var(--muted);font-size:11px">#${m.matchid}</span></td>
+      <td>${esc(m.mapname||'?')}</td>
+      <td>${m.kills??0} / ${m.deaths??0} / ${m.assists??0}</td>
+      <td class="${m.deaths>0&&m.kills/m.deaths>=1.3?'kd-g':m.deaths>0&&m.kills/m.deaths>=0.9?'kd-n':'kd-b'}">${kd2}</td>
+      <td class="adr-highlight">${m.adr!=null?parseFloat(m.adr).toFixed(1):'—'}</td>
+      <td>${m.hs_pct!=null?parseFloat(m.hs_pct).toFixed(1)+'%':'—'}</td>
+      <td>${num(m.damage)}</td>
+      <td style="font-size:11px;color:var(--muted2)">${m.team1_name??'?'} vs ${m.team2_name??'?'}</td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('p-player').innerHTML = `
+    <div class="back-btn" onclick="go(_back||'leaderboard')">← Back</div>
+    <div class="profile-top">
+      ${avatarHtml}
+      <div>
+        <div class="p-name">${countryFlag}${esc(steam.name || name)}</div>
+        <div class="p-sub">${steam.real_name ? esc(steam.real_name)+' • ' : ''}${c.matches??0} matches played</div>
+        <div style="margin-top:6px">${profileLink}</div>
+      </div>
+    </div>
+    <div class="card" style="margin-bottom:12px">
+      <div class="stats-grid">${statsGrid}</div>
+    </div>
+    ${recent.length ? `
+    <div class="page-title" style="font-size:16px;margin-bottom:10px">Match History</div>
+    <div class="card ovx">
+      <table class="ph-table">
+        <thead><tr>
+          <th>Match</th><th>Map</th><th>K/D/A</th><th>K/D</th><th>ADR</th><th>HS%</th><th>Dmg</th><th>Teams</th>
+        </tr></thead>
+        <tbody>${recentRows}</tbody>
+      </table>
+    </div>` : ''}`;
+}
+
+// ── Leaderboard ───────────────────────────────────────────────────────────────
+let _lbSort = 'kills';
+async function loadLeaderboard() {
+  const el = document.getElementById('p-leaderboard');
+  el.innerHTML = '<div class="loading"><div class="spin"></div><br>Loading…</div>';
+  const data = await fetch('/api/leaderboard').then(r=>r.json()).catch(()=>[]);
+  if (!Array.isArray(data) || !data.length) {
+    el.innerHTML = '<div class="empty">No player data available yet.</div>';
+    return;
+  }
+  // Fetch Steam avatars in parallel (top 20 only to keep it fast)
+  await Promise.all(data.slice(0, 20).map(async p => {
+    if (p.steamid64 && p.steamid64 !== '0') {
+      try {
+        const s = await fetch('/api/steam/'+p.steamid64).then(r=>r.json()).catch(()=>({}));
+        if (s.avatar) p._steam_avatar = s.avatar;
+        if (s.name)   p._steam_name   = s.name;
+      } catch(_) {}
+    }
+  }));
+  renderLeaderboard(data, _lbSort);
+}
+
+function renderLeaderboard(data, sortKey) {
+  _lbSort = sortKey;
+  const el = document.getElementById('p-leaderboard');
+
+  const sorted = [...data].sort((a,b) => {
+    const av = parseFloat(a[sortKey]??0), bv = parseFloat(b[sortKey]??0);
+    return bv - av;
+  });
+
+  const cols = [
+    {key:'kills',      label:'Kills'},
+    {key:'deaths',     label:'Deaths'},
+    {key:'assists',    label:'Assists'},
+    {key:'kd',         label:'K/D'},
+    {key:'adr',        label:'ADR'},
+    {key:'hs_pct',     label:'HS%'},
+    {key:'damage',     label:'Damage'},
+    {key:'matches',    label:'Matches'},
+    {key:'aces',       label:'5K'},
+    {key:'clutch_wins',label:'Clutches'},
+  ];
+
+  const thStyle = k => k===sortKey
+    ? 'style="color:var(--orange);cursor:pointer"'
+    : 'style="cursor:pointer"';
+
+  const headers = cols.map(c =>
+    `<th ${thStyle(c.key)} onclick="renderLeaderboard(window._lbData,'${c.key}')">${c.label}</th>`
+  ).join('');
+
+  const rows = sorted.map((p, i) => {
+    const rank = i + 1;
+    const rankCls = rank===1?'rank-gold':rank===2?'rank-silver':rank===3?'rank-bronze':'';
+    const kd = parseFloat(p.kd??0);
+    const kdCls = kd>=1.3?'kd-g':kd>=0.9?'kd-n':'kd-b';
+    const hsPct = parseFloat(p.hs_pct??0);
+    const hsBar = `<div class="hs-bar-wrap">
+      <div class="hs-bar"><div class="hs-bar-fill" style="width:${Math.min(hsPct,100)}%"></div></div>
+      <span class="hs-val">${hsPct.toFixed(1)}%</span>
+    </div>`;
+    const avatarEl = p._steam_avatar
+      ? `<img src="${p._steam_avatar}" style="width:24px;height:24px;border-radius:50%;object-fit:cover;vertical-align:middle;margin-right:8px;border:1px solid var(--border2)" alt="">`
+      : `<span style="display:inline-block;width:24px;height:24px;border-radius:50%;background:var(--surface2);vertical-align:middle;margin-right:8px;text-align:center;line-height:24px;font-size:10px;font-family:'Rajdhani',sans-serif;font-weight:700;color:var(--muted2)">${initials(p.name)}</span>`;
+    const displayName = esc(p._steam_name || p.name);
+    return `<tr class="${rankCls}" onclick="go('player',{name:'${esc(p.name)}'},'leaderboard')">
+      <td>${rank===1?'🥇':rank===2?'🥈':rank===3?'🥉':rank}</td>
+      <td>${avatarEl}<span class="pname">${displayName}</span></td>
+      <td>${p.kills??0}</td>
+      <td>${p.deaths??0}</td>
+      <td>${p.assists??0}</td>
+      <td class="kd-num ${kdCls}">${kd.toFixed(2)}</td>
+      <td class="adr-highlight">${p.adr!=null?parseFloat(p.adr).toFixed(1):'—'}</td>
+      <td>${hsBar}</td>
+      <td>${p.damage!=null?Number(p.damage).toLocaleString():'—'}</td>
+      <td>${p.matches??0}</td>
+      <td>${p.aces??0}</td>
+      <td>${p.clutch_wins??0}</td>
+    </tr>`;
+  }).join('');
+
+  // Top 3 podium cards
+  const top3 = sorted.slice(0,3);
+  const podiumCard = (p, rank) => {
+    if (!p) return '';
+    const medals = ['🥇','🥈','🥉'];
+    const colors = ['var(--orange)','#a0aec0','#b87333'];
+    const avatarEl = p._steam_avatar
+      ? `<img src="${p._steam_avatar}" style="width:52px;height:52px;border-radius:50%;object-fit:cover;border:2px solid ${colors[rank]};margin-bottom:8px" alt="${esc(p.name)}">`
+      : `<div style="width:52px;height:52px;border-radius:50%;background:var(--surface);border:2px solid ${colors[rank]};display:flex;align-items:center;justify-content:center;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:18px;color:${colors[rank]};margin:0 auto 8px">${initials(p.name)}</div>`;
+    return `<div style="flex:1;background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:16px 14px;text-align:center;cursor:pointer" onclick="go('player',{name:'${esc(p.name)}'},'leaderboard')">
+      <div style="font-size:24px;margin-bottom:6px">${medals[rank]}</div>
+      ${avatarEl}
+      <div style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:16px;color:${colors[rank]};margin-bottom:8px">${esc(p.name)}</div>
+      <div style="display:flex;justify-content:center;gap:16px;flex-wrap:wrap">
+        <div><div style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:20px;color:var(--white)">${p.kills??0}</div><div style="font-size:10px;color:var(--muted2);letter-spacing:1px;text-transform:uppercase">Kills</div></div>
+        <div><div style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:20px;color:var(--white)">${parseFloat(p.kd??0).toFixed(2)}</div><div style="font-size:10px;color:var(--muted2);letter-spacing:1px;text-transform:uppercase">K/D</div></div>
+        <div><div style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:20px;color:var(--white)">${p.matches??0}</div><div style="font-size:10px;color:var(--muted2);letter-spacing:1px;text-transform:uppercase">Matches</div></div>
+      </div>
+    </div>`;
+  };
+
+  window._lbData = data;
+
+  const sortLabel = cols.find(c=>c.key===sortKey)?.label ?? sortKey;
+
+  el.innerHTML = `
+    <div class="page-title">Leaderboard <span class="sub">${data.length} players • sorted by ${sortLabel}</span></div>
+    <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">
+      ${top3.map((p,i)=>podiumCard(p,i)).join('')}
+    </div>
+    <div class="card lb-wrap">
+      <table class="lb-table">
+        <thead><tr>
+          <th>#</th><th>Player</th>${headers}
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
+}
+
 // Check for ?match= URL param to deep-link
 const urlParams = new URLSearchParams(location.search);
 if(urlParams.get('match')) go('match',{id:urlParams.get('match')});
@@ -745,9 +1028,11 @@ else go('matches');
 async def start_http_server():
     app = web.Application()
     app.router.add_get('/api/player/{name}', handle_api_player)
+    app.router.add_get('/api/steam/{steamid64}', handle_api_steam)
     app.router.add_get('/api/matches',       handle_api_matches)
     app.router.add_get('/api/match/{matchid}', handle_api_match)
     app.router.add_get('/api/demos',          handle_api_demos)
+    app.router.add_get('/api/leaderboard',   handle_api_leaderboard)
     app.router.add_get('/stats',             handle_stats_page)
     app.router.add_get('/',                  handle_stats_page)
     app.router.add_get('/health',            handle_health_check)
@@ -762,6 +1047,7 @@ async def start_http_server():
     return runner
 
 TOKEN = os.getenv("TOKEN")
+STEAM_API_KEY = os.getenv("STEAM_API_KEY", "")
 SERVER_IP = os.getenv("SERVER_IP", "127.0.0.1")
 SERVER_PORT = int(os.getenv("SERVER_PORT", 27015))
 RCON_IP = os.getenv("RCON_IP", SERVER_IP)
