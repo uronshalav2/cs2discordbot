@@ -111,7 +111,7 @@ async def handle_api_matches(request):
         return _json_response({"error": str(e)})
 
 async def handle_api_match(request):
-    """GET /api/match/{matchid} — full scoreboard for a match"""
+    """GET /api/match/{matchid} — full scoreboard for a match, merged with fshost JSON if available"""
     matchid = request.match_info.get('matchid', '')
     try:
         conn = get_db()
@@ -133,9 +133,98 @@ async def handle_api_match(request):
         """, (matchid,))
         players = c.fetchall()
         c.close(); conn.close()
-        return _json_response({"meta": meta, "maps": maps, "players": players})
+
+        # Try to merge extra data from fshost JSON (rating, kast, multi_kills, etc.)
+        fshost_data = _fetch_fshost_match_json(matchid)
+        if fshost_data:
+            # Build a lookup: steam_id -> fshost player row
+            fshost_players = {}
+            for team_key in ('team1', 'team2'):
+                for fp in (fshost_data.get(team_key) or {}).get('players', []):
+                    sid = str(fp.get('steam_id', ''))
+                    if sid:
+                        fshost_players[sid] = fp
+            # Also build name -> fshost row as fallback
+            fshost_by_name = {}
+            for team_key in ('team1', 'team2'):
+                for fp in (fshost_data.get(team_key) or {}).get('players', []):
+                    fshost_by_name[str(fp.get('name', '')).lower()] = fp
+
+            for p in players:
+                sid = str(p.get('steamid64', ''))
+                fp = fshost_players.get(sid) or fshost_by_name.get(str(p.get('name','')).lower())
+                if fp:
+                    p['rating']          = fp.get('rating')
+                    p['kast']            = fp.get('kast')
+                    p['adr']             = fp.get('adr') or p.get('adr')
+                    p['hs_pct']          = fp.get('hs_percent') or p.get('hs_pct')
+                    p['multi_kills']     = fp.get('multi_kills')
+                    p['opening_kills']   = fp.get('opening_kills')
+                    p['opening_deaths']  = fp.get('opening_deaths')
+                    p['trade_kills']     = fp.get('trade_kills')
+                    p['clutch_1v1']      = fp.get('1v1', '0/0')
+                    p['clutch_1v2']      = fp.get('1v2', '0/0')
+                    p['flash_assists']   = fp.get('flash_assists')
+                    p['utility_damage']  = fp.get('utility_damage')
+
+        return _json_response({"meta": meta, "maps": maps, "players": players, "fshost": fshost_data})
     except Exception as e:
         return _json_response({"error": str(e)})
+
+
+async def handle_api_fshost_match(request):
+    """GET /api/fshost-match/{matchid} — raw fshost JSON for a match"""
+    matchid = request.match_info.get('matchid', '')
+    loop = asyncio.get_running_loop()
+    data = await loop.run_in_executor(None, _fetch_fshost_match_json, matchid)
+    if data is None:
+        return _json_response({"error": "fshost JSON not found for this match ID"})
+    return _json_response(data)
+
+
+def _fetch_fshost_match_json(matchid: str) -> dict | None:
+    """
+    Fetch the fshost .json stats file for a given match ID.
+    Uses the cached matchid→demo map to find the JSON download URL.
+    Returns the parsed dict or None.
+    """
+    try:
+        matchid_map = build_matchid_to_demo_map()
+        entry = matchid_map.get(str(matchid))
+        if not entry:
+            return None
+        # The map stores the .dem info; the .json has same base name
+        dem_name = entry.get('name', '')
+        if not dem_name.endswith('.dem'):
+            return None
+        json_name = dem_name.replace('.dem', '.json')
+
+        # Find the JSON file in all_files
+        all_files = fetch_all_demos_raw()
+        json_url = None
+        for f in all_files:
+            if f.get('name') == json_name:
+                json_url = f.get('download_url')
+                break
+
+        # Also check if metadata was cached in the map entry
+        cached_meta = entry.get('metadata')
+        if cached_meta:
+            return cached_meta
+
+        if not json_url:
+            return None
+
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            'Referer': 'https://fshost.me/'
+        }
+        r = requests.get(json_url, headers=headers, timeout=10)
+        r.raise_for_status()
+        return r.json()
+    except Exception as e:
+        print(f"[fshost JSON] Error fetching for match {matchid}: {e}")
+        return None
 
 
 async def handle_api_demos(request):
@@ -269,7 +358,7 @@ nav{background:var(--surface);border-bottom:2px solid var(--border);display:flex
 .f-btn.on{color:var(--orange);border-color:var(--orange);background:var(--orange-glow)}
 
 /* SCOREBOARD TABLE */
-.sb-table{width:100%;border-collapse:collapse;min-width:620px}
+.sb-table{width:100%;border-collapse:collapse;min-width:820px}
 .sb-table th{padding:7px 10px;text-align:right;font-family:'Rajdhani',sans-serif;font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--muted2);background:rgba(0,0,0,.35);border-bottom:1px solid var(--border);white-space:nowrap}
 .sb-table th:first-child{text-align:left}
 .sb-table td{padding:9px 10px;text-align:right;border-bottom:1px solid var(--border);font-size:13px}
@@ -282,6 +371,10 @@ nav{background:var(--surface);border-bottom:2px solid var(--border);display:flex
 .t-div td{color:var(--t);border-top:2px solid rgba(240,168,66,.2)}
 .kda-cell{font-family:'Rajdhani',sans-serif;font-weight:600;font-size:14px}
 .adr-highlight{color:var(--orange)}
+.rating-hi{color:#a78bfa;font-family:'Rajdhani',sans-serif;font-weight:700}
+.rating-md{color:var(--text);font-family:'Rajdhani',sans-serif;font-weight:600}
+.rating-lo{color:var(--loss);font-family:'Rajdhani',sans-serif;font-weight:600}
+.kast-val{color:var(--muted2);font-size:12px}
 
 /* MATCHES LIST */
 .matches-list .match-item{display:flex;align-items:center;gap:14px;padding:12px 16px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .13s}
@@ -433,8 +526,12 @@ async function loadMatch(id) {
   if(d.error){document.getElementById('p-match').innerHTML=`<div class="empty">${d.error}</div>`;return}
   const meta=d.meta||{}, maps=d.maps||[], players=d.players||[];
 
-  // Find MVP = highest kills overall
-  const mvp = players.reduce((best,p)=>(!best||parseInt(p.kills||0)>parseInt(best.kills||0)?p:best),null);
+  // Find MVP = highest rating (from fshost) or fallback to kills
+  const mvp = players.reduce((best,p)=>{
+    const score = p.rating != null ? parseFloat(p.rating) : parseInt(p.kills||0)/100;
+    const bestScore = best ? (best.rating != null ? parseFloat(best.rating) : parseInt(best.kills||0)/100) : -1;
+    return score > bestScore ? p : best;
+  }, null);
 
   // Awards
   const byKills=[...players].sort((a,b)=>parseInt(b.kills||0)-parseInt(a.kills||0));
@@ -447,19 +544,27 @@ async function loadMatch(id) {
         <div class="mvp-name">${esc(mvp.name)}</div>
         <div class="mvp-stats">
           <div class="mvp-stat"><div class="mvp-val">${mvp.kills||0} / ${mvp.deaths||0} / ${mvp.assists||0}</div><div class="mvp-lbl">K / D / A</div></div>
-          <div class="mvp-stat"><div class="mvp-val">${mvp.adr||'—'}</div><div class="mvp-lbl">ADR</div></div>
-          <div class="mvp-stat"><div class="mvp-val">${mvp.hs_pct||0}%</div><div class="mvp-lbl">HS%</div></div>
+          <div class="mvp-stat"><div class="mvp-val">${mvp.adr!=null?parseFloat(mvp.adr).toFixed(1):'—'}</div><div class="mvp-lbl">ADR</div></div>
+          <div class="mvp-stat"><div class="mvp-val">${mvp.hs_pct!=null?parseFloat(mvp.hs_pct).toFixed(1)+'%':'—'}</div><div class="mvp-lbl">HS%</div></div>
           <div class="mvp-stat"><div class="mvp-val" style="color:var(--${kdf(mvp.kills&&mvp.deaths?(mvp.kills/mvp.deaths).toFixed(2):'0')})">${mvp.kills&&mvp.deaths?(mvp.kills/mvp.deaths).toFixed(2):'—'}</div><div class="mvp-lbl">K/D</div></div>
+          ${mvp.rating!=null?`<div class="mvp-stat"><div class="mvp-val ${ratingCls(mvp.rating)}">${parseFloat(mvp.rating).toFixed(2)}</div><div class="mvp-lbl">Rating</div></div>`:''}
+          ${mvp.kast!=null?`<div class="mvp-stat"><div class="mvp-val" style="color:var(--text)">${parseFloat(mvp.kast).toFixed(1)}%</div><div class="mvp-lbl">KAST</div></div>`:''}
         </div>
       </div>
     </div>` : '';
 
+  const byRating=[...players].filter(p=>p.rating!=null).sort((a,b)=>parseFloat(b.rating)-parseFloat(a.rating));
+
   const awardsHtml = `<div class="awards-grid">
     ${byKills[0]?`<div class="award-card"><div class="award-avatar">${initials(byKills[0].name)}</div><div><div class="award-name">${esc(byKills[0].name)}</div><div style="font-size:10px;color:var(--muted2)">Most Kills</div></div><div style="margin-left:auto;text-align:right"><div class="award-val">${byKills[0].kills}</div></div></div>`:''}
     ${byDmg[0]?`<div class="award-card"><div class="award-avatar">${initials(byDmg[0].name)}</div><div><div class="award-name">${esc(byDmg[0].name)}</div><div style="font-size:10px;color:var(--muted2)">Most Damage</div></div><div style="margin-left:auto;text-align:right"><div class="award-val">${num(byDmg[0].damage)}</div></div></div>`:''}
+    ${byRating[0]?`<div class="award-card"><div class="award-avatar">${initials(byRating[0].name)}</div><div><div class="award-name">${esc(byRating[0].name)}</div><div style="font-size:10px;color:var(--muted2)">Best Rating</div></div><div style="margin-left:auto;text-align:right"><div class="award-val rating-hi">${parseFloat(byRating[0].rating).toFixed(2)}</div></div></div>`:''}
   </div>`;
 
   // Scoreboard per map
+  const hasExtra = players.some(p => p.rating != null || p.kast != null);
+  const extraHeaders = hasExtra ? '<th>Rating</th><th>KAST</th><th title="Opening Kills / Opening Deaths">OK/OD</th>' : '';
+  const colCount = hasExtra ? 13 : 10;
   const mapsHtml = maps.map(m=>{
     const mp = players.filter(p=>p.mapnumber===m.mapnumber);
     // More flexible team filtering - handle CT, ct, Counter-Terrorist, COUNTER-TERRORIST, 2, etc.
@@ -482,12 +587,13 @@ async function loadMatch(id) {
             <thead><tr>
               <th>Player</th><th>K</th><th>D</th><th>A</th>
               <th>K/D</th><th>ADR</th><th>HS%</th><th>Dmg</th><th>5K</th><th>Clutch</th>
+              ${extraHeaders}
             </tr></thead>
             <tbody>
-              <tr class="team-divider ct-div"><td colspan="10">Counter-Terrorists</td></tr>
-              ${sbRows(ct)}
-              <tr class="team-divider t-div"><td colspan="10">Terrorists</td></tr>
-              ${sbRows(t)}
+              <tr class="team-divider ct-div"><td colspan="${colCount}">Counter-Terrorists</td></tr>
+              ${sbRows(ct, hasExtra)}
+              <tr class="team-divider t-div"><td colspan="${colCount}">Terrorists</td></tr>
+              ${sbRows(t, hasExtra)}
             </tbody>
           </table>
         </div>
@@ -525,21 +631,34 @@ async function loadMatch(id) {
     ${mapsHtml}`;
 }
 
-function sbRows(arr) {
-  if(!arr.length) return '<tr><td colspan="10" style="text-align:center;color:var(--muted);padding:12px">—</td></tr>';
-  return [...arr].sort((a,b)=>parseInt(b.kills||0)-parseInt(a.kills||0)).map(p=>{
+function ratingCls(r) {
+  const v = parseFloat(r);
+  if (isNaN(v)) return 'rating-md';
+  return v >= 1.15 ? 'rating-hi' : v >= 0.85 ? 'rating-md' : 'rating-lo';
+}
+
+function sbRows(arr, hasExtra) {
+  if(!arr.length) return `<tr><td colspan="${hasExtra?13:10}" style="text-align:center;color:var(--muted);padding:12px">—</td></tr>`;
+  return [...arr].sort((a,b)=>parseFloat(b.rating||b.kills||0)-parseFloat(a.rating||a.kills||0)).map(p=>{
     const kd = p.deaths>0?(p.kills/p.deaths).toFixed(2):parseFloat(p.kills||0).toFixed(2);
+    const ratingVal = p.rating != null ? parseFloat(p.rating).toFixed(2) : '—';
+    const kastVal   = p.kast   != null ? parseFloat(p.kast).toFixed(1)+'%' : '—';
+    const extraCols = hasExtra ? `
+      <td class="${ratingCls(p.rating)}">${ratingVal}</td>
+      <td class="kast-val">${kastVal}</td>
+      <td style="font-size:11px;color:var(--muted2)">${p.opening_kills??'—'} / ${p.opening_deaths??'—'}</td>` : '';
     return `<tr>
       <td onclick="go('player',{name:'${esc(p.name)}'},'match')">${esc(p.name)}</td>
       <td class="kda-cell">${p.kills||0}</td>
       <td class="kda-cell">${p.deaths||0}</td>
       <td class="kda-cell">${p.assists||0}</td>
       <td class="kda-cell ${kdc(kd)}">${kd}</td>
-      <td class="adr-highlight">${p.adr||0}</td>
-      <td>${p.hs_pct||0}%</td>
+      <td class="adr-highlight">${p.adr!=null?parseFloat(p.adr).toFixed(1):'—'}</td>
+      <td>${p.hs_pct!=null?parseFloat(p.hs_pct).toFixed(1)+'%':'—'}</td>
       <td>${num(p.damage)}</td>
-      <td>${p.enemies5k||0}</td>
-      <td>${p.v1_wins||0}</td>
+      <td>${p.enemies5k||p['5k']||0}</td>
+      <td>${p.v1_wins||(p.clutch_1v1||'').split('/')[0]||0}</td>
+      ${extraCols}
     </tr>`;
   }).join('');
 }
@@ -615,6 +734,7 @@ async def start_http_server():
     app.router.add_get('/api/matches',       handle_api_matches)
     app.router.add_get('/api/match/{matchid}', handle_api_match)
     app.router.add_get('/api/demos',          handle_api_demos)
+    app.router.add_get('/api/fshost-match/{matchid}', handle_api_fshost_match)
     app.router.add_get('/stats',             handle_stats_page)
     app.router.add_get('/',                  handle_stats_page)
     app.router.add_get('/health',            handle_health_check)
