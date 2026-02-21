@@ -114,7 +114,7 @@ async def handle_api_matches(request):
         if not rows:
             return _json_response([])
 
-        # ── fshost: attach demo URL to each match by matchid ──────────────────
+        # ── fshost: enrich each row with JSON data (scores, demo) ───────────────
         loop = asyncio.get_running_loop()
         matchid_map = await loop.run_in_executor(None, build_matchid_to_demo_map)
 
@@ -122,8 +122,32 @@ async def handle_api_matches(request):
         for row in rows:
             mid   = str(row.get('matchid', ''))
             entry = matchid_map.get(mid, {})
+            meta  = entry.get('metadata') or {}
+            t1    = meta.get('team1', {})
+            t2    = meta.get('team2', {})
+
+            # Use fshost round scores if available, fall back to DB map scores
+            if t1.get('score') is not None:
+                row['team1_score'] = t1.get('score', 0)
+                row['team2_score'] = t2.get('score', 0)
+            else:
+                row['team1_score'] = row.get('map_team1_score') or row.get('team1_score') or 0
+                row['team2_score'] = row.get('map_team2_score') or row.get('team2_score') or 0
+
+            # Use fshost team names if DB has generic ones (CT/T)
+            if t1.get('name') and 'COUNTER' not in str(row.get('team1_name','')).upper():
+                pass  # DB name is fine
+            elif t1.get('name'):
+                row['team1_name'] = t1['name']
+                row['team2_name'] = t2.get('name', row.get('team2_name', 'Team 2'))
+
+            # Winner from fshost (more reliable)
+            if meta.get('winner'):
+                row['winner'] = meta['winner']
+
             row['demo_url']  = entry.get('download_url', '')
             row['demo_size'] = entry.get('size_formatted', '')
+            row['mapname']   = meta.get('map') or row.get('mapname') or '?'
             results.append(row)
 
         return _json_response(results)
@@ -218,29 +242,14 @@ def _players_from_fshost(data: dict, matchid: str) -> list:
 
 
 def _fetch_fshost_match_json(matchid: str) -> dict | None:
-    """Fetch the fshost .json stats file for a given match ID."""
+    """Return the fshost JSON for a given match ID, using the cache built by build_matchid_to_demo_map."""
     try:
         matchid_map = build_matchid_to_demo_map()
         entry = matchid_map.get(str(matchid))
         if not entry:
             return None
-        cached = entry.get('metadata')
-        if cached and cached.get('team1'):
-            return cached
-        dem_name = entry.get('name', '')
-        if not dem_name.endswith('.dem'):
-            return None
-        json_name = dem_name.replace('.dem', '.json')
-        all_files = fetch_all_demos_raw()
-        json_url  = next((f.get('download_url') for f in all_files if f.get('name') == json_name), None)
-        if not json_url:
-            return None
-        headers = {'User-Agent': 'Mozilla/5.0', 'Referer': 'https://fshost.me/'}
-        r = requests.get(json_url, headers=headers, timeout=10)
-        r.raise_for_status()
-        result = r.json()
-        entry['metadata'] = result
-        return result
+        # metadata is always stored now
+        return entry.get('metadata')
     except Exception as e:
         print(f"[fshost JSON] Error fetching match {matchid}: {e}")
         return None
@@ -1111,107 +1120,75 @@ _CACHE_TTL_SECONDS = 300  # 5 minutes
 
 def build_matchid_to_demo_map(force_refresh=False):
     """
-    Build a mapping of matchid -> demo file by parsing .json metadata files.
-    Uses caching to avoid repeated downloads of .json files.
-    
-    How it works:
-    1. Fetches all files from fshost (both .dem and .json)
-    2. For each .json file:
-       - Downloads it
-       - Parses the JSON to extract matchid
-       - Maps matchid to the corresponding .dem file
-    3. Returns dict: {matchid: {"name": demo_name, "download_url": url}}
-    
-    Example .json structure:
-    {
-      "matchid": "11",
-      "team1_name": "Counter-Terrorists",
-      "team2_name": "Team Nakai",
-      "mapname": "de_mirage",
-      ...
+    Build a mapping of matchid -> match data from ALL fshost .json files.
+    Every .json is indexed by its match_id field — no .dem required.
+    Demo info (download_url, size) is attached if a matching .dem exists.
+
+    Returns dict: {
+      "26": {
+        "metadata":      {...full fshost JSON...},
+        "name":          "2026-02-21_21-18-57_26_de_mirage_...dem"  (or ""),
+        "download_url":  "https://..."  (or ""),
+        "size_formatted":"286.37MB"     (or ""),
+      }
     }
-    
-    Returns dict: {"11": {"name": "2024-02-20_18-23-00_match11.dem", "download_url": "..."}}
     """
     global _MATCHID_DEMO_CACHE, _MATCHID_CACHE_TIME
-    
-    # Check cache
+
     if not force_refresh and _MATCHID_DEMO_CACHE is not None and _MATCHID_CACHE_TIME is not None:
-        age = (datetime.now() - _MATCHID_CACHE_TIME).total_seconds()
-        if age < _CACHE_TTL_SECONDS:
+        if (datetime.now() - _MATCHID_CACHE_TIME).total_seconds() < _CACHE_TTL_SECONDS:
             return _MATCHID_DEMO_CACHE
-    
-    print("[Demo Map] Building matchid → demo mapping from .json files...")
+
+    print("[Demo Map] Building matchid map from all fshost .json files...")
     all_files = fetch_all_demos_raw()
+
+    # Index .dem files by base name for quick lookup
+    dem_by_base = {}
+    for f in all_files:
+        n = f.get("name", "")
+        if n.endswith(".dem"):
+            dem_by_base[n[:-4]] = f  # strip .dem
+
     matchid_map = {}
-    json_files_processed = 0
-    json_files_with_matchid = 0
-    
-    # First pass: Parse all .json files to get match IDs
-    json_to_dem = {}  # maps json filename to demo info
+    headers = {'User-Agent': 'Mozilla/5.0', 'Referer': 'https://fshost.me/'}
+
     for file_obj in all_files:
         name = file_obj.get("name", "")
         if not name.endswith(".json"):
             continue
-            
-        json_files_processed += 1
-        download_url = file_obj.get("download_url", "")
-        if not download_url:
+        url = file_obj.get("download_url", "")
+        if not url:
             continue
-        
         try:
-            headers = {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-                'Referer': 'https://fshost.me/'
-            }
-            resp = requests.get(download_url, headers=headers, timeout=10)
+            resp = requests.get(url, headers=headers, timeout=10)
             resp.raise_for_status()
             metadata = resp.json()
-            
-            # Extract match ID from the JSON metadata (try different field names)
-            matchid = metadata.get("matchid") or metadata.get("match_id") or metadata.get("id")
-            if matchid:
-                # The corresponding .dem file should have the same base name
-                base_name = name.replace(".json", "")
-                dem_name = f"{base_name}.dem"
-                json_to_dem[name] = {
-                    "matchid": str(matchid),
-                    "dem_name": dem_name,
-                    "metadata": metadata  # Store full metadata for debugging
-                }
-                json_files_with_matchid += 1
-                print(f"[Demo Map] ✓ {name} → Match ID: {matchid}")
         except Exception as e:
-            print(f"[Demo Map] ✗ Error parsing {name}: {e}")
+            print(f"[Demo Map] ✗ {name}: {e}")
             continue
-    
-    # Second pass: Find the actual .dem files and map them by match ID
-    for file_obj in all_files:
-        name = file_obj.get("name", "")
-        if not name.endswith(".dem"):
+
+        matchid = str(metadata.get("match_id") or metadata.get("matchid") or metadata.get("id") or "")
+        if not matchid:
+            print(f"[Demo Map] ✗ {name}: no match_id field")
             continue
-            
-        # Check if we have metadata for this demo
-        json_name = name.replace(".dem", ".json")
-        if json_name in json_to_dem:
-            info = json_to_dem[json_name]
-            matchid = info["matchid"]
-            matchid_map[matchid] = {
-                "name": name,
-                "download_url": file_obj.get("download_url", "#"),
-                "size_formatted": file_obj.get("size_formatted", ""),
-                "modified_at": file_obj.get("modified_at", ""),
-                "metadata": info.get("metadata", {})
-            }
-    
-    print(f"[Demo Map] Processed {json_files_processed} .json files")
-    print(f"[Demo Map] Found {json_files_with_matchid} with match IDs")
-    print(f"[Demo Map] Mapped {len(matchid_map)} match IDs to demos")
-    
-    # Update cache
+
+        # Find matching .dem (same base name)
+        base = name[:-5]  # strip .json
+        dem_entry = dem_by_base.get(base, {})
+
+        matchid_map[matchid] = {
+            "metadata":      metadata,
+            "name":          dem_entry.get("name", ""),
+            "download_url":  dem_entry.get("download_url", ""),
+            "size_formatted":dem_entry.get("size_formatted", ""),
+            "modified_at":   dem_entry.get("modified_at", ""),
+        }
+        print(f"[Demo Map] ✓ match {matchid} ← {name}" + (f" + {dem_entry.get('name')}" if dem_entry else " (no demo)"))
+
+    print(f"[Demo Map] Total: {len(matchid_map)} matches indexed from {sum(1 for f in all_files if f.get('name','').endswith('.json'))} JSONs")
+
     _MATCHID_DEMO_CACHE = matchid_map
     _MATCHID_CACHE_TIME = datetime.now()
-    
     return matchid_map
 
 def fetch_all_demos_raw():
