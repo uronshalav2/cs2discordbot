@@ -88,192 +88,111 @@ async def handle_api_player(request):
         return _json_response({"error": str(e)})
 
 async def handle_api_matches(request):
-    """GET /api/matches — recent matches. Uses DB if available, falls back to fshost JSONs."""
+    """GET /api/matches - pure fshost JSON source."""
     try:
         limit = int(request.rel_url.query.get('limit', 30))
-        db_matches = []
-        try:
-            conn = get_db()
-            c = conn.cursor(dictionary=True)
-            c.execute(f"""
-                SELECT mm.matchid, mm.team1_name, mm.team2_name,
-                    mm.team1_score, mm.team2_score, mm.winner,
-                    mm.start_time, mm.end_time,
-                    m.mapname, m.mapnumber
-                FROM {MATCHZY_TABLES['matches']} mm
-                LEFT JOIN {MATCHZY_TABLES['maps']} m ON mm.matchid=m.matchid
-                WHERE mm.end_time IS NOT NULL
-                ORDER BY mm.end_time DESC
-                LIMIT %s
-            """, (limit,))
-            db_matches = c.fetchall()
-            c.close(); conn.close()
-        except Exception as e:
-            print(f"[api/matches] DB error: {e}")
-
-        if db_matches:
-            return _json_response(db_matches)
-
-        # ── Fallback: build match list entirely from fshost JSONs ──────────────
-        matchid_map = build_matchid_to_demo_map()
-        fshost_matches = []
+        loop  = asyncio.get_running_loop()
+        matchid_map = await loop.run_in_executor(None, build_matchid_to_demo_map)
+        results = []
         for mid, entry in matchid_map.items():
-            data = entry.get('metadata') or _fetch_fshost_match_json(mid)
+            data = entry.get('metadata') or await loop.run_in_executor(None, _fetch_fshost_match_json, mid)
             if not data:
                 continue
             t1 = data.get('team1', {})
             t2 = data.get('team2', {})
-            fshost_matches.append({
-                'matchid':     data.get('match_id') or mid,
-                'team1_name':  t1.get('name', 'Team 1'),
-                'team2_name':  t2.get('name', 'Team 2'),
-                'team1_score': t1.get('score', 0),
-                'team2_score': t2.get('score', 0),
-                'winner':      data.get('winner', ''),
-                'end_time':    data.get('date'),
-                'start_time':  data.get('date'),
-                'mapname':     data.get('map', '?'),
-                'mapnumber':   1,
+            results.append({
+                'matchid':      data.get('match_id') or mid,
+                'team1_name':   t1.get('name', 'Team 1'),
+                'team2_name':   t2.get('name', 'Team 2'),
+                'team1_score':  t1.get('score', 0),
+                'team2_score':  t2.get('score', 0),
+                'winner':       data.get('winner', ''),
+                'end_time':     data.get('date'),
+                'start_time':   data.get('date'),
+                'mapname':      data.get('map', '?'),
+                'mapnumber':    1,
+                'total_rounds': data.get('total_rounds'),
+                'demo_url':     entry.get('download_url', ''),
+                'demo_size':    entry.get('size_formatted', ''),
             })
-        # Sort newest first by date string (ISO format sorts lexicographically)
-        fshost_matches.sort(key=lambda x: x.get('end_time') or '', reverse=True)
-        return _json_response(fshost_matches[:limit])
+        results.sort(key=lambda x: x.get('end_time') or '', reverse=True)
+        return _json_response(results[:limit])
     except Exception as e:
         return _json_response({"error": str(e)})
+
 
 async def handle_api_match(request):
-    """GET /api/match/{matchid} — scoreboard, merging DB + fshost JSON"""
+    """GET /api/match/{matchid} - pure fshost JSON source."""
     matchid = request.match_info.get('matchid', '')
     try:
-        # ── 1. Try DB first ────────────────────────────────────────────────────
-        meta, maps, db_players = None, [], []
-        try:
-            conn = get_db()
-            c = conn.cursor(dictionary=True)
-            c.execute(f"SELECT * FROM {MATCHZY_TABLES['matches']} WHERE matchid=%s", (matchid,))
-            meta = c.fetchone()
-            c.execute(f"SELECT * FROM {MATCHZY_TABLES['maps']} WHERE matchid=%s ORDER BY mapnumber", (matchid,))
-            maps = c.fetchall()
-            c.execute(f"""
-                SELECT p.*,
-                    ROUND(p.head_shot_kills/NULLIF(p.kills,0)*100,1) AS hs_pct,
-                    ROUND(p.damage/30,1) AS adr
-                FROM {MATCHZY_TABLES['players']} p
-                WHERE p.matchid=%s
-                ORDER BY p.mapnumber, p.team, p.kills DESC
-            """, (matchid,))
-            db_players = c.fetchall()
-            c.close(); conn.close()
-        except Exception as e:
-            print(f"[api/match] DB error: {e}")
-
-        # ── 2. Always try to fetch fshost JSON for extra stats ─────────────────
-        fshost = _fetch_fshost_match_json(matchid)
-
-        # ── 3. If DB had no players, build everything from fshost JSON ─────────
-        if not db_players and fshost:
-            players = _players_from_fshost(fshost, matchid)
-
-            # Build meta from fshost if DB had nothing
-            if not meta:
-                t1 = fshost.get('team1', {})
-                t2 = fshost.get('team2', {})
-                meta = {
-                    'matchid':    fshost.get('match_id') or matchid,
-                    'team1_name': t1.get('name', 'Team 1'),
-                    'team2_name': t2.get('name', 'Team 2'),
-                    'team1_score': t1.get('score', 0),
-                    'team2_score': t2.get('score', 0),
-                    'winner':     fshost.get('winner', ''),
-                    'start_time': fshost.get('date'),
-                    'end_time':   fshost.get('date'),
-                }
-
-            # Build maps list from fshost if DB had nothing
-            if not maps:
-                t1 = fshost.get('team1', {})
-                t2 = fshost.get('team2', {})
-                maps = [{
-                    'matchid':    matchid,
-                    'mapnumber':  1,
-                    'mapname':    fshost.get('map', 'unknown'),
-                    'team1_score': t1.get('score', 0),
-                    'team2_score': t2.get('score', 0),
-                    'winner':     fshost.get('winner', ''),
-                }]
-        else:
-            # DB had players — merge fshost extras on top
-            players = db_players
-            if fshost:
-                fshost_by_sid  = {}
-                fshost_by_name = {}
-                for tk in ('team1', 'team2'):
-                    for fp in (fshost.get(tk) or {}).get('players', []):
-                        sid = str(fp.get('steam_id', ''))
-                        if sid:
-                            fshost_by_sid[sid] = fp
-                        fshost_by_name[str(fp.get('name', '')).lower()] = fp
-                for p in players:
-                    sid = str(p.get('steamid64', ''))
-                    fp  = fshost_by_sid.get(sid) or fshost_by_name.get(str(p.get('name', '')).lower())
-                    if fp:
-                        p['rating']         = fp.get('rating')
-                        p['kast']           = fp.get('kast')
-                        p['adr']            = fp.get('adr') or p.get('adr')
-                        p['hs_pct']         = fp.get('hs_percent') or p.get('hs_pct')
-                        p['multi_kills']    = fp.get('multi_kills')
-                        p['opening_kills']  = fp.get('opening_kills')
-                        p['opening_deaths'] = fp.get('opening_deaths')
-                        p['trade_kills']    = fp.get('trade_kills')
-                        p['clutch_1v1']     = fp.get('1v1', '0/0')
-                        p['clutch_1v2']     = fp.get('1v2', '0/0')
-                        p['flash_assists']  = fp.get('flash_assists')
-                        p['utility_damage'] = fp.get('utility_damage')
-
-        return _json_response({"meta": meta, "maps": maps, "players": players, "fshost": bool(fshost)})
+        loop = asyncio.get_running_loop()
+        data = await loop.run_in_executor(None, _fetch_fshost_match_json, matchid)
+        if not data:
+            return _json_response({"error": f"No fshost data found for match {matchid}"})
+        t1 = data.get('team1', {})
+        t2 = data.get('team2', {})
+        meta = {
+            'matchid':     data.get('match_id') or matchid,
+            'team1_name':  t1.get('name', 'Team 1'),
+            'team2_name':  t2.get('name', 'Team 2'),
+            'team1_score': t1.get('score', 0),
+            'team2_score': t2.get('score', 0),
+            'winner':      data.get('winner', ''),
+            'end_time':    data.get('date'),
+            'start_time':  data.get('date'),
+        }
+        maps = [{
+            'matchid':      matchid,
+            'mapnumber':    1,
+            'mapname':      data.get('map', 'unknown'),
+            'team1_score':  t1.get('score', 0),
+            'team2_score':  t2.get('score', 0),
+            'winner':       data.get('winner', ''),
+            'total_rounds': data.get('total_rounds'),
+        }]
+        players = _players_from_fshost(data, matchid)
+        matchid_map = build_matchid_to_demo_map()
+        entry = matchid_map.get(str(matchid), {})
+        demo  = {'name': entry.get('name',''), 'url': entry.get('download_url',''), 'size': entry.get('size_formatted','')}
+        return _json_response({"meta": meta, "maps": maps, "players": players, "demo": demo})
     except Exception as e:
         return _json_response({"error": str(e)})
 
 
-def _players_from_fshost(fshost: dict, matchid: str) -> list:
-    """
-    Flatten fshost JSON team1/team2 players into a unified list
-    with normalised field names matching the DB schema.
-    team field is set to 'team1' or 'team2' so the JS can split by team.
-    """
+def _players_from_fshost(data: dict, matchid: str) -> list:
+    """Flatten fshost team1/team2 players into a unified list."""
     players = []
     for team_key in ('team1', 'team2'):
-        team_data = fshost.get(team_key, {})
+        team_data = data.get(team_key, {})
         team_name = team_data.get('name', team_key)
         for fp in team_data.get('players', []):
-            # parse clutch strings like "1/2" → wins/attempts
-            def clutch_wins(s):
+            kills    = int(fp.get('kills', 0) or 0)
+            deaths   = int(fp.get('deaths', 0) or 0)
+            hs_kills = int(fp.get('headshot_kills', 0) or 0)
+            hs_pct   = fp.get('hs_percent')
+            if hs_pct is None:
+                hs_pct = round(hs_kills / kills * 100, 1) if kills else 0
+            def cw(s):
                 try: return int(str(s).split('/')[0])
                 except: return 0
-
-            hs_pct = fp.get('hs_percent')
-            if hs_pct is None and fp.get('kills'):
-                hs_pct = round(fp.get('headshot_kills', 0) / fp['kills'] * 100, 1)
-
             players.append({
                 'matchid':        matchid,
                 'mapnumber':      1,
                 'steamid64':      str(fp.get('steam_id', '0')),
                 'name':           fp.get('name', '?'),
-                'team':           team_key,          # 'team1' or 'team2'
+                'team':           team_key,
                 'team_name':      team_name,
-                'kills':          fp.get('kills', 0),
-                'deaths':         fp.get('deaths', 0),
-                'assists':        fp.get('assists', 0),
-                'damage':         fp.get('damage', 0),
-                'head_shot_kills':fp.get('headshot_kills', 0),
+                'kills':          kills,
+                'deaths':         deaths,
+                'assists':        int(fp.get('assists', 0) or 0),
+                'damage':         int(fp.get('damage', 0) or 0),
+                'head_shot_kills':hs_kills,
                 'hs_pct':         hs_pct,
                 'adr':            fp.get('adr'),
-                'enemies5k':      fp.get('5k', 0),
-                'enemies4k':      fp.get('4k', 0),
-                'v1_wins':        clutch_wins(fp.get('1v1', 0)),
-                'v2_wins':        clutch_wins(fp.get('1v2', 0)),
-                # Extra fshost-only fields
+                'enemies5k':      int(fp.get('5k', 0) or 0),
+                'enemies4k':      int(fp.get('4k', 0) or 0),
+                'v1_wins':        cw(fp.get('1v1', 0)),
+                'v2_wins':        cw(fp.get('1v2', 0)),
                 'rating':         fp.get('rating'),
                 'kast':           fp.get('kast'),
                 'multi_kills':    fp.get('multi_kills'),
@@ -288,16 +207,6 @@ def _players_from_fshost(fshost: dict, matchid: str) -> list:
     return players
 
 
-async def handle_api_fshost_match(request):
-    """GET /api/fshost-match/{matchid} — raw fshost JSON for a match"""
-    matchid = request.match_info.get('matchid', '')
-    loop = asyncio.get_running_loop()
-    data = await loop.run_in_executor(None, _fetch_fshost_match_json, matchid)
-    if data is None:
-        return _json_response({"error": "fshost JSON not found for this match ID"})
-    return _json_response(data)
-
-
 def _fetch_fshost_match_json(matchid: str) -> dict | None:
     """Fetch the fshost .json stats file for a given match ID."""
     try:
@@ -305,28 +214,25 @@ def _fetch_fshost_match_json(matchid: str) -> dict | None:
         entry = matchid_map.get(str(matchid))
         if not entry:
             return None
-        # Check if metadata was already cached
-        cached_meta = entry.get('metadata')
-        if cached_meta and cached_meta.get('team1'):
-            return cached_meta
-        # Otherwise find the .json file and fetch it
+        cached = entry.get('metadata')
+        if cached and cached.get('team1'):
+            return cached
         dem_name = entry.get('name', '')
         if not dem_name.endswith('.dem'):
             return None
         json_name = dem_name.replace('.dem', '.json')
         all_files = fetch_all_demos_raw()
-        json_url = next((f.get('download_url') for f in all_files if f.get('name') == json_name), None)
+        json_url  = next((f.get('download_url') for f in all_files if f.get('name') == json_name), None)
         if not json_url:
             return None
-        headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-            'Referer': 'https://fshost.me/'
-        }
+        headers = {'User-Agent': 'Mozilla/5.0', 'Referer': 'https://fshost.me/'}
         r = requests.get(json_url, headers=headers, timeout=10)
         r.raise_for_status()
-        return r.json()
+        result = r.json()
+        entry['metadata'] = result
+        return result
     except Exception as e:
-        print(f"[fshost JSON] Error fetching for match {matchid}: {e}")
+        print(f"[fshost JSON] Error fetching match {matchid}: {e}")
         return None
 
 
@@ -590,13 +496,19 @@ function demoBtn(demo, small=false) {
 // ── Matches ───────────────────────────────────────────────────────────────────
 async function loadMatches() {
   spin('p-matches');
-  const [data, ] = await Promise.all([
-    fetch('/api/matches?limit=30').then(r=>r.json()).catch(()=>[]),
-    getDemos()
-  ]);
-  if(!data.length){document.getElementById('p-matches').innerHTML='<div class="empty">No completed matches yet.</div>';return}
+  const data = await fetch('/api/matches?limit=30').then(r=>r.json()).catch(()=>[]);
+  if(!Array.isArray(data)||!data.length){
+    document.getElementById('p-matches').innerHTML='<div class="empty">No completed matches yet.</div>';return;
+  }
   const items = data.map(m=>{
-    const demo = findDemo(m.end_time);
+    // Demo comes directly in match data from fshost
+    const demoHtml = m.demo_url
+      ? `<a href="${m.demo_url}" target="_blank" onclick="event.stopPropagation()"
+           style="display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border:1px solid rgba(255,85,0,.5);border-radius:2px;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--orange);background:var(--orange-glow);text-decoration:none;white-space:nowrap">
+           📥 Demo${m.demo_size?' ('+m.demo_size+')':''}</a>`
+      : '';
+    // Clean winner name (remove "team_" prefix for display)
+    const winnerClean = (m.winner||'').replace(/^team_/i,'');
     return `
     <div class="match-item" onclick="go('match',{id:'${m.matchid}'},'matches')">
       <div class="m-id">#${m.matchid}</div>
@@ -605,8 +517,8 @@ async function loadMatches() {
         <div class="m-score">${m.team1_score??0} : ${m.team2_score??0}</div>
       </div>
       <div class="m-map">${esc(m.mapname||'—')}</div>
-      ${m.winner?`<div class="m-winner">W: ${esc(m.winner)}</div>`:''}
-      ${demoBtn(demo, true)}
+      ${winnerClean?`<div class="m-winner">W: ${esc(winnerClean)}</div>`:''}
+      ${demoHtml}
       <div class="m-date">${fmtDate(m.end_time)}</div>
     </div>`;
   }).join('');
@@ -618,52 +530,29 @@ async function loadMatches() {
 // ── Match Detail ──────────────────────────────────────────────────────────────
 async function loadMatch(id) {
   spin('p-match');
-  const [d, ] = await Promise.all([
-    fetch('/api/match/'+id).then(r=>r.json()).catch(()=>({error:'fetch failed'})),
-    getDemos()
-  ]);
+  const d = await fetch('/api/match/'+id).then(r=>r.json()).catch(()=>({error:'fetch failed'}));
   if(d.error){document.getElementById('p-match').innerHTML=`<div class="empty">${d.error}</div>`;return}
-  const meta=d.meta||{}, maps=d.maps||[], players=d.players||[];
 
-  // ── Determine team split strategy ──────────────────────────────────────────
-  // DB data uses p.team = 'CT' or 'T'
-  // fshost data uses p.team = 'team1' or 'team2'
-  const hasCTT = players.some(p => {
-    const t = String(p.team||'').toUpperCase();
-    return t==='CT'||t==='T'||t==='COUNTER-TERRORIST'||t==='TERRORIST';
-  });
-  const hasTeam12 = players.some(p => {
-    const t = String(p.team||'').toLowerCase();
-    return t==='team1'||t==='team2';
-  });
+  const meta=d.meta||{}, maps=d.maps||[], players=d.players||[], demo=d.demo||{};
 
-  function splitTeams(mapPlayers) {
-    if (hasCTT) {
-      const ct = mapPlayers.filter(p=>{ const t=String(p.team||'').toUpperCase(); return t==='CT'||t==='COUNTER-TERRORIST'||t==='COUNTER_TERRORIST'||t==='2'; });
-      const t  = mapPlayers.filter(p=>{ const t2=String(p.team||'').toUpperCase(); return t2==='T'||t2==='TERRORIST'||t2==='TERRORISTS'||t2==='3'; });
-      return { left: ct, right: t, leftLabel: 'Counter-Terrorists', rightLabel: 'Terrorists', leftCls: 'ct-div', rightCls: 't-div' };
-    } else if (hasTeam12) {
-      const t1 = mapPlayers.filter(p=>String(p.team||'').toLowerCase()==='team1');
-      const t2 = mapPlayers.filter(p=>String(p.team||'').toLowerCase()==='team2');
-      const t1name = (t1[0]||{}).team_name || meta.team1_name || 'Team 1';
-      const t2name = (t2[0]||{}).team_name || meta.team2_name || 'Team 2';
-      return { left: t1, right: t2, leftLabel: esc(t1name), rightLabel: esc(t2name), leftCls: 'ct-div', rightCls: 't-div' };
-    } else {
-      // fallback: split 50/50
-      const half = Math.ceil(mapPlayers.length/2);
-      return { left: mapPlayers.slice(0,half), right: mapPlayers.slice(half), leftLabel: 'Team 1', rightLabel: 'Team 2', leftCls: 'ct-div', rightCls: 't-div' };
-    }
+  // ── Team split: players have team='team1' or 'team2' from fshost ──────────
+  function splitTeams(arr) {
+    const t1 = arr.filter(p=>String(p.team||'').toLowerCase()==='team1');
+    const t2 = arr.filter(p=>String(p.team||'').toLowerCase()==='team2');
+    const n1  = (t1[0]||{}).team_name || meta.team1_name || 'Team 1';
+    const n2  = (t2[0]||{}).team_name || meta.team2_name || 'Team 2';
+    return {t1, t2, n1, n2};
   }
 
-  const hasExtra = players.some(p => p.rating != null || p.kast != null);
-  const colCount = hasExtra ? 13 : 10;
-  const extraHeaders = hasExtra ? '<th>Rating</th><th>KAST</th><th title="Opening Kills / Opening Deaths">OK/OD</th>' : '';
+  const hasExtra = players.some(p=>p.rating!=null||p.kast!=null);
+  const colCount  = hasExtra ? 13 : 10;
+  const extraHdr  = hasExtra ? '<th>Rating</th><th>KAST</th><th title="Opening K/D">OK/OD</th>' : '';
 
-  // Find MVP = highest rating or kills
-  const mvp = players.reduce((best,p)=>{
-    const score = p.rating!=null ? parseFloat(p.rating)*100 : parseInt(p.kills||0);
-    const bScore = best ? (best.rating!=null ? parseFloat(best.rating)*100 : parseInt(best.kills||0)) : -1;
-    return score > bScore ? p : best;
+  // MVP = highest rating, fallback to kills
+  const mvp = players.reduce((b,p)=>{
+    const s = p.rating!=null?parseFloat(p.rating)*100:parseInt(p.kills||0);
+    const bs= b?(b.rating!=null?parseFloat(b.rating)*100:parseInt(b.kills||0)):-1;
+    return s>bs?p:b;
   }, null);
 
   const byKills  = [...players].sort((a,b)=>parseInt(b.kills||0)-parseInt(a.kills||0));
@@ -676,7 +565,7 @@ async function loadMatch(id) {
       <div class="mvp-info">
         <div class="mvp-name">${esc(mvp.name)}</div>
         <div class="mvp-stats">
-          <div class="mvp-stat"><div class="mvp-val">${mvp.kills||0} / ${mvp.deaths||0} / ${mvp.assists||0}</div><div class="mvp-lbl">K / D / A</div></div>
+          <div class="mvp-stat"><div class="mvp-val">${mvp.kills??0} / ${mvp.deaths??0} / ${mvp.assists??0}</div><div class="mvp-lbl">K / D / A</div></div>
           <div class="mvp-stat"><div class="mvp-val">${mvp.adr!=null?parseFloat(mvp.adr).toFixed(1):'—'}</div><div class="mvp-lbl">ADR</div></div>
           <div class="mvp-stat"><div class="mvp-val">${mvp.hs_pct!=null?parseFloat(mvp.hs_pct).toFixed(1)+'%':'—'}</div><div class="mvp-lbl">HS%</div></div>
           <div class="mvp-stat"><div class="mvp-val" style="color:var(--${kdf(mvp.kills&&mvp.deaths?(mvp.kills/mvp.deaths).toFixed(2):'0')})">${mvp.kills&&mvp.deaths?(mvp.kills/mvp.deaths).toFixed(2):'—'}</div><div class="mvp-lbl">K/D</div></div>
@@ -693,48 +582,56 @@ async function loadMatch(id) {
   </div>`;
 
   const mapsHtml = maps.map(m=>{
-    const mapNum = m.mapnumber ?? 1;
-    const mp = players.filter(p=>(p.mapnumber??1)===mapNum);
-    const {left, right, leftLabel, rightLabel, leftCls, rightCls} = splitTeams(mp);
+    const mapPlayers = players.filter(p=>(p.mapnumber??1)===(m.mapnumber??1));
+    const {t1, t2, n1, n2} = splitTeams(mapPlayers);
     return `
       <div style="margin-bottom:14px">
         <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
-          <div style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:15px;letter-spacing:1px;text-transform:uppercase;color:var(--white)">${esc(m.mapname||'Map '+mapNum)}</div>
-          <div style="font-size:12px;color:var(--muted2)">${m.team1_score??0} : ${m.team2_score??0}</div>
+          <div style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:15px;letter-spacing:1px;text-transform:uppercase;color:var(--white)">${esc(m.mapname||'Map')}</div>
+          <div style="font-size:14px;color:var(--white);font-family:'Rajdhani',sans-serif;font-weight:700">${m.team1_score??0} : ${m.team2_score??0}</div>
+          ${m.total_rounds?`<div style="font-size:11px;color:var(--muted2)">${m.total_rounds} rounds</div>`:''}
         </div>
         <div class="card ovx">
           <table class="sb-table">
             <thead><tr>
               <th>Player</th><th>K</th><th>D</th><th>A</th>
               <th>K/D</th><th>ADR</th><th>HS%</th><th>Dmg</th><th>5K</th><th>Clutch</th>
-              ${extraHeaders}
+              ${extraHdr}
             </tr></thead>
             <tbody>
-              <tr class="team-divider ${leftCls}"><td colspan="${colCount}">${leftLabel}</td></tr>
-              ${sbRows(left, hasExtra)}
-              <tr class="team-divider ${rightCls}"><td colspan="${colCount}">${rightLabel}</td></tr>
-              ${sbRows(right, hasExtra)}
+              <tr class="team-divider ct-div"><td colspan="${colCount}">${esc(n1)}</td></tr>
+              ${sbRows(t1, hasExtra)}
+              <tr class="team-divider t-div"><td colspan="${colCount}">${esc(n2)}</td></tr>
+              ${sbRows(t2, hasExtra)}
             </tbody>
           </table>
         </div>
       </div>`;
   }).join('');
 
-  const t1=meta.team1_name||'Team 1', t2=meta.team2_name||'Team 2';
-  const s1=meta.team1_score??0, s2=meta.team2_score??0;
-  const won = s1>s2?t1:s2>s1?t2:(meta.winner||null);
+  const t1name = meta.team1_name||'Team 1';
+  const t2name = meta.team2_name||'Team 2';
+  const s1 = meta.team1_score??0;
+  const s2 = meta.team2_score??0;
+  const won = meta.winner || (s1>s2?t1name:s2>s1?t2name:null);
+  // Demo button from fshost data directly
+  const demoBtnHtml = demo.url
+    ? `<div class="meta-chip"><a href="${demo.url}" target="_blank"
+         style="display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border:1px solid rgba(255,85,0,.5);border-radius:2px;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--orange);background:var(--orange-glow);text-decoration:none">
+         📥 Demo${demo.size?' ('+demo.size+')':''}</a></div>`
+    : '';
 
   document.getElementById('p-match').innerHTML = `
     <div class="back-btn" onclick="go(_back||'matches')">← Back</div>
     <div class="match-header-card" style="margin-bottom:12px">
       <div class="match-score-row">
         <div class="team-block">
-          <div class="team-nm" style="color:var(--ct)">${esc(t1)}</div>
+          <div class="team-nm" style="color:var(--ct)">${esc(t1name)}</div>
           <div class="team-sc" style="color:var(--ct)">${s1}</div>
         </div>
         <div class="score-mid"><div class="score-colon">:</div></div>
         <div class="team-block" style="text-align:right">
-          <div class="team-nm" style="color:var(--t);text-align:right">${esc(t2)}</div>
+          <div class="team-nm" style="color:var(--t);text-align:right">${esc(t2name)}</div>
           <div class="team-sc" style="color:var(--t)">${s2}</div>
         </div>
       </div>
@@ -742,7 +639,7 @@ async function loadMatch(id) {
         <div class="meta-chip">Match <strong>#${meta.matchid||id}</strong></div>
         ${fmtDate(meta.end_time)?`<div class="meta-chip">${fmtDate(meta.end_time)}</div>`:''}
         ${won?`<div class="meta-chip"><span class="winner-tag">Winner: ${esc(won)}</span></div>`:''}
-        ${(()=>{const demo=findDemo(meta.end_time);return demo?`<div class="meta-chip">${demoBtn(demo)}</div>`:''})()}
+        ${demoBtnHtml}
       </div>
     </div>
     ${mvpHtml}
@@ -751,23 +648,22 @@ async function loadMatch(id) {
     ${mapsHtml}`;
 }
 
-function ratingCls(r){const v=parseFloat(r);return isNaN(v)?'':v>=1.15?'style="color:#a78bfa"':v>=0.85?'':'style="color:var(--loss)"';}
-
 function sbRows(arr, hasExtra) {
   const cols = hasExtra ? 13 : 10;
-  if(!arr.length) return `<tr><td colspan="${cols}" style="text-align:center;color:var(--muted);padding:12px">—</td></tr>`;
+  if (!arr.length) return `<tr><td colspan="${cols}" style="text-align:center;color:var(--muted);padding:12px">—</td></tr>`;
   return [...arr].sort((a,b)=>{
     const sa = a.rating!=null?parseFloat(a.rating)*100:parseInt(a.kills||0);
     const sb = b.rating!=null?parseFloat(b.rating)*100:parseInt(b.kills||0);
     return sb-sa;
   }).map(p=>{
-    const kd = p.deaths>0?(p.kills/p.deaths).toFixed(2):parseFloat(p.kills||0).toFixed(2);
-    const adrVal  = p.adr!=null ? parseFloat(p.adr).toFixed(1) : '—';
-    const hsPct   = p.hs_pct!=null ? parseFloat(p.hs_pct).toFixed(1)+'%' : (p.hs_percent!=null ? parseFloat(p.hs_percent).toFixed(1)+'%' : '—');
-    const fiveK   = p.enemies5k ?? p['5k'] ?? 0;
-    const clutch  = p.v1_wins ?? (p.clutch_1v1!=null ? String(p.clutch_1v1).split('/')[0] : 0);
+    const kd     = p.deaths>0?(p.kills/p.deaths).toFixed(2):parseFloat(p.kills||0).toFixed(2);
+    const adrVal = p.adr!=null?parseFloat(p.adr).toFixed(1):'—';
+    const hsVal  = p.hs_pct!=null?parseFloat(p.hs_pct).toFixed(1)+'%':'—';
+    const fiveK  = p.enemies5k ?? p['5k'] ?? 0;
+    const clutch = p.v1_wins ?? 0;
+    const ratingStyle = p.rating!=null?(parseFloat(p.rating)>=1.15?'style="color:#a78bfa"':parseFloat(p.rating)<0.85?'style="color:var(--loss)"':''):'';
     const extraCols = hasExtra ? `
-      <td ${ratingCls(p.rating)}>${p.rating!=null?parseFloat(p.rating).toFixed(2):'—'}</td>
+      <td ${ratingStyle}>${p.rating!=null?parseFloat(p.rating).toFixed(2):'—'}</td>
       <td style="color:var(--muted2);font-size:12px">${p.kast!=null?parseFloat(p.kast).toFixed(1)+'%':'—'}</td>
       <td style="font-size:11px;color:var(--muted2)">${p.opening_kills??'—'}/${p.opening_deaths??'—'}</td>` : '';
     return `<tr>
@@ -777,71 +673,13 @@ function sbRows(arr, hasExtra) {
       <td class="kda-cell">${p.assists??0}</td>
       <td class="kda-cell ${kdc(kd)}">${kd}</td>
       <td class="adr-highlight">${adrVal}</td>
-      <td>${hsPct}</td>
+      <td>${hsVal}</td>
       <td>${num(p.damage)}</td>
       <td>${fiveK}</td>
       <td>${clutch}</td>
       ${extraCols}
     </tr>`;
   }).join('');
-}
-
-// ── Player Profile ────────────────────────────────────────────────────────────
-async function loadPlayer(name) {
-  spin('p-player');
-  const d = await fetch('/api/player/'+encodeURIComponent(name)).then(r=>r.json()).catch(()=>({error:'fetch failed'}));
-  if(d.error){document.getElementById('p-player').innerHTML=`<div class="empty">${d.error}</div>`;return}
-  const c=d.career, matches=d.recent_matches||[];
-  const kd=c.kd||'0.00';
-
-  const statsGrid = [
-    [c.kills,'Kills'],[c.deaths,'Deaths'],
-    [c.kd,'K/D Ratio',kdc(kd)],[`${c.hs_pct||0}%`,'HS%',''],
-    [c.adr,'ADR','adr-highlight'],[c.assists,'Assists'],
-    [c.matches,'Matches'],[c.aces,'Aces'],
-    [c.clutch_1v1,'1v1 Wins'],[c.entry_wins,'Entry Wins'],
-    [num(c.total_damage),'Total Dmg'],[c.headshots,'Headshots'],
-  ].map(([v,l,cls=''])=>`<div class="stat-box"><div class="stat-val ${cls}">${v??'-'}</div><div class="stat-lbl">${l}</div></div>`).join('');
-
-  const matchRows = matches.map(m=>{
-    const kd2=m.deaths>0?(m.kills/m.deaths).toFixed(2):parseFloat(m.kills||0).toFixed(2);
-    // More flexible team detection
-    const teamUpper = String(m.team||'').toUpperCase();
-    const isCT = teamUpper === 'CT' || teamUpper === 'COUNTER-TERRORIST' || teamUpper === 'COUNTER_TERRORIST' || teamUpper === '2';
-    const side = isCT ? '<span class="side-ct">CT</span>' : '<span class="side-t">T</span>';
-    return `<tr onclick="go('match',{id:'${m.matchid}'},'player')">
-      <td>${esc(m.mapname||'—')}</td>
-      <td>${side}</td>
-      <td>${m.kills||0}</td><td>${m.deaths||0}</td><td>${m.assists||0}</td>
-      <td class="${kdc(kd2)}">${kd2}</td>
-      <td>${m.hs_pct||0}%</td>
-      <td class="adr-highlight">${m.adr||0}</td>
-      <td>${(m.team1_score??0)} : ${(m.team2_score??0)}</td>
-    </tr>`;
-  }).join('');
-
-  document.getElementById('p-player').innerHTML = `
-    <div class="back-btn" onclick="go(_back||'matches')">← Back</div>
-    <div class="profile-top">
-      <div class="p-avatar">${initials(c.name)}</div>
-      <div>
-        <div class="p-name">${esc(c.name)}</div>
-        <div class="p-sub">SteamID64: ${c.steamid64||'N/A'} &nbsp;·&nbsp; ${c.matches||0} matches played</div>
-      </div>
-    </div>
-    <div class="card" style="margin-bottom:14px">
-      <div class="stats-grid">${statsGrid}</div>
-    </div>
-    <div class="page-title" style="font-size:16px;margin-bottom:8px">Match History</div>
-    <div class="card ovx">
-      <table class="ph-table">
-        <thead><tr>
-          <th>Map</th><th>Side</th><th>K</th><th>D</th><th>A</th>
-          <th>K/D</th><th>HS%</th><th>ADR</th><th>Score</th>
-        </tr></thead>
-        <tbody>${matchRows||'<tr><td colspan="9" style="text-align:center;color:var(--muted);padding:14px">No matches yet</td></tr>'}</tbody>
-      </table>
-    </div>`;
 }
 
 // Check for ?match= URL param to deep-link
@@ -857,7 +695,6 @@ async def start_http_server():
     app.router.add_get('/api/matches',       handle_api_matches)
     app.router.add_get('/api/match/{matchid}', handle_api_match)
     app.router.add_get('/api/demos',          handle_api_demos)
-    app.router.add_get('/api/fshost-match/{matchid}', handle_api_fshost_match)
     app.router.add_get('/stats',             handle_stats_page)
     app.router.add_get('/',                  handle_stats_page)
     app.router.add_get('/health',            handle_health_check)
