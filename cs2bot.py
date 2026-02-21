@@ -199,25 +199,14 @@ async def handle_api_match(request):
         }]
         players = _players_from_fshost(data, matchid)
 
-        # Build demo info: prefer demo_filename from JSON, fall back to matchid map
-        demo_filename = data.get('demo_filename', '')
-        demo_url  = ''
-        demo_size = ''
-        if demo_filename:
-            # Construct download URL from the same base URL as DEMOS_JSON_URL
-            # fshost stores demos at the same host, just reference by filename
-            matchid_map = build_matchid_to_demo_map()
-            entry = matchid_map.get(str(matchid), {})
-            # If the map has it, use that URL; otherwise construct from filename
-            if entry.get('download_url'):
-                demo_url  = entry['download_url']
-                demo_size = entry.get('size_formatted', '')
-            else:
-                # Try to derive URL from DEMOS_JSON_URL base
-                if DEMOS_JSON_URL:
-                    base = DEMOS_JSON_URL.rsplit('/', 1)[0]
-                    demo_url = f"{base}/{demo_filename}"
-        demo = {'name': demo_filename, 'url': demo_url, 'size': demo_size}
+        # Build demo info directly from the matchid cache
+        matchid_map = build_matchid_to_demo_map()
+        entry = matchid_map.get(str(matchid), {})
+        demo = {
+            'name': entry.get('name', ''),
+            'url':  entry.get('download_url', ''),
+            'size': entry.get('size_formatted', ''),
+        }
         return _json_response({"meta": meta, "maps": maps, "players": players, "demo": demo})
     except Exception as e:
         return _json_response({"error": str(e)})
@@ -1218,7 +1207,10 @@ def build_matchid_to_demo_map(force_refresh=False):
             continue
 
         # Find matching .dem (same base name)
+        # fshost names JSON files as "<base>_stats.json", so strip "_stats" too
         base = name[:-5]  # strip .json
+        if base.endswith("_stats"):
+            base = base[:-6]  # strip _stats
         dem_entry = dem_by_base.get(base, {})
 
         matchid_map[matchid] = {
