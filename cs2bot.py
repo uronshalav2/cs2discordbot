@@ -1249,15 +1249,54 @@ async def fetch_faceit_stats_cs2(nickname: str) -> dict:
 
 # ========== STEAM API HELPERS ==========
 
-def get_steam_player_info(steamid64: str) -> dict | None:
+STEAM64_BASE = 76561197960265728
+
+def to_steam64(steamid_raw: str) -> str | None:
     """
-    Fetch Steam profile info for a given SteamID64.
+    Convert whatever MatchZy stores to a proper Steam64 ID.
+    Handles:
+      - Already a Steam64:  "76561198xxxxxxxxx"  (>= 76561197960265728)
+      - Steam32 integer:    "12345678"            -> adds base
+      - STEAM_0:X:Y format: "STEAM_0:1:12345678" -> standard conversion
+    Returns None if the input is falsy or '0'.
+    """
+    if not steamid_raw or str(steamid_raw) in ("0", ""):
+        return None
+    s = str(steamid_raw).strip()
+
+    # STEAM_X:Y:Z format
+    if s.upper().startswith("STEAM_"):
+        try:
+            parts = s.split(":")
+            y = int(parts[1])
+            z = int(parts[2])
+            return str(STEAM64_BASE + z * 2 + y)
+        except Exception:
+            return None
+
+    # Pure integer
+    try:
+        n = int(s)
+        if n <= 0:
+            return None
+        if n >= STEAM64_BASE:          # already Steam64
+            return str(n)
+        return str(n + STEAM64_BASE)   # Steam32 → Steam64
+    except ValueError:
+        return None
+
+
+def get_steam_player_info(steamid_raw: str) -> dict | None:
+    """
+    Fetch Steam profile info for a given SteamID (any format).
+    Converts Steam32 / STEAM_0:X:Y to Steam64 automatically.
     Returns dict with name, avatar, profile_url, country or None on failure.
     Requires STEAM_API_KEY env var.
     """
     if not STEAM_API_KEY:
         return None
-    if not steamid64 or steamid64 == "0":
+    steamid64 = to_steam64(steamid_raw)
+    if not steamid64:
         return None
     try:
         url = (
@@ -1279,7 +1318,7 @@ def get_steam_player_info(steamid64: str) -> dict | None:
             "visibility":  p.get("communityvisibilitystate"),  # 3 = public
         }
     except Exception as e:
-        print(f"[Steam API] Error for {steamid64}: {e}")
+        print(f"[Steam API] Error for {steamid_raw}: {e}")
         return None
 
 async def get_steam_player_info_async(steamid64: str) -> dict | None:
@@ -1546,7 +1585,10 @@ async def profile_cmd(inter: discord.Interaction, player_name: str):
     if entry_wins:
         embed.add_field(name="🚪 Entry Wins", value=f"**{entry_wins}**", inline=True)
 
-    footer_text = f"SteamID64: {steamid64 or 'N/A'}"
+    steam64_converted = to_steam64(steamid64)
+    footer_text = f"Steam32: {steamid64 or 'N/A'}"
+    if steam64_converted:
+        footer_text += f" | Steam64: {steam64_converted}"
     if not steam and STEAM_API_KEY:
         footer_text += " • (Steam profile unavailable)"
     elif not STEAM_API_KEY:
