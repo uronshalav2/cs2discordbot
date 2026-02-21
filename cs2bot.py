@@ -340,17 +340,31 @@ async def handle_api_leaderboard(request):
     except Exception as e:
         return _json_response({"error": str(e)})
 
+STEAMID64_BASE = 76561197960265728
+
+def to_steamid64(raw: str) -> str:
+    """Convert SteamID32 or SteamID64 to SteamID64 string."""
+    try:
+        val = int(raw)
+        # SteamID32 values are < 2^32, SteamID64 values are much larger
+        if val < 0x100000000:
+            val += STEAMID64_BASE
+        return str(val)
+    except (ValueError, TypeError):
+        return raw
+
 async def handle_api_steam(request):
     """GET /api/steam/{steamid64} — fetch Steam profile info via Steam Web API"""
     steamid = request.match_info.get('steamid64', '')
     if not steamid or not STEAM_API_KEY:
         return _json_response({"error": "Steam API not configured"})
     try:
+        steamid64 = to_steamid64(steamid)
         loop = asyncio.get_running_loop()
         def fetch():
             url = (
                 f"https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v2/"
-                f"?key={STEAM_API_KEY}&steamids={steamid}"
+                f"?key={STEAM_API_KEY}&steamids={steamid64}"
             )
             r = requests.get(url, timeout=8)
             r.raise_for_status()
