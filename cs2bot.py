@@ -88,35 +88,45 @@ async def handle_api_player(request):
         return _json_response({"error": str(e)})
 
 async def handle_api_matches(request):
-    """GET /api/matches - pure fshost JSON source."""
+    """GET /api/matches — DB for match list, fshost map for demo links."""
     try:
         limit = int(request.rel_url.query.get('limit', 30))
-        loop  = asyncio.get_running_loop()
+
+        # ── DB: get match list with team names, scores, dates ─────────────────
+        conn = get_db()
+        c = conn.cursor(dictionary=True)
+        c.execute(f"""
+            SELECT mm.matchid, mm.team1_name, mm.team2_name,
+                   mm.winner,
+                   mm.start_time, mm.end_time,
+                   m.mapname, m.mapnumber,
+                   m.team1_score AS map_team1_score,
+                   m.team2_score AS map_team2_score
+            FROM {MATCHZY_TABLES['matches']} mm
+            LEFT JOIN {MATCHZY_TABLES['maps']} m ON mm.matchid = m.matchid
+            WHERE mm.end_time IS NOT NULL
+            ORDER BY mm.end_time DESC
+            LIMIT %s
+        """, (limit,))
+        rows = c.fetchall()
+        c.close(); conn.close()
+
+        if not rows:
+            return _json_response([])
+
+        # ── fshost: attach demo URL to each match by matchid ──────────────────
+        loop = asyncio.get_running_loop()
         matchid_map = await loop.run_in_executor(None, build_matchid_to_demo_map)
+
         results = []
-        for mid, entry in matchid_map.items():
-            data = entry.get('metadata') or await loop.run_in_executor(None, _fetch_fshost_match_json, mid)
-            if not data:
-                continue
-            t1 = data.get('team1', {})
-            t2 = data.get('team2', {})
-            results.append({
-                'matchid':      data.get('match_id') or mid,
-                'team1_name':   t1.get('name', 'Team 1'),
-                'team2_name':   t2.get('name', 'Team 2'),
-                'team1_score':  t1.get('score', 0),
-                'team2_score':  t2.get('score', 0),
-                'winner':       data.get('winner', ''),
-                'end_time':     data.get('date'),
-                'start_time':   data.get('date'),
-                'mapname':      data.get('map', '?'),
-                'mapnumber':    1,
-                'total_rounds': data.get('total_rounds'),
-                'demo_url':     entry.get('download_url', ''),
-                'demo_size':    entry.get('size_formatted', ''),
-            })
-        results.sort(key=lambda x: x.get('end_time') or '', reverse=True)
-        return _json_response(results[:limit])
+        for row in rows:
+            mid   = str(row.get('matchid', ''))
+            entry = matchid_map.get(mid, {})
+            row['demo_url']  = entry.get('download_url', '')
+            row['demo_size'] = entry.get('size_formatted', '')
+            results.append(row)
+
+        return _json_response(results)
     except Exception as e:
         return _json_response({"error": str(e)})
 
@@ -514,7 +524,7 @@ async function loadMatches() {
       <div class="m-id">#${m.matchid}</div>
       <div class="m-teams">
         <div class="m-teams-str">${esc(m.team1_name||'Team 1')} <span style="color:var(--muted2)">vs</span> ${esc(m.team2_name||'Team 2')}</div>
-        <div class="m-score">${m.team1_score??0} : ${m.team2_score??0}</div>
+        <div class="m-score">${m.map_team1_score??m.team1_score??0} : ${m.map_team2_score??m.team2_score??0}</div>
       </div>
       <div class="m-map">${esc(m.mapname||'—')}</div>
       ${winnerClean?`<div class="m-winner">W: ${esc(winnerClean)}</div>`:''}
