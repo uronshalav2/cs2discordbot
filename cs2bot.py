@@ -385,6 +385,56 @@ async def handle_api_steam(request):
     except Exception as e:
         return _json_response({"error": str(e)})
 
+async def handle_api_status(request):
+    """GET /api/status — live CS2 server status via a2s"""
+    try:
+        loop = asyncio.get_running_loop()
+        addr = (SERVER_IP, SERVER_PORT)
+        info = await loop.run_in_executor(None, a2s.info, addr)
+        try:
+            a2s_players = await asyncio.wait_for(
+                loop.run_in_executor(None, a2s.players, addr), 5
+            )
+        except Exception:
+            a2s_players = []
+
+        # Build player list
+        player_list = []
+        if a2s_players and any(getattr(p, "name", "") for p in a2s_players):
+            for p in a2s_players:
+                name = getattr(p, "name", "") or ""
+                if name:
+                    player_list.append({
+                        "name":  name,
+                        "score": getattr(p, "score", 0),
+                        "duration": round(getattr(p, "duration", 0)),
+                    })
+        else:
+            # fallback to rcon
+            rcon_players = rcon_list_players()
+            for p in rcon_players:
+                player_list.append({"name": p.get("name",""), "score": 0, "duration": 0})
+
+        return _json_response({
+            "online":       True,
+            "server_name":  info.server_name,
+            "map":          info.map_name,
+            "players":      info.player_count,
+            "max_players":  info.max_players,
+            "connect":      f"{SERVER_IP}:{SERVER_PORT}",
+            "player_list":  player_list,
+        })
+    except Exception:
+        return _json_response({
+            "online":      False,
+            "server_name": "",
+            "map":         "",
+            "players":     0,
+            "max_players": 10,
+            "connect":     f"{SERVER_IP}:{SERVER_PORT}",
+            "player_list": [],
+        })
+
 async def handle_stats_page(request):
     """GET /stats — main stats website (SPA)"""
     html = _build_stats_html()
@@ -558,27 +608,49 @@ nav{background:var(--surface);border-bottom:2px solid var(--border);display:flex
   <div class="tabs">
     <div class="tab active" data-p="matches">Matches</div>
     <div class="tab" data-p="leaderboard">Leaderboard</div>
+    <div class="tab" data-p="server">Server</div>
   </div>
 </nav>
 
 <div id="app">
   <div id="p-matches"></div>
   <div id="p-leaderboard" style="display:none"></div>
+  <div id="p-server" style="display:none"></div>
   <div id="p-player" style="display:none"></div>
   <div id="p-match" style="display:none"></div>
 </div>
 
 <script>
 // ── Router ────────────────────────────────────────────────────────────────────
+// Shared CS2 map image URLs (Steam CDN)
+const MAP_IMGS = {
+  'de_mirage':   'https://cdn.akamai.steamstatic.com/apps/730/maps/screenshots/de_mirage.jpg',
+  'de_dust2':    'https://cdn.akamai.steamstatic.com/apps/730/maps/screenshots/de_dust2.jpg',
+  'de_inferno':  'https://cdn.akamai.steamstatic.com/apps/730/maps/screenshots/de_inferno.jpg',
+  'de_nuke':     'https://cdn.akamai.steamstatic.com/apps/730/maps/screenshots/de_nuke.jpg',
+  'de_ancient':  'https://cdn.akamai.steamstatic.com/apps/730/maps/screenshots/de_ancient.jpg',
+  'de_anubis':   'https://cdn.akamai.steamstatic.com/apps/730/maps/screenshots/de_anubis.jpg',
+  'de_vertigo':  'https://cdn.akamai.steamstatic.com/apps/730/maps/screenshots/de_vertigo.jpg',
+  'de_overpass': 'https://cdn.akamai.steamstatic.com/apps/730/maps/screenshots/de_overpass.jpg',
+};
+function mapThumb(mapname, h=48, w=80) {
+  const url = MAP_IMGS[mapname];
+  if (!url) return `<div style="width:${w}px;height:${h}px;background:var(--surface2);border-radius:3px;display:flex;align-items:center;justify-content:center;flex-shrink:0"><span style="font-size:9px;color:var(--muted2);font-family:'Rajdhani',sans-serif;font-weight:700;letter-spacing:1px;text-transform:uppercase">${esc(mapname||'?')}</span></div>`;
+  return `<div style="width:${w}px;height:${h}px;border-radius:3px;overflow:hidden;flex-shrink:0;position:relative">
+    <img src="${url}" style="width:100%;height:100%;object-fit:cover" onerror="this.parentElement.style.background='var(--surface2)'">
+  </div>`;
+}
+
 let _back = null;
 function go(page, params={}, back=null) {
-  ['matches','leaderboard','player','match'].forEach(p => {
+  ['matches','leaderboard','server','player','match'].forEach(p => {
     document.getElementById('p-'+p).style.display = (p===page)?'':'none';
   });
   document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active',t.dataset.p===page));
   _back = back;
   if(page==='matches')     loadMatches();
   if(page==='leaderboard') loadLeaderboard();
+  if(page==='server')      loadServer();
   if(page==='player')      loadPlayer(params.name);
   if(page==='match')       loadMatch(params.id);
 }
@@ -646,6 +718,7 @@ async function loadMatches() {
     return `
     <div class="match-item" onclick="go('match',{id:'${m.matchid}'},'matches')">
       <div class="m-id">#${m.matchid}</div>
+      ${mapThumb(m.mapname, 44, 72)}
       <div class="m-teams">
         <div class="m-teams-str">${esc(m.team1_name||'Team 1')} <span style="color:var(--muted2)">vs</span> ${esc(m.team2_name||'Team 2')}</div>
         <div class="m-score">${m.map_team1_score??m.team1_score??0} : ${m.map_team2_score??m.team2_score??0}</div>
@@ -758,7 +831,13 @@ async function loadMatch(id) {
 
   document.getElementById('p-match').innerHTML = `
     <div class="back-btn" onclick="go(_back||'matches')">← Back</div>
-    <div class="match-header-card" style="margin-bottom:12px">
+    <div class="match-header-card" style="margin-bottom:12px;padding:0;overflow:hidden">
+      ${maps[0]?.mapname ? `<div style="position:relative;height:110px;overflow:hidden">
+        ${MAP_IMGS[maps[0].mapname] ? `<img src="${MAP_IMGS[maps[0].mapname]}" style="width:100%;height:100%;object-fit:cover;opacity:0.6">` : `<div style="width:100%;height:100%;background:linear-gradient(135deg,#0d1117,#1a2332)"></div>`}
+        <div style="position:absolute;inset:0;background:linear-gradient(to top,rgba(10,13,20,.95) 0%,rgba(10,13,20,.3) 100%)"></div>
+        <div style="position:absolute;bottom:12px;left:22px;font-family:'Rajdhani',sans-serif;font-weight:800;font-size:18px;color:#fff;text-transform:uppercase;letter-spacing:2px;text-shadow:0 1px 4px rgba(0,0,0,.8)">${esc(maps[0].mapname)}</div>
+      </div>` : ''}
+      <div style="padding:18px 22px">
       <div class="match-score-row">
         <div class="team-block">
           <div class="team-nm" style="color:var(--ct)">${esc(t1name)}</div>
@@ -775,6 +854,7 @@ async function loadMatch(id) {
         ${fmtDate(meta.end_time)?`<div class="meta-chip">${fmtDate(meta.end_time)}</div>`:''}
         ${won?`<div class="meta-chip"><span class="winner-tag">Winner: ${esc(won)}</span></div>`:''}
         ${demoBtnHtml}
+      </div>
       </div>
     </div>
     ${mvpHtml}
@@ -907,6 +987,104 @@ async function loadPlayer(name) {
         <tbody>${recentRows}</tbody>
       </table>
     </div>` : ''}`;
+}
+
+// ── Server Status ─────────────────────────────────────────────────────────────
+let _serverRefreshTimer = null;
+
+async function loadServer() {
+  const el = document.getElementById('p-server');
+  // Keep existing content while refreshing (avoid flicker on auto-refresh)
+  if (!el.dataset.loaded) {
+    el.innerHTML = '<div class="loading"><div class="spin"></div><br>Querying server…</div>';
+  }
+
+  const s = await fetch('/api/status').then(r=>r.json()).catch(()=>({online:false,player_list:[],connect:''}));
+
+  const fillPct = s.max_players > 0 ? Math.round((s.players / s.max_players) * 100) : 0;
+  const fillColor = fillPct === 0 ? 'var(--muted2)' : fillPct < 40 ? 'var(--loss)' : fillPct < 75 ? '#f0a842' : 'var(--win)';
+  const statusDot = s.online
+    ? `<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:var(--win);box-shadow:0 0 6px var(--win);margin-right:8px"></span><span style="color:var(--win);font-family:'Rajdhani',sans-serif;font-weight:700;font-size:13px;letter-spacing:1px">ONLINE</span>`
+    : `<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:var(--loss);box-shadow:0 0 6px var(--loss);margin-right:8px"></span><span style="color:var(--loss);font-family:'Rajdhani',sans-serif;font-weight:700;font-size:13px;letter-spacing:1px">OFFLINE</span>`;
+
+  const mapName = s.map || '—';
+  const mapImgUrl = MAP_IMGS[s.map] || null;
+  const mapImg = s.map
+    ? `<div style="position:relative;height:120px;background:linear-gradient(135deg,#0d1117,#1a2332);border-radius:4px;overflow:hidden;margin-bottom:12px">
+        ${mapImgUrl
+          ? `<img src="${mapImgUrl}" style="width:100%;height:100%;object-fit:cover;opacity:0.75" onerror="this.style.display='none'">`
+          : ''}
+        <div style="position:absolute;inset:0;background:linear-gradient(to top,rgba(0,0,0,.75) 0%,transparent 55%)"></div>
+        <div style="position:absolute;bottom:10px;left:14px;font-family:'Rajdhani',sans-serif;font-weight:800;font-size:22px;color:#fff;text-transform:uppercase;letter-spacing:1px;text-shadow:0 1px 6px rgba(0,0,0,.8)">${esc(mapName)}</div>
+      </div>`
+    : '';
+
+  const playerRows = s.player_list.length
+    ? s.player_list.map((p,i) => {
+        const mins = Math.floor((p.duration||0) / 60);
+        const timeStr = mins > 0 ? `${mins}m` : '—';
+        return `<tr>
+          <td style="text-align:left;color:var(--white);font-family:'Rajdhani',sans-serif;font-weight:600;font-size:14px;padding:9px 14px">${esc(p.name)}</td>
+          <td style="padding:9px 14px;text-align:center;font-family:'Rajdhani',sans-serif;font-weight:700;color:var(--orange)">${p.score ?? 0}</td>
+          <td style="padding:9px 14px;text-align:right;color:var(--muted2);font-size:12px">${timeStr}</td>
+        </tr>`;
+      }).join('')
+    : `<tr><td colspan="3" style="padding:24px;text-align:center;color:var(--muted2)">No players currently online</td></tr>`;
+
+  const now = new Date().toLocaleTimeString();
+
+  el.dataset.loaded = '1';
+  el.innerHTML = `
+    <div class="page-title">Server Status <span class="sub">auto-refreshes every 30s • last: ${now}</span></div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
+
+      <!-- Status card -->
+      <div class="card" style="padding:20px 22px">
+        <div style="display:flex;align-items:center;margin-bottom:16px">${statusDot}</div>
+        ${s.online ? `
+        <div style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:13px;color:var(--muted2);letter-spacing:1px;text-transform:uppercase;margin-bottom:4px">Server</div>
+        <div style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:16px;color:var(--white);margin-bottom:14px">${esc(s.server_name||'CS2 Server')}</div>
+        <div style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:13px;color:var(--muted2);letter-spacing:1px;text-transform:uppercase;margin-bottom:4px">Connect</div>
+        <div style="font-family:'Rajdhani',sans-serif;font-size:13px;color:var(--orange);letter-spacing:.5px;cursor:pointer" onclick="navigator.clipboard.writeText('connect ${esc(s.connect)}').then(()=>alert('Copied!'))" title="Click to copy">connect ${esc(s.connect)} 📋</div>
+        ` : `<div style="color:var(--muted2);font-size:13px;margin-top:8px">The server is currently unreachable.</div>`}
+      </div>
+
+      <!-- Map + players card -->
+      <div class="card" style="padding:20px 22px">
+        ${mapImg}
+        <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:8px">
+          <div style="font-family:'Rajdhani',sans-serif;font-weight:800;font-size:40px;color:var(--white);line-height:1">${s.players}</div>
+          <div style="font-family:'Rajdhani',sans-serif;font-weight:600;font-size:18px;color:var(--muted2)">/ ${s.max_players}</div>
+          <div style="font-size:11px;color:var(--muted2);letter-spacing:1px;text-transform:uppercase;margin-left:4px">players</div>
+        </div>
+        <!-- fill bar -->
+        <div style="height:5px;background:var(--border2);border-radius:3px;overflow:hidden">
+          <div style="height:100%;width:${fillPct}%;background:${fillColor};border-radius:3px;transition:width .6s"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Player list -->
+    <div class="page-title" style="font-size:16px;margin-bottom:10px">Players Online <span class="sub">${s.players} / ${s.max_players}</span></div>
+    <div class="card">
+      <table style="width:100%;border-collapse:collapse">
+        <thead>
+          <tr style="background:rgba(0,0,0,.35)">
+            <th style="padding:7px 14px;text-align:left;font-family:'Rajdhani',sans-serif;font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--muted2);border-bottom:1px solid var(--border)">Player</th>
+            <th style="padding:7px 14px;text-align:center;font-family:'Rajdhani',sans-serif;font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--muted2);border-bottom:1px solid var(--border)">Score</th>
+            <th style="padding:7px 14px;text-align:right;font-family:'Rajdhani',sans-serif;font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--muted2);border-bottom:1px solid var(--border)">Time</th>
+          </tr>
+        </thead>
+        <tbody>${playerRows}</tbody>
+      </table>
+    </div>`;
+
+  // Schedule auto-refresh only while on this page
+  clearTimeout(_serverRefreshTimer);
+  _serverRefreshTimer = setTimeout(() => {
+    if (document.getElementById('p-server').style.display !== 'none') loadServer();
+  }, 30000);
 }
 
 // ── Leaderboard ───────────────────────────────────────────────────────────────
@@ -1047,6 +1225,7 @@ async def start_http_server():
     app.router.add_get('/api/match/{matchid}', handle_api_match)
     app.router.add_get('/api/demos',          handle_api_demos)
     app.router.add_get('/api/leaderboard',   handle_api_leaderboard)
+    app.router.add_get('/api/status',        handle_api_status)
     app.router.add_get('/stats',             handle_stats_page)
     app.router.add_get('/',                  handle_stats_page)
     app.router.add_get('/health',            handle_health_check)
