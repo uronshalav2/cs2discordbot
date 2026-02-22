@@ -272,10 +272,10 @@ nav{background:#09090b;border-bottom:2px solid var(--border);display:flex;align-
 
 /* UTIL */
 .loading{padding:48px;text-align:center;color:var(--muted2)}
-.spin{display:inline-block;width:48px;height:48px;margin-bottom:10px;animation:cs2-pulse 1.4s ease-in-out infinite;filter:drop-shadow(0 0 8px rgba(255,85,0,.5))}
-@keyframes cs2-pulse{
-  0%,100%{opacity:.35;transform:scale(.92);filter:drop-shadow(0 0 4px rgba(255,85,0,.3))}
-  50%{opacity:1;transform:scale(1.04);filter:drop-shadow(0 0 14px rgba(255,85,0,.85))}
+.spin{display:inline-block;width:140px;height:auto;margin-bottom:14px;animation:cs2-shine 2s ease-in-out infinite;filter:brightness(0) saturate(100%) invert(40%) sepia(90%) saturate(800%) hue-rotate(360deg) brightness(1.1)}
+@keyframes cs2-shine{
+  0%,100%{opacity:.5;filter:brightness(0) saturate(100%) invert(40%) sepia(90%) saturate(800%) hue-rotate(360deg) brightness(1)}
+  50%{opacity:1;filter:brightness(0) saturate(100%) invert(45%) sepia(100%) saturate(1200%) hue-rotate(360deg) brightness(1.6) drop-shadow(0 0 16px rgba(255,85,0,1))}
 }
 .empty{padding:40px;text-align:center;color:var(--muted2)}
 .ovx{overflow-x:auto}
