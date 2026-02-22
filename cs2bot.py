@@ -643,7 +643,7 @@ nav{background:#09090b;border-bottom:2px solid var(--border);display:flex;align-
 .card{background:#0c0e10;border:1px solid var(--border);border-radius:4px;overflow:hidden}
 
 /* LEADERBOARD */
-.lb-wrap{overflow-x:auto}
+.lb-wrap{overflow-x:auto;border:1px solid rgba(255,85,0,.3)!important;box-shadow:0 0 20px rgba(255,85,0,.06),inset 0 1px 0 rgba(255,255,255,.04)!important;border-radius:4px}
 .lb-table{width:100%;border-collapse:collapse;min-width:680px}
 .lb-table thead tr{background:rgba(0,0,0,.6)}
 .lb-table th{padding:8px 12px;text-align:right;font-family:'Rajdhani',sans-serif;font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--muted2);border-bottom:1px solid var(--border);white-space:nowrap}
