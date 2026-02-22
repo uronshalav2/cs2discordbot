@@ -663,14 +663,19 @@ nav{background:#09090b;border-bottom:2px solid var(--border);display:flex;align-
 .lb-wrap{overflow-x:auto;border:1px solid rgba(255,85,0,.3)!important;box-shadow:0 0 20px rgba(255,85,0,.06),inset 0 1px 0 rgba(255,255,255,.04)!important;border-radius:4px}
 .lb-table{width:100%;border-collapse:collapse;min-width:680px}
 .lb-table thead tr{background:rgba(0,0,0,.6)}
-.lb-table th{padding:8px 12px;text-align:right;font-family:'Rajdhani',sans-serif;font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--muted2);border-bottom:1px solid var(--border);white-space:nowrap}
+.lb-table th{padding:8px 12px;text-align:right;font-family:'Rajdhani',sans-serif;font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--muted2);border-bottom:1px solid var(--border);white-space:nowrap;user-select:none}
+.lb-table th.sortable{cursor:pointer;transition:color .15s}
+.lb-table th.sortable:hover{color:var(--text)}
+.lb-table th.sort-active{color:var(--orange)}
+.lb-table th.sort-active::after{content:' ▼';font-size:8px;opacity:.8}
 .lb-table th:first-child,.lb-table th:nth-child(2){text-align:left}
 .lb-table td{padding:9px 12px;text-align:right;border-bottom:1px solid var(--border);font-size:13px;white-space:nowrap}
 .lb-table td:first-child{text-align:center;width:40px;font-family:'Rajdhani',sans-serif;font-weight:700;color:var(--muted)}
 .lb-table td:nth-child(2){text-align:left}
-.lb-table tbody tr{cursor:pointer;transition:background .12s}
+.lb-table tbody tr{cursor:pointer;transition:background .12s,transform .0s}
 .lb-table tbody tr:hover td{background:rgba(255,85,0,.04)}
 .lb-table tbody tr:last-child td{border-bottom:none}
+.lb-table tbody tr.lb-moving{transition:transform .35s cubic-bezier(.4,0,.2,1);will-change:transform}
 .rank-gold td:first-child{color:var(--orange);background:linear-gradient(90deg,rgba(255,85,0,.14) 0%,rgba(255,85,0,.05) 100%)}
 .rank-gold td:nth-child(2){background:linear-gradient(90deg,rgba(255,85,0,.05) 0%,transparent 100%)}
 .rank-silver td:first-child{color:#a0aec0;background:linear-gradient(90deg,rgba(160,174,192,.12) 0%,rgba(160,174,192,.04) 100%)}
@@ -1649,103 +1654,177 @@ function renderLeaderboard(data, sortKey) {
   _lbSort = sortKey;
   const el = document.getElementById('p-leaderboard');
 
-  const sorted = [...data].sort((a,b) => {
-    const av = parseFloat(a[sortKey]??0), bv = parseFloat(b[sortKey]??0);
-    return bv - av;
-  });
-
   const cols = [
-    {key:'kills',      label:'Kills'},
-    {key:'deaths',     label:'Deaths'},
-    {key:'assists',    label:'Assists'},
-    {key:'kd',         label:'K/D'},
-    {key:'adr',        label:'ADR'},
-    {key:'hs_pct',     label:'HS%'},
-    {key:'damage',     label:'Damage'},
-    {key:'matches',    label:'Matches'},
-    {key:'aces',       label:'5K'},
-    {key:'clutch_wins',label:'Clutches'},
+    {key:'kills',       label:'Kills'},
+    {key:'deaths',      label:'Deaths'},
+    {key:'assists',     label:'Assists'},
+    {key:'kd',          label:'K/D'},
+    {key:'adr',         label:'ADR'},
+    {key:'hs_pct',      label:'HS%'},
+    {key:'damage',      label:'Damage'},
+    {key:'matches',     label:'Matches'},
+    {key:'aces',        label:'5K'},
+    {key:'clutch_wins', label:'Clutches'},
   ];
 
-  const thStyle = k => k===sortKey
-    ? 'style="color:var(--orange);cursor:pointer"'
-    : 'style="cursor:pointer"';
+  const sorted = [...data].sort((a,b) => parseFloat(b[sortKey]??0) - parseFloat(a[sortKey]??0));
 
-  const headers = cols.map(c =>
-    `<th ${thStyle(c.key)} onclick="renderLeaderboard(window._lbData,'${c.key}')">${c.label}</th>`
-  ).join('');
+  // ── First render: build full DOM ──────────────────────────────────────────
+  const tbody = document.querySelector('#lb-tbody');
+  if (!tbody) {
+    // Build headers
+    const headers = cols.map(c =>
+      `<th class="sortable${c.key===sortKey?' sort-active':''}" data-sort="${c.key}">${c.label}</th>`
+    ).join('');
 
-  const rows = sorted.map((p, i) => {
-    const rank = i + 1;
-    const rankCls = rank===1?'rank-gold':rank===2?'rank-silver':rank===3?'rank-bronze':'';
-    const kd = parseFloat(p.kd??0);
-    const kdCls = kd>=1.3?'kd-g':kd>=0.9?'kd-n':'kd-b';
-    const hsPct = parseFloat(p.hs_pct??0);
-    const hsBar = `<div class="hs-bar-wrap">
-      <div class="hs-bar"><div class="hs-bar-fill" style="width:${Math.min(hsPct,100)}%"></div></div>
-      <span class="hs-val">${hsPct.toFixed(1)}%</span>
-    </div>`;
-    const avatarEl = p._steam_avatar
-      ? `<img src="${p._steam_avatar}" style="width:24px;height:24px;border-radius:50%;object-fit:cover;vertical-align:middle;margin-right:8px;border:1px solid var(--border2)" alt="">`
-      : `<span style="display:inline-block;width:24px;height:24px;border-radius:50%;background:var(--surface2);vertical-align:middle;margin-right:8px;text-align:center;line-height:24px;font-size:10px;font-family:'Rajdhani',sans-serif;font-weight:700;color:var(--muted2)">${initials(p.name)}</span>`;
-    const displayName = esc(p._steam_name || p.name);
-    return `<tr class="${rankCls}" onclick="go('player',{name:'${esc(p.name)}'},'leaderboard')">
-      <td style="${rank<=3?`color:${['var(--orange)','#a0aec0','#b87333'][rank-1]};font-family:'Rajdhani',sans-serif;font-weight:800;font-size:15px`:'color:var(--muted2)'}">${rank}</td>
-      <td>${avatarEl}<span class="pname">${displayName}</span></td>
-      <td>${p.kills??0}</td>
-      <td>${p.deaths??0}</td>
-      <td>${p.assists??0}</td>
-      <td class="kd-num ${kdCls}">${kd.toFixed(2)}</td>
-      <td class="adr-highlight">${p.adr!=null?parseFloat(p.adr).toFixed(1):'—'}</td>
-      <td>${hsBar}</td>
-      <td>${p.damage!=null?Number(p.damage).toLocaleString():'—'}</td>
-      <td>${p.matches??0}</td>
-      <td>${p.aces??0}</td>
-      <td>${p.clutch_wins??0}</td>
-    </tr>`;
-  }).join('');
+    // Build rows — each row gets data-steamid for FLIP keying
+    const rowsHtml = sorted.map((p, i) => {
+      const rank = i + 1;
+      const kd = parseFloat(p.kd??0);
+      const kdCls = kd>=1.3?'kd-g':kd>=0.9?'kd-n':'kd-b';
+      const hsPct = parseFloat(p.hs_pct??0);
+      const hsBar = `<div class="hs-bar-wrap"><div class="hs-bar"><div class="hs-bar-fill" style="width:${Math.min(hsPct,100)}%"></div></div><span class="hs-val">${hsPct.toFixed(1)}%</span></div>`;
+      const avatarEl = p._steam_avatar
+        ? `<img src="${p._steam_avatar}" style="width:24px;height:24px;border-radius:50%;object-fit:cover;vertical-align:middle;margin-right:8px;border:1px solid var(--border2)" alt="">`
+        : `<span style="display:inline-block;width:24px;height:24px;border-radius:50%;background:var(--surface2);vertical-align:middle;margin-right:8px;text-align:center;line-height:24px;font-size:10px;font-family:'Rajdhani',sans-serif;font-weight:700;color:var(--muted2)">${initials(p.name)}</span>`;
+      const rankColors = ['var(--orange)','#a0aec0','#b87333'];
+      const rankStyle = rank<=3 ? `color:${rankColors[rank-1]};font-family:'Rajdhani',sans-serif;font-weight:800;font-size:15px` : 'color:var(--muted2)';
+      const rankCls = rank===1?'rank-gold':rank===2?'rank-silver':rank===3?'rank-bronze':'';
+      return `<tr class="${rankCls}" data-sid="${esc(p.steamid64||p.name)}" onclick="go('player',{name:'${esc(p.name)}'},'leaderboard')">
+        <td style="${rankStyle}">${rank}</td>
+        <td>${avatarEl}<span class="pname">${esc(p._steam_name||p.name)}</span></td>
+        <td>${p.kills??0}</td>
+        <td>${p.deaths??0}</td>
+        <td>${p.assists??0}</td>
+        <td class="kd-num ${kdCls}">${kd.toFixed(2)}</td>
+        <td class="adr-highlight">${p.adr!=null?parseFloat(p.adr).toFixed(1):'—'}</td>
+        <td>${hsBar}</td>
+        <td>${p.damage!=null?Number(p.damage).toLocaleString():'—'}</td>
+        <td>${p.matches??0}</td>
+        <td>${p.aces??0}</td>
+        <td>${p.clutch_wins??0}</td>
+      </tr>`;
+    }).join('');
 
-  // Top 3 podium cards
-  const top3 = sorted.slice(0,3);
-  const podiumCard = (p, rank) => {
-    if (!p) return '';
-    const colors      = ['var(--orange)','#a0aec0','#b87333'];
-    const glowColors  = ['rgba(255,85,0,.18)','rgba(160,174,192,.14)','rgba(184,115,51,.15)'];
-    const borderColors= ['rgba(255,85,0,.35)','rgba(160,174,192,.3)','rgba(184,115,51,.3)'];
-    const rankLabels  = ['1ST','2ND','3RD'];
-    const c = colors[rank];
-    const avatarEl = p._steam_avatar
-      ? `<img src="${p._steam_avatar}" style="width:56px;height:56px;border-radius:50%;object-fit:cover;border:2px solid ${c};margin-bottom:10px" alt="${esc(p.name)}">`
-      : `<div style="width:56px;height:56px;border-radius:50%;background:var(--surface);border:2px solid ${c};display:flex;align-items:center;justify-content:center;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:20px;color:${c};margin:0 auto 10px">${initials(p.name)}</div>`;
-    return `<div class="podium-card" data-rank="${rank}" style="--card-color:${c};--glow:${glowColors[rank]};--bdr:${borderColors[rank]};flex:1;background:${glowColors[rank]};backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border:1px solid ${borderColors[rank]};border-top:2px solid ${c};border-radius:6px;padding:18px 14px;text-align:center;cursor:pointer;position:relative;overflow:hidden;" onclick="go('player',{name:'${esc(p.name)}'},'leaderboard')">
-      <div class="podium-shine"></div>
-      <div style="position:absolute;top:10px;left:14px;font-family:'Rajdhani',sans-serif;font-weight:800;font-size:11px;letter-spacing:2px;color:${c};opacity:.9">${rankLabels[rank]}</div>
-      <div style="margin-top:6px;position:relative;z-index:1">${avatarEl}</div>
-      <div style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:15px;color:#fff;margin-bottom:12px;position:relative;z-index:1">${esc(p._steam_name||p.name)}</div>
-      <div style="display:flex;justify-content:center;gap:16px;flex-wrap:wrap;position:relative;z-index:1">
-        <div><div style="font-family:'Rajdhani',sans-serif;font-weight:800;font-size:20px;color:#fff" data-count="${p.kills??0}" data-dec="0">${p.kills??0}</div><div style="font-size:10px;color:rgba(255,255,255,.5);letter-spacing:1px;text-transform:uppercase">Kills</div></div>
-        <div><div style="font-family:'Rajdhani',sans-serif;font-weight:800;font-size:20px;color:#fff" data-count="${parseFloat(p.kd??0).toFixed(2)}" data-dec="2">${parseFloat(p.kd??0).toFixed(2)}</div><div style="font-size:10px;color:rgba(255,255,255,.5);letter-spacing:1px;text-transform:uppercase">K/D</div></div>
-        <div><div style="font-family:'Rajdhani',sans-serif;font-weight:800;font-size:20px;color:#fff" data-count="${p.matches??0}" data-dec="0">${p.matches??0}</div><div style="font-size:10px;color:rgba(255,255,255,.5);letter-spacing:1px;text-transform:uppercase">Matches</div></div>
+    // Top 3 podium
+    const top3 = sorted.slice(0,3);
+    const podiumCard = (p, rank) => {
+      if (!p) return '';
+      const colors      = ['var(--orange)','#a0aec0','#b87333'];
+      const glowColors  = ['rgba(255,85,0,.18)','rgba(160,174,192,.14)','rgba(184,115,51,.15)'];
+      const borderColors= ['rgba(255,85,0,.35)','rgba(160,174,192,.3)','rgba(184,115,51,.3)'];
+      const rankLabels  = ['1ST','2ND','3RD'];
+      const c = colors[rank];
+      const avatarEl = p._steam_avatar
+        ? `<img src="${p._steam_avatar}" style="width:56px;height:56px;border-radius:50%;object-fit:cover;border:2px solid ${c};margin-bottom:10px" alt="${esc(p.name)}">`
+        : `<div style="width:56px;height:56px;border-radius:50%;background:var(--surface);border:2px solid ${c};display:flex;align-items:center;justify-content:center;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:20px;color:${c};margin:0 auto 10px">${initials(p.name)}</div>`;
+      return `<div class="podium-card" data-rank="${rank}" style="--card-color:${c};--glow:${glowColors[rank]};--bdr:${borderColors[rank]};flex:1;background:${glowColors[rank]};backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border:1px solid ${borderColors[rank]};border-top:2px solid ${c};border-radius:6px;padding:18px 14px;text-align:center;cursor:pointer;position:relative;overflow:hidden;" onclick="go('player',{name:'${esc(p.name)}'},'leaderboard')">
+        <div class="podium-shine"></div>
+        <div style="position:absolute;top:10px;left:14px;font-family:'Rajdhani',sans-serif;font-weight:800;font-size:11px;letter-spacing:2px;color:${c};opacity:.9">${rankLabels[rank]}</div>
+        <div style="margin-top:6px;position:relative;z-index:1">${avatarEl}</div>
+        <div style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:15px;color:#fff;margin-bottom:12px;position:relative;z-index:1">${esc(p._steam_name||p.name)}</div>
+        <div style="display:flex;justify-content:center;gap:16px;flex-wrap:wrap;position:relative;z-index:1">
+          <div><div style="font-family:'Rajdhani',sans-serif;font-weight:800;font-size:20px;color:#fff" data-count="${p.kills??0}" data-dec="0">${p.kills??0}</div><div style="font-size:10px;color:rgba(255,255,255,.5);letter-spacing:1px;text-transform:uppercase">Kills</div></div>
+          <div><div style="font-family:'Rajdhani',sans-serif;font-weight:800;font-size:20px;color:#fff" data-count="${parseFloat(p.kd??0).toFixed(2)}" data-dec="2">${parseFloat(p.kd??0).toFixed(2)}</div><div style="font-size:10px;color:rgba(255,255,255,.5);letter-spacing:1px;text-transform:uppercase">K/D</div></div>
+          <div><div style="font-family:'Rajdhani',sans-serif;font-weight:800;font-size:20px;color:#fff" data-count="${p.matches??0}" data-dec="0">${p.matches??0}</div><div style="font-size:10px;color:rgba(255,255,255,.5);letter-spacing:1px;text-transform:uppercase">Matches</div></div>
+        </div>
+      </div>`;
+    };
+
+    window._lbData = data;
+    el.innerHTML = `
+      <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">
+        ${top3.map((p,i)=>podiumCard(p,i)).join('')}
       </div>
-    </div>`;
-  };
+      <div class="card lb-wrap">
+        <table class="lb-table">
+          <thead><tr id="lb-thead">
+            <th>#</th><th>Player</th>${headers}
+          </tr></thead>
+          <tbody id="lb-tbody">${rowsHtml}</tbody>
+        </table>
+      </div>`;
 
-  window._lbData = data;
+    // Attach sort click handlers
+    document.querySelectorAll('#lb-thead th.sortable').forEach(th => {
+      th.addEventListener('click', () => sortLeaderboard(th.dataset.sort));
+    });
+    return;
+  }
 
-  const sortLabel = cols.find(c=>c.key===sortKey)?.label ?? sortKey;
+  // ── Re-sort: FLIP animate existing rows ───────────────────────────────────
+  sortLeaderboard(sortKey, true);
+}
 
-  el.innerHTML = `
-    <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">
-      ${top3.map((p,i)=>podiumCard(p,i)).join('')}
-    </div>
-    <div class="card lb-wrap">
-      <table class="lb-table">
-        <thead><tr>
-          <th>#</th><th>Player</th>${headers}
-        </tr></thead>
-        <tbody>${rows}</tbody>
-      </table>
-    </div>`;
+function sortLeaderboard(sortKey, _internal) {
+  const data = window._lbData;
+  if (!data) return;
+  _lbSort = sortKey;
+
+  const tbody = document.getElementById('lb-tbody');
+  const thead = document.getElementById('lb-thead');
+  if (!tbody || !thead) { renderLeaderboard(data, sortKey); return; }
+
+  // Update header highlight
+  thead.querySelectorAll('th.sortable').forEach(th => {
+    th.classList.toggle('sort-active', th.dataset.sort === sortKey);
+  });
+
+  const rows = Array.from(tbody.querySelectorAll('tr'));
+
+  // STEP 1 — record current positions (First)
+  const firstPos = new Map();
+  rows.forEach(tr => {
+    firstPos.set(tr.dataset.sid, tr.getBoundingClientRect().top);
+  });
+
+  // STEP 2 — sort the data and reorder DOM nodes
+  const sorted = [...data].sort((a,b) => parseFloat(b[sortKey]??0) - parseFloat(a[sortKey]??0));
+  sorted.forEach((p, i) => {
+    const sid = p.steamid64 || p.name;
+    const tr = tbody.querySelector(`tr[data-sid="${CSS.escape(sid)}"]`);
+    if (!tr) return;
+
+    // Update rank number and rank classes
+    const rank = i + 1;
+    tr.className = rank===1?'rank-gold':rank===2?'rank-silver':rank===3?'rank-bronze':'';
+    const rankColors = ['var(--orange)','#a0aec0','#b87333'];
+    const rankTd = tr.querySelector('td:first-child');
+    if (rankTd) {
+      rankTd.textContent = rank;
+      rankTd.style.cssText = rank<=3
+        ? `color:${rankColors[rank-1]};font-family:'Rajdhani',sans-serif;font-weight:800;font-size:15px`
+        : 'color:var(--muted2)';
+    }
+
+    tbody.appendChild(tr); // moves to correct order
+  });
+
+  // STEP 3 — record new positions (Last) and invert
+  rows.forEach(tr => {
+    const sid = tr.dataset.sid;
+    const first = firstPos.get(sid);
+    const last = tr.getBoundingClientRect().top;
+    const delta = first - last;
+    if (Math.abs(delta) < 1) return;
+
+    // Apply inverse transform instantly (no transition)
+    tr.style.transition = 'none';
+    tr.style.transform = `translateY(${delta}px)`;
+
+    // STEP 4 — play forward (remove transform with transition)
+    tr.classList.add('lb-moving');
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        tr.style.transition = '';
+        tr.style.transform = '';
+        tr.addEventListener('transitionend', () => {
+          tr.classList.remove('lb-moving');
+          tr.style.transform = '';
+        }, {once: true});
+      });
+    });
+  });
 }
 
 // ── Specialist Boards ─────────────────────────────────────────────────────────
