@@ -166,13 +166,15 @@ nav{background:#09090b;border-bottom:2px solid var(--border);display:flex;align-
 .matches-list .match-item:last-child{border-bottom:1px solid rgba(255,85,0,.15)}
 .match-item .m-bg{position:absolute;inset:0;background-size:cover;background-position:center;z-index:0;transition:transform .35s ease;will-change:transform}
 .matches-list .match-item:hover .m-bg{transform:scale(1.04)}
-.match-item .m-overlay{position:absolute;inset:0;background:linear-gradient(90deg,rgba(6,8,14,.97) 0%,rgba(6,8,14,.92) 30%,rgba(6,8,14,.65) 60%,rgba(6,8,14,.25) 100%);z-index:1}
+.match-item .m-overlay{position:absolute;inset:0;background:linear-gradient(90deg,rgba(6,8,14,.92) 0%,rgba(6,8,14,.82) 35%,rgba(6,8,14,.45) 70%,rgba(6,8,14,.1) 100%);z-index:1}
 .match-item .m-hover-layer{position:absolute;inset:0;z-index:1;background:linear-gradient(90deg,rgba(255,85,0,.07) 0%,rgba(255,85,0,.03) 30%,transparent 70%);opacity:0;transition:opacity .22s ease}
 .matches-list .match-item:hover .m-hover-layer{opacity:1}
 .matches-list .match-item:hover .m-score{text-shadow:0 0 18px rgba(255,120,40,.45),0 2px 8px rgba(0,0,0,.9)}
 .matches-list .match-item:hover .m-id{color:var(--orange)}
-.match-item .m-content{position:relative;z-index:2;display:flex;align-items:center;gap:14px;width:100%;padding:18px 24px}
-.m-id{font-size:11px;color:rgba(255,255,255,.22);width:42px;font-family:'Rajdhani',sans-serif;font-weight:600;flex-shrink:0;transition:color .22s ease}
+.match-item .m-content{position:relative;z-index:2;display:flex;align-items:flex-end;gap:10px;width:100%;padding:14px 20px;flex-wrap:wrap}
+.m-pill{display:inline-flex;align-items:center;gap:8px;background:rgba(10,13,20,.55);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border:1px solid rgba(255,255,255,.1);border-radius:6px;padding:6px 12px;transition:border-color .22s}
+.matches-list .match-item:hover .m-pill{border-color:rgba(255,85,0,.25)}
+.m-id{font-size:11px;color:rgba(255,255,255,.22);font-family:'Rajdhani',sans-serif;font-weight:600;flex-shrink:0;transition:color .22s ease;align-self:center}
 .m-teams{flex:1}
 .m-teams-str{font-size:13px;color:rgba(255,255,255,.8);margin-bottom:4px;font-weight:500}
 .m-score{font-family:'Rajdhani',sans-serif;font-weight:800;font-size:26px;color:#fff;text-shadow:0 2px 8px rgba(0,0,0,.9),0 0 20px rgba(0,0,0,.5);transition:text-shadow .22s ease}
@@ -280,7 +282,6 @@ nav{background:#09090b;border-bottom:2px solid var(--border);display:flex;align-
 .predict-player-row{display:flex;align-items:center;gap:10px;padding:8px 10px;cursor:pointer;transition:background .12s;border-bottom:1px solid var(--border)}
 .predict-player-row:last-child{border-bottom:none}
 .predict-player-row:hover{background:rgba(255,85,0,.05)}
-.predict-player-row.in-team1,.predict-player-row.in-team2{pointer-events:none;opacity:.4}
 .pred-bar-wrap{height:28px;border-radius:4px;overflow:hidden;display:flex;margin:16px 0;background:var(--surface)}
 .pred-bar-t1{background:linear-gradient(90deg,rgba(255,85,0,.9),rgba(255,85,0,.6));height:100%;transition:width .8s cubic-bezier(.4,0,.2,1);display:flex;align-items:center;justify-content:flex-end;padding-right:10px;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:14px;color:#fff}
 .pred-bar-t2{background:linear-gradient(90deg,rgba(91,196,245,.6),rgba(91,196,245,.9));height:100%;transition:width .8s cubic-bezier(.4,0,.2,1);display:flex;align-items:center;padding-left:10px;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:14px;color:#fff}
@@ -573,11 +574,11 @@ async function loadMatches() {
       <div class="m-hover-layer"></div>
       <div class="m-content">
         <div class="m-id">#${m.matchid}</div>
-        <div class="m-teams">
-          <div class="m-teams-str">${esc(m.team1_name||'Team 1')} <span style="color:var(--muted2)">vs</span> ${esc(m.team2_name||'Team 2')}</div>
+        <div class="m-pill">
           <div class="m-score">${m.map_team1_score??m.team1_score??0} : ${m.map_team2_score??m.team2_score??0}</div>
+          <div class="m-teams-str">${esc(m.team1_name||'Team 1')}<br><span style="color:var(--muted2);font-size:10px">vs</span><br>${esc(m.team2_name||'Team 2')}</div>
         </div>
-        <div class="m-date">${fmtDate(m.end_time)}</div>
+        <div class="m-pill"><div class="m-date-pill">${fmtDate(m.end_time)}</div></div>
       </div>
     </div>`;
   }).join('');
@@ -1605,7 +1606,6 @@ async function loadPredict() {
 function renderPredict() {
   const el = document.getElementById('p-predict');
   const [t1, t2] = _predictTeams;
-  const players   = _predictPlayers || [];
   const canPredict = t1.length === 5 && t2.length === 5;
 
   function teamSlots(teamIdx) {
@@ -1661,28 +1661,24 @@ function predictOpenPicker(teamIdx) {
   const listEl   = document.getElementById('predict-picker-list');
   if (!pickerEl || !listEl) return;
   const [t1, t2] = _predictTeams;
-  const players  = _predictPlayers || [];
 
-  const rows = players.map((p, i) => {
-    const inT1 = t1.some(x=>x.name===p.name);
-    const inT2 = t2.some(x=>x.name===p.name);
+  // Only show players not already on either team
+  const allSelected = new Set([...t1, ...t2].map(p => p.name));
+  const available = (_predictPlayers || []).filter(p => !allSelected.has(p.name));
+
+  const rows = available.length ? available.map((p, i) => {
+    const globalIdx = _predictPlayers.indexOf(p);
     const av = p._steam_avatar
       ? `<img src="${p._steam_avatar}" style="width:34px;height:34px;border-radius:50%;object-fit:cover;flex-shrink:0">`
       : `<div style="width:34px;height:34px;border-radius:50%;background:var(--surface2);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:12px;color:var(--muted2)">${initials(p.name)}</div>`;
-    const badge = inT1
-      ? `<span style="font-size:9px;padding:1px 6px;border-radius:2px;background:rgba(255,85,0,.15);border:1px solid rgba(255,85,0,.35);color:var(--orange);font-family:'Rajdhani',sans-serif;font-weight:700;letter-spacing:1px">Team A</span>`
-      : inT2
-      ? `<span style="font-size:9px;padding:1px 6px;border-radius:2px;background:rgba(91,196,245,.12);border:1px solid rgba(91,196,245,.3);color:var(--ct);font-family:'Rajdhani',sans-serif;font-weight:700;letter-spacing:1px">Team B</span>`
-      : '';
-    return `<div class="predict-player-row${inT1?' in-team1':inT2?' in-team2':''}" onclick="${(inT1||inT2)?'':'predictAdd('+teamIdx+','+i+')'}">
+    return `<div class="predict-player-row" onclick="predictAdd(${teamIdx},${globalIdx})">
       ${av}
       <div style="flex:1;min-width:0">
         <div style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:14px;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(p._steam_name||p.name)}</div>
         <div style="font-size:11px;color:var(--muted2)">${p.kills??0} kills &middot; ${parseFloat(p.kd??0).toFixed(2)} K/D &middot; ${parseFloat(p.adr??0).toFixed(0)} ADR &middot; ${p.matches??0} matches</div>
       </div>
-      ${badge}
     </div>`;
-  }).join('');
+  }).join('') : `<div style="padding:24px;text-align:center;color:var(--muted2);font-size:12px">No available players</div>`;
 
   listEl.innerHTML = `
     <div style="padding:10px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;background:#0c0e10;z-index:1">
@@ -1791,7 +1787,6 @@ function buildPrediction(t1, t2) {
         <span>Team A</span><span>Team B</span>
       </div>
     </div>
-
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
       <div class="card" style="padding:14px">
         <div style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:11px;letter-spacing:2px;text-transform:uppercase;color:var(--orange);margin-bottom:10px">Team A Roles</div>
@@ -1802,7 +1797,6 @@ function buildPrediction(t1, t2) {
         ${r2.map(({label,p})=>roleCard(label,p,'var(--ct)')).join('')}
       </div>
     </div>
-
     <div class="card" style="padding:14px">
       <div style="display:flex;justify-content:space-between;padding:4px 0 8px;border-bottom:1px solid var(--border)">
         <span style="font-size:10px;font-family:'Rajdhani',sans-serif;font-weight:700;letter-spacing:1px;color:var(--orange)">TEAM A</span>
