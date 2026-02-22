@@ -721,17 +721,17 @@ nav{background:var(--surface);border-bottom:2px solid var(--border);display:flex
 .adr-highlight{color:var(--orange)}
 
 /* MATCHES LIST */
-.matches-list .match-item{position:relative;overflow:hidden;display:flex;align-items:center;gap:14px;padding:0;border-bottom:2px solid rgba(0,0,0,.6);cursor:pointer;transition:filter .15s;min-height:76px}
+.matches-list .match-item{position:relative;overflow:hidden;display:flex;align-items:center;gap:14px;padding:0;border-bottom:3px solid rgba(0,0,0,.8);cursor:pointer;transition:filter .15s;min-height:96px}
 .matches-list .match-item:hover{filter:brightness(1.12)}
 .matches-list .match-item:last-child{border-bottom:none}
 .match-item .m-bg{position:absolute;inset:0;background-size:cover;background-position:center;z-index:0}
-.match-item .m-overlay{position:absolute;inset:0;background:linear-gradient(90deg,rgba(6,8,14,.96) 0%,rgba(6,8,14,.88) 35%,rgba(6,8,14,.6) 65%,rgba(6,8,14,.3) 100%);z-index:1}
-.match-item .m-content{position:relative;z-index:2;display:flex;align-items:center;gap:14px;width:100%;padding:14px 20px}
-.m-id{font-size:11px;color:rgba(255,255,255,.5);width:42px;font-family:'Rajdhani',sans-serif;font-weight:600;flex-shrink:0}
+.match-item .m-overlay{position:absolute;inset:0;background:linear-gradient(90deg,rgba(6,8,14,.97) 0%,rgba(6,8,14,.92) 30%,rgba(6,8,14,.65) 60%,rgba(6,8,14,.25) 100%);z-index:1}
+.match-item .m-content{position:relative;z-index:2;display:flex;align-items:center;gap:14px;width:100%;padding:18px 24px}
+.m-id{font-size:11px;color:rgba(255,255,255,.45);width:42px;font-family:'Rajdhani',sans-serif;font-weight:600;flex-shrink:0}
 .m-teams{flex:1}
-.m-teams-str{font-size:12px;color:rgba(255,255,255,.75);margin-bottom:3px;font-weight:500}
-.m-score{font-family:'Rajdhani',sans-serif;font-weight:800;font-size:22px;color:#fff;text-shadow:0 1px 6px rgba(0,0,0,.8)}
-.m-date{font-size:11px;color:rgba(255,255,255,.55);text-align:right;white-space:nowrap;text-shadow:0 1px 4px rgba(0,0,0,.9)}
+.m-teams-str{font-size:13px;color:rgba(255,255,255,.8);margin-bottom:4px;font-weight:500}
+.m-score{font-family:'Rajdhani',sans-serif;font-weight:800;font-size:26px;color:#fff;text-shadow:0 2px 8px rgba(0,0,0,.9),0 0 20px rgba(0,0,0,.5)}
+.m-date{font-size:11px;color:rgba(255,255,255,.5);text-align:right;white-space:nowrap;text-shadow:0 1px 4px rgba(0,0,0,.9)}
 
 /* PROFILE */
 .profile-top{background:linear-gradient(135deg,var(--surface) 0%,#141c28 100%);border:1px solid var(--border);border-radius:4px;padding:22px 24px;margin-bottom:12px;display:flex;align-items:center;gap:20px}
@@ -1218,17 +1218,26 @@ async function loadMaps() {
     const total = parseInt(m.total_matches||0);
     const mapImg = MAP_IMGS[m.mapname];
     return `
-    <div class="card" style="overflow:hidden;margin-bottom:12px">
-      <div style="position:relative;height:130px">
-        ${mapImg ? `<img src="${mapImg}" style="width:100%;height:100%;object-fit:cover;opacity:.55">` : `<div style="width:100%;height:100%;background:linear-gradient(135deg,#0d1117,#1a2332)"></div>`}
-        <div style="position:absolute;inset:0;background:linear-gradient(to top,rgba(10,13,20,1) 0%,rgba(10,13,20,.2) 100%)"></div>
-        <div style="position:absolute;bottom:12px;left:18px">
-          <div style="font-family:'Rajdhani',sans-serif;font-weight:800;font-size:22px;color:#fff;text-transform:uppercase;letter-spacing:2px">${esc(m.mapname)}</div>
+    <div style="position:relative;border-radius:6px;overflow:hidden;margin-bottom:12px;height:160px;cursor:default">
+      ${mapImg
+        ? `<img src="${mapImg}" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:0.82">`
+        : `<div style="position:absolute;inset:0;background:linear-gradient(135deg,#0d1117,#1a2332)"></div>`}
+      <div style="position:absolute;inset:0;background:linear-gradient(to bottom,rgba(0,0,0,.08) 0%,rgba(0,0,0,.45) 100%)"></div>
+      <div style="position:relative;z-index:2;height:100%;display:flex;flex-direction:column;justify-content:flex-end;padding:16px 20px">
+        <div style="font-family:'Rajdhani',sans-serif;font-weight:800;font-size:13px;letter-spacing:3px;text-transform:uppercase;color:rgba(255,255,255,.55);margin-bottom:8px;text-shadow:0 1px 4px rgba(0,0,0,.8)">${esc(m.mapname)}</div>
+        <div style="
+          display:inline-flex;align-items:center;gap:10px;
+          background:rgba(10,13,20,.45);
+          backdrop-filter:blur(14px);
+          -webkit-backdrop-filter:blur(14px);
+          border:1px solid rgba(255,255,255,.1);
+          border-radius:6px;
+          padding:10px 18px;
+          align-self:flex-start;
+        ">
+          <div style="font-family:'Rajdhani',sans-serif;font-weight:900;font-size:38px;color:#fff;line-height:1">${total}</div>
+          <div style="font-size:11px;color:rgba(255,255,255,.6);text-transform:uppercase;letter-spacing:1.5px;line-height:1.4">Games<br>Played</div>
         </div>
-      </div>
-      <div style="padding:16px 18px;display:flex;align-items:center;gap:10px">
-        <div style="font-family:'Rajdhani',sans-serif;font-weight:800;font-size:36px;color:var(--accent)">${total}</div>
-        <div style="font-size:13px;color:var(--muted2);text-transform:uppercase;letter-spacing:1px">Game${total!==1?'s':''} Played</div>
       </div>
     </div>`;
   }).join('');
