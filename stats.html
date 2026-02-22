@@ -272,8 +272,11 @@ nav{background:#09090b;border-bottom:2px solid var(--border);display:flex;align-
 
 /* UTIL */
 .loading{padding:48px;text-align:center;color:var(--muted2)}
-.spin{display:inline-block;width:18px;height:18px;border:2px solid var(--border2);border-top-color:var(--orange);border-radius:50%;animation:spin .6s linear infinite;margin-bottom:8px}
-@keyframes spin{to{transform:rotate(360deg)}}
+.spin{display:inline-block;width:48px;height:48px;margin-bottom:10px;animation:cs2-pulse 1.4s ease-in-out infinite;filter:drop-shadow(0 0 8px rgba(255,85,0,.5))}
+@keyframes cs2-pulse{
+  0%,100%{opacity:.35;transform:scale(.92);filter:drop-shadow(0 0 4px rgba(255,85,0,.3))}
+  50%{opacity:1;transform:scale(1.04);filter:drop-shadow(0 0 14px rgba(255,85,0,.85))}
+}
 .empty{padding:40px;text-align:center;color:var(--muted2)}
 .ovx{overflow-x:auto}
 </style>
@@ -451,9 +454,6 @@ function animateCount(el, target, opts={}) {
   requestAnimationFrame(step);
 }
 
-// Detect mobile/touch devices — skip animation to prevent layout jumping
-const _isMobile = window.matchMedia('(max-width: 768px)').matches || ('ontouchstart' in window);
-
 // Attach counters to any element with data-count attribute after DOM injection
 function attachCounters(root) {
   (root || document).querySelectorAll('[data-count]').forEach(el => {
@@ -462,12 +462,7 @@ function attachCounters(root) {
     const target   = parseFloat(el.dataset.count);
     const decimals = parseInt(el.dataset.dec  || '0');
     const suffix   = el.dataset.suffix || '';
-    if (_isMobile) {
-      // On mobile, set the final value immediately — no animation
-      el.textContent = (decimals > 0 ? target.toFixed(decimals) : Number(target).toLocaleString()) + suffix;
-    } else {
-      animateCount(el, target, {decimals, suffix, duration: 800});
-    }
+    animateCount(el, target, {decimals, suffix, duration: 800});
   });
 }
 
@@ -505,7 +500,7 @@ const fmtDate = s=>{
   return d.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});
 };
 const initials = n=>(n||'?').split(/[ _]/).slice(0,2).map(w=>w[0]||'').join('').toUpperCase().slice(0,2)||'?';
-function spin(id){document.getElementById(id).innerHTML='<div class="loading"><div class="spin"></div><br>Loading…</div>'}
+function spin(id){document.getElementById(id).innerHTML='<div class="loading"><img class="spin" src="https://upload.wikimedia.org/wikipedia/commons/2/26/Counter-Strike_vertical_logo_%282023%29.svg" alt="CS2"><br>Loading…</div>'}
 
 // ── Demo helpers ─────────────────────────────────────────────────────────────
 let _demosCache = null;
@@ -846,7 +841,7 @@ async function loadPlayer(name) {
 // ── Map Stats ─────────────────────────────────────────────────────────────────
 async function loadMaps() {
   const el = document.getElementById('p-maps');
-  el.innerHTML = '<div class="loading"><div class="spin"></div><br>Loading…</div>';
+  el.innerHTML = '<div class="loading"><img class="spin" src="https://upload.wikimedia.org/wikipedia/commons/2/26/Counter-Strike_vertical_logo_%282023%29.svg" alt="CS2"><br>Loading…</div>';
   const [dbStats, demos] = await Promise.all([
     fetch('/api/mapstats').then(r=>r.json()).catch(()=>[]),
     fetch('/api/demos').then(r=>r.json()).catch(()=>[]),
@@ -920,7 +915,7 @@ let _h2hSel = [null, null]; // [player1, player2]
 
 async function loadH2H() {
   const el = document.getElementById('p-h2h');
-  el.innerHTML = '<div class="loading"><div class="spin"></div><br>Loading players…</div>';
+  el.innerHTML = '<div class="loading"><img class="spin" src="https://upload.wikimedia.org/wikipedia/commons/2/26/Counter-Strike_vertical_logo_%282023%29.svg" alt="CS2"><br>Loading players…</div>';
   if (!_h2hPlayers) {
     const data = await fetch('/api/leaderboard').then(r=>r.json()).catch(()=>[]);
     // Fetch Steam avatars for all
@@ -1019,7 +1014,7 @@ async function runH2H() {
   if (!p1 || !p2 || !body) return;
 
   // Show loading state inside the expanding body
-  body.innerHTML = '<div class="loading" style="padding:20px"><div class="spin"></div><br>Loading…</div>';
+  body.innerHTML = '<div class="loading" style="padding:20px"><img class="spin" src="https://upload.wikimedia.org/wikipedia/commons/2/26/Counter-Strike_vertical_logo_%282023%29.svg" alt="CS2"><br>Loading…</div>';
   body.classList.add('open');
 
   // Collapse picker
@@ -1103,7 +1098,7 @@ function h2hBack() {
 let _lbSort = 'kills';
 async function loadLeaderboard() {
   const el = document.getElementById('p-leaderboard');
-  el.innerHTML = '<div class="loading"><div class="spin"></div><br>Loading…</div>';
+  el.innerHTML = '<div class="loading"><img class="spin" src="https://upload.wikimedia.org/wikipedia/commons/2/26/Counter-Strike_vertical_logo_%282023%29.svg" alt="CS2"><br>Loading…</div>';
   const data = await fetch('/api/leaderboard').then(r=>r.json()).catch(()=>[]);
   if (!Array.isArray(data) || !data.length) {
     el.innerHTML = emptyState('leaderboard','No Player Data','Stats will appear after matches are completed');
@@ -1305,7 +1300,7 @@ let _specData = null;
 async function loadSpecialists() {
   const el = document.getElementById('p-specialists');
   if (_specData) { renderSpecialists(_specData, _specTab); return; }
-  el.innerHTML = '<div class="loading"><div class="spin"></div><br>Loading…</div>';
+  el.innerHTML = '<div class="loading"><img class="spin" src="https://upload.wikimedia.org/wikipedia/commons/2/26/Counter-Strike_vertical_logo_%282023%29.svg" alt="CS2"><br>Loading…</div>';
   const data = await fetch('/api/specialists').then(r=>r.json()).catch(()=>[]);
   if (!Array.isArray(data) || !data.length) {
     el.innerHTML = emptyState('specialists','No Specialist Data','Clutch kings, entry fraggers and more will appear here'); return;
@@ -1394,7 +1389,7 @@ let _demoFilters = {map:''};
 async function loadDemos() {
   const el = document.getElementById('p-demos');
   if (_demoData) { renderDemos(); return; }
-  el.innerHTML = '<div class="loading"><div class="spin"></div><br>Loading demos…</div>';
+  el.innerHTML = '<div class="loading"><img class="spin" src="https://upload.wikimedia.org/wikipedia/commons/2/26/Counter-Strike_vertical_logo_%282023%29.svg" alt="CS2"><br>Loading demos…</div>';
   const data = await fetch('/api/demos').then(r=>r.json()).catch(()=>[]);
   if (!Array.isArray(data) || !data.length) {
     el.innerHTML = emptyState('demos','No Demos Found','Demo files will appear here once uploaded'); return;
