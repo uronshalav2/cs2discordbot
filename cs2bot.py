@@ -281,12 +281,12 @@ def _fetch_fshost_match_json(matchid: str) -> dict | None:
 
 
 async def handle_api_demos(request):
-    """GET /api/demos — returns all demos from fshost with parsed timestamps (only .dem files)"""
+    """GET /api/demos — returns all demos from fshost with parsed timestamps and match metadata"""
     demos = fetch_all_demos_raw()
+    matchid_map = build_matchid_to_demo_map()
     result = []
     for d in demos:
         name = d.get("name", "")
-        # Only include .dem files, not .json files
         if not name.endswith(".dem"):
             continue
         m = DEMO_TS_RE.match(name)
@@ -296,13 +296,30 @@ async def handle_api_demos(request):
                 ts = datetime.strptime(m.group(1), "%Y-%m-%d_%H-%M-%S").isoformat()
             except ValueError:
                 pass
+        # Try to find match metadata for this demo
+        meta = {}
+        for mid, entry in matchid_map.items():
+            if entry.get('name') == name or entry.get('name','').replace('.json','') == name.replace('.dem',''):
+                raw_meta = entry.get('metadata') or {}
+                meta = {
+                    'matchid':    str(raw_meta.get('match_id', mid)),
+                    'mapname':    raw_meta.get('map', ''),
+                    'team1_name': (raw_meta.get('team1') or {}).get('name', ''),
+                    'team2_name': (raw_meta.get('team2') or {}).get('name', ''),
+                    'team1_score':(raw_meta.get('team1') or {}).get('score', ''),
+                    'team2_score':(raw_meta.get('team2') or {}).get('score', ''),
+                }
+                break
         result.append({
-            "name": name,
-            "download_url": d.get("download_url", ""),
+            "name":           name,
+            "download_url":   d.get("download_url", ""),
             "size_formatted": d.get("size_formatted", ""),
-            "modified_at": d.get("modified_at", ""),
-            "filename_ts": ts,
+            "modified_at":    d.get("modified_at", ""),
+            "filename_ts":    ts,
+            **meta,
         })
+    # Sort newest first
+    result.sort(key=lambda x: x.get('filename_ts') or x.get('modified_at') or '', reverse=True)
     return _json_response(result)
 
 async def handle_api_leaderboard(request):
@@ -333,6 +350,37 @@ async def handle_api_leaderboard(request):
             WHERE steamid64 != '0' AND name != '' AND name IS NOT NULL
             GROUP BY steamid64, name
             ORDER BY kills DESC
+        """)
+        rows = c.fetchall()
+        c.close(); conn.close()
+        return _json_response(rows)
+    except Exception as e:
+        return _json_response({"error": str(e)})
+
+async def handle_api_specialists(request):
+    """GET /api/specialists — specialist stat boards: clutch, entry, flash, utility"""
+    try:
+        conn = get_db()
+        c = conn.cursor(dictionary=True)
+        c.execute(f"""
+            SELECT
+                name, steamid64,
+                COUNT(DISTINCT matchid)                                         AS matches,
+                SUM(v1_wins)                                                    AS clutch_1v1,
+                SUM(v2_wins)                                                    AS clutch_1v2,
+                SUM(v1_wins) + SUM(v2_wins)                                    AS clutch_total,
+                SUM(entry_wins)                                                 AS entry_wins,
+                SUM(entry_count)                                                AS entry_attempts,
+                ROUND(SUM(entry_wins)/NULLIF(SUM(entry_count),0)*100,1)       AS entry_rate,
+                SUM(flash_successes)                                            AS flash_successes,
+                ROUND(SUM(flash_successes)/NULLIF(COUNT(DISTINCT CONCAT(matchid,'_',mapnumber)),0),1) AS flashes_per_map,
+                SUM(utility_damage)                                             AS utility_damage,
+                ROUND(SUM(utility_damage)/NULLIF(COUNT(DISTINCT CONCAT(matchid,'_',mapnumber)),0),1) AS util_dmg_per_map
+            FROM {MATCHZY_TABLES['players']}
+            WHERE steamid64 != '0' AND name != '' AND name IS NOT NULL
+            GROUP BY steamid64, name
+            HAVING matches >= 1
+            ORDER BY clutch_total DESC
         """)
         rows = c.fetchall()
         c.close(); conn.close()
@@ -694,7 +742,8 @@ nav{background:var(--surface);border-bottom:2px solid var(--border);display:flex
     <div class="tab" data-p="leaderboard">Leaderboard</div>
     <div class="tab" data-p="maps">Maps</div>
     <div class="tab" data-p="h2h">Head-to-Head</div>
-    <div class="tab" data-p="status">Status</div>
+    <div class="tab" data-p="specialists">Specialists</div>
+    <div class="tab" data-p="demos">Demos</div>
   </div>
   <div class="nav-right">
     <a href="https://skins.fsho.st" target="_blank" class="btn-sm" style="text-decoration:none">🎨 Skins</a>
@@ -709,7 +758,8 @@ nav{background:var(--surface);border-bottom:2px solid var(--border);display:flex
     <div class="mobile-tab" data-p="leaderboard" onclick="go('leaderboard');closeMenu()">Leaderboard</div>
     <div class="mobile-tab" data-p="maps" onclick="go('maps');closeMenu()">Maps</div>
     <div class="mobile-tab" data-p="h2h" onclick="go('h2h');closeMenu()">Head-to-Head</div>
-    <div class="mobile-tab" data-p="status" onclick="go('status');closeMenu()">Status</div>
+    <div class="mobile-tab" data-p="specialists" onclick="go('specialists');closeMenu()">Specialists</div>
+    <div class="mobile-tab" data-p="demos" onclick="go('demos');closeMenu()">Demos</div>
     <a href="https://skins.fsho.st" target="_blank" class="mobile-skins" onclick="closeMenu()">🎨 Skins</a>
   </div>
 </div>
@@ -719,7 +769,8 @@ nav{background:var(--surface);border-bottom:2px solid var(--border);display:flex
   <div id="p-leaderboard" style="display:none"></div>
   <div id="p-maps" style="display:none"></div>
   <div id="p-h2h" style="display:none"></div>
-  <div id="p-status" style="display:none"></div>
+  <div id="p-specialists" style="display:none"></div>
+  <div id="p-demos" style="display:none"></div>
   <div id="p-player" style="display:none"></div>
   <div id="p-match" style="display:none"></div>
 </div>
@@ -757,7 +808,7 @@ function closeMenu() {
 
 let _back = null;
 function go(page, params={}, back=null) {
-  ['matches','leaderboard','maps','h2h','status','player','match'].forEach(p => {
+  ['matches','leaderboard','maps','h2h','specialists','demos','player','match'].forEach(p => {
     document.getElementById('p-'+p).style.display = (p===page)?'':'none';
   });
   document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active',t.dataset.p===page));
@@ -767,7 +818,8 @@ function go(page, params={}, back=null) {
   if(page==='leaderboard') loadLeaderboard();
   if(page==='maps')        loadMaps();
   if(page==='h2h')         loadH2H();
-  if(page==='status')      loadServer();
+  if(page==='specialists') loadSpecialists();
+  if(page==='demos')       loadDemos();
   if(page==='player')      loadPlayer(params.name);
   if(page==='match')       loadMatch(params.id);
 }
@@ -1243,100 +1295,6 @@ async function runH2H() {
     </div>`;
 }
 
-// ── Server Status ─────────────────────────────────────────────────────────────
-async function loadServer() {
-  const el = document.getElementById('p-status');
-  if (!el.dataset.loaded) {
-    el.innerHTML = '<div class="loading"><div class="spin"></div><br>Querying server…</div>';
-  }
-
-  const s = await fetch('/api/status').then(r=>r.json()).catch(()=>({online:false,player_list:[],connect:''}));
-
-  const fillPct = s.max_players > 0 ? Math.round((s.players / s.max_players) * 100) : 0;
-  const fillColor = fillPct === 0 ? 'var(--muted2)' : fillPct < 40 ? 'var(--loss)' : fillPct < 75 ? '#f0a842' : 'var(--win)';
-  const statusDot = s.online
-    ? `<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:var(--win);box-shadow:0 0 6px var(--win);margin-right:8px"></span><span style="color:var(--win);font-family:'Rajdhani',sans-serif;font-weight:700;font-size:13px;letter-spacing:1px">ONLINE</span>`
-    : `<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:var(--loss);box-shadow:0 0 6px var(--loss);margin-right:8px"></span><span style="color:var(--loss);font-family:'Rajdhani',sans-serif;font-weight:700;font-size:13px;letter-spacing:1px">OFFLINE</span>`;
-
-  const mapName = s.map || '—';
-  const mapImgUrl = MAP_IMGS[s.map] || null;
-  const mapImg = s.map
-    ? `<div style="position:relative;height:120px;background:linear-gradient(135deg,#0d1117,#1a2332);border-radius:4px;overflow:hidden;margin-bottom:12px">
-        ${mapImgUrl
-          ? `<img src="${mapImgUrl}" style="width:100%;height:100%;object-fit:cover;opacity:0.75" onerror="this.style.display='none'">`
-          : ''}
-        <div style="position:absolute;inset:0;background:linear-gradient(to top,rgba(0,0,0,.75) 0%,transparent 55%)"></div>
-        <div style="position:absolute;bottom:10px;left:14px;font-family:'Rajdhani',sans-serif;font-weight:800;font-size:22px;color:#fff;text-transform:uppercase;letter-spacing:1px;text-shadow:0 1px 6px rgba(0,0,0,.8)">${esc(mapName)}</div>
-      </div>`
-    : '';
-
-  const playerRows = s.player_list.length
-    ? s.player_list.map((p,i) => {
-        const mins = Math.floor((p.duration||0) / 60);
-        const timeStr = mins > 0 ? `${mins}m` : '—';
-        return `<tr>
-          <td style="text-align:left;color:var(--white);font-family:'Rajdhani',sans-serif;font-weight:600;font-size:14px;padding:9px 14px">${esc(p.name)}</td>
-          <td style="padding:9px 14px;text-align:center;font-family:'Rajdhani',sans-serif;font-weight:700;color:var(--orange)">${p.score ?? 0}</td>
-          <td style="padding:9px 14px;text-align:right;color:var(--muted2);font-size:12px">${timeStr}</td>
-        </tr>`;
-      }).join('')
-    : `<tr><td colspan="3" style="padding:24px;text-align:center;color:var(--muted2)">No players currently online</td></tr>`;
-
-  const now = new Date().toLocaleTimeString();
-
-  el.dataset.loaded = '1';
-  el.innerHTML = `
-    <div class="page-title">Server Status <span class="sub">last checked: ${now} • <span style="cursor:pointer;color:var(--orange)" onclick="document.getElementById('p-status').dataset.loaded='';loadServer()">↻ Refresh</span></span></div>
-
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
-
-      <!-- Status card -->
-      <div class="card" style="padding:20px 22px">
-        <div style="display:flex;align-items:center;margin-bottom:16px">${statusDot}</div>
-        ${s.online ? `
-        <div style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:13px;color:var(--muted2);letter-spacing:1px;text-transform:uppercase;margin-bottom:4px">Server</div>
-        <div style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:16px;color:var(--white);margin-bottom:14px">${esc(s.server_name||'CS2 Server')}</div>
-        <div id="connect-str" style="font-family:'Rajdhani',sans-serif;font-size:12px;color:var(--muted2);margin-bottom:10px;letter-spacing:.5px">connect ${esc(s.connect)}</div>
-        <button onclick="navigator.clipboard.writeText('connect ${esc(s.connect)}').then(()=>{const b=document.getElementById('copy-btn');b.textContent='✅ Copied!';b.style.borderColor='var(--win)';b.style.color='var(--win)';setTimeout(()=>{b.textContent='📋 Copy Connect';b.style.borderColor='';b.style.color='';},2000)})"
-          id="copy-btn"
-          style="width:100%;padding:10px;border:1px solid var(--orange);border-radius:3px;background:var(--orange-glow);color:var(--orange);font-family:'Rajdhani',sans-serif;font-weight:700;font-size:13px;letter-spacing:1.5px;text-transform:uppercase;cursor:pointer;transition:all .18s">
-          📋 Copy Connect
-        </button>
-        ` : `<div style="color:var(--muted2);font-size:13px;margin-top:8px">The server is currently unreachable.</div>`}
-      </div>
-
-      <!-- Map + players card -->
-      <div class="card" style="padding:20px 22px">
-        ${mapImg}
-        <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:8px">
-          <div style="font-family:'Rajdhani',sans-serif;font-weight:800;font-size:40px;color:var(--white);line-height:1">${s.players}</div>
-          <div style="font-family:'Rajdhani',sans-serif;font-weight:600;font-size:18px;color:var(--muted2)">/ ${s.max_players}</div>
-          <div style="font-size:11px;color:var(--muted2);letter-spacing:1px;text-transform:uppercase;margin-left:4px">players</div>
-        </div>
-        <!-- fill bar -->
-        <div style="height:5px;background:var(--border2);border-radius:3px;overflow:hidden">
-          <div style="height:100%;width:${fillPct}%;background:${fillColor};border-radius:3px;transition:width .6s"></div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Player list -->
-    <div class="page-title" style="font-size:16px;margin-bottom:10px">Players Online <span class="sub">${s.players} / ${s.max_players}</span></div>
-    <div class="card">
-      <table style="width:100%;border-collapse:collapse">
-        <thead>
-          <tr style="background:rgba(0,0,0,.35)">
-            <th style="padding:7px 14px;text-align:left;font-family:'Rajdhani',sans-serif;font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--muted2);border-bottom:1px solid var(--border)">Player</th>
-            <th style="padding:7px 14px;text-align:center;font-family:'Rajdhani',sans-serif;font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--muted2);border-bottom:1px solid var(--border)">Score</th>
-            <th style="padding:7px 14px;text-align:right;font-family:'Rajdhani',sans-serif;font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--muted2);border-bottom:1px solid var(--border)">Time</th>
-          </tr>
-        </thead>
-        <tbody>${playerRows}</tbody>
-      </table>
-    </div>`;
-
-}
-
 // ── Leaderboard ───────────────────────────────────────────────────────────────
 let _lbSort = 'kills';
 async function loadLeaderboard() {
@@ -1460,6 +1418,160 @@ function renderLeaderboard(data, sortKey) {
     </div>`;
 }
 
+// ── Specialist Boards ─────────────────────────────────────────────────────────
+let _specTab = 'clutch';
+let _specData = null;
+async function loadSpecialists() {
+  const el = document.getElementById('p-specialists');
+  if (_specData) { renderSpecialists(_specData, _specTab); return; }
+  el.innerHTML = '<div class="loading"><div class="spin"></div><br>Loading…</div>';
+  const data = await fetch('/api/specialists').then(r=>r.json()).catch(()=>[]);
+  if (!Array.isArray(data) || !data.length) {
+    el.innerHTML = '<div class="empty">No specialist data yet.</div>'; return;
+  }
+  _specData = data;
+  renderSpecialists(data, _specTab);
+}
+function renderSpecialists(data, tab) {
+  _specTab = tab;
+  const el = document.getElementById('p-specialists');
+  const tabs = [
+    {id:'clutch',  label:'🤝 Clutch Kings'},
+    {id:'entry',   label:'⚡ Entry Fraggers'},
+    {id:'flash',   label:'💡 Flash Kings'},
+    {id:'utility', label:'💣 Utility'},
+  ];
+  const tabsHtml = tabs.map(t => `
+    <div onclick="renderSpecialists(window._specData,'${t.id}')"
+      style="padding:8px 16px;border-radius:3px;cursor:pointer;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:13px;letter-spacing:1px;text-transform:uppercase;transition:all .15s;${tab===t.id?'background:var(--orange);color:#000;':'background:var(--surface2);color:var(--muted2);border:1px solid var(--border);'}">${t.label}</div>
+  `).join('');
+
+  let sorted, cols, getValue, getExtra;
+  if (tab === 'clutch') {
+    sorted = [...data].sort((a,b) => (b.clutch_total||0)-(a.clutch_total||0));
+    cols = [{label:'1v1 Wins'},{label:'1v2 Wins'},{label:'Total Clutches'}];
+    getValue = p => `<td style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:18px;color:var(--ct)">${p.clutch_1v1??0}</td><td style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:18px;color:var(--t)">${p.clutch_1v2??0}</td><td style="font-family:'Rajdhani',sans-serif;font-weight:800;font-size:20px;color:var(--orange)">${p.clutch_total??0}</td>`;
+  } else if (tab === 'entry') {
+    sorted = [...data].sort((a,b) => (b.entry_wins||0)-(a.entry_wins||0));
+    cols = [{label:'Entry Wins'},{label:'Attempts'},{label:'Success Rate'}];
+    getValue = p => `<td style="font-family:'Rajdhani',sans-serif;font-weight:800;font-size:20px;color:var(--orange)">${p.entry_wins??0}</td><td style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:18px;color:var(--muted2)">${p.entry_attempts??0}</td><td style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:18px;color:var(--win)">${p.entry_rate!=null?p.entry_rate+'%':'—'}</td>`;
+  } else if (tab === 'flash') {
+    sorted = [...data].sort((a,b) => (b.flash_successes||0)-(a.flash_successes||0));
+    cols = [{label:'Total Flashes'},{label:'Per Map'},{label:'Matches'}];
+    getValue = p => `<td style="font-family:'Rajdhani',sans-serif;font-weight:800;font-size:20px;color:var(--orange)">${p.flash_successes??0}</td><td style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:18px;color:var(--win)">${p.flashes_per_map??'—'}</td><td style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:18px;color:var(--muted2)">${p.matches??0}</td>`;
+  } else {
+    sorted = [...data].sort((a,b) => (b.utility_damage||0)-(a.utility_damage||0));
+    cols = [{label:'Total Util DMG'},{label:'Per Map'},{label:'Matches'}];
+    getValue = p => `<td style="font-family:'Rajdhani',sans-serif;font-weight:800;font-size:20px;color:var(--orange)">${p.utility_damage!=null?Number(p.utility_damage).toLocaleString():'—'}</td><td style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:18px;color:var(--win)">${p.util_dmg_per_map??'—'}</td><td style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:18px;color:var(--muted2)">${p.matches??0}</td>`;
+  }
+
+  const headerCols = cols.map(c=>`<th style="padding:8px 16px;text-align:center;font-family:'Rajdhani',sans-serif;font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--muted2)">${c.label}</th>`).join('');
+  const rows = sorted.map((p,i) => {
+    const rank = i+1;
+    const medal = rank===1?'🥇':rank===2?'🥈':rank===3?'🥉':rank;
+    return `<tr onclick="go('player',{name:'${esc(p.name)}'},'specialists')" style="cursor:pointer">
+      <td style="padding:10px 14px;text-align:center;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:15px;color:var(--muted2)">${medal}</td>
+      <td style="padding:10px 14px;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:15px;color:var(--white)">${esc(p.name)}</td>
+      ${getValue(p)}
+    </tr>`;
+  }).join('');
+
+  window._specData = data;
+  el.innerHTML = `
+    <div class="page-title">Specialist Boards</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px">${tabsHtml}</div>
+    <div class="card lb-wrap">
+      <table class="lb-table" style="width:100%;border-collapse:collapse">
+        <thead><tr style="background:rgba(0,0,0,.35)">
+          <th style="padding:8px 14px;width:50px"></th>
+          <th style="padding:8px 14px;text-align:left;font-family:'Rajdhani',sans-serif;font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--muted2)">Player</th>
+          ${headerCols}
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
+}
+
+// ── Demo Browser ──────────────────────────────────────────────────────────────
+let _demoData = null;
+let _demoFilters = {map:'', team:'', search:''};
+async function loadDemos() {
+  const el = document.getElementById('p-demos');
+  if (_demoData) { renderDemos(); return; }
+  el.innerHTML = '<div class="loading"><div class="spin"></div><br>Loading demos…</div>';
+  const data = await fetch('/api/demos').then(r=>r.json()).catch(()=>[]);
+  if (!Array.isArray(data) || !data.length) {
+    el.innerHTML = '<div class="empty">No demos found.</div>'; return;
+  }
+  _demoData = data;
+  renderDemos();
+}
+function renderDemos() {
+  const el = document.getElementById('p-demos');
+  const data = _demoData || [];
+  // Build filter options
+  const maps  = [...new Set(data.map(d=>d.mapname).filter(Boolean))].sort();
+  const teams = [...new Set(data.flatMap(d=>[d.team1_name,d.team2_name]).filter(Boolean))].sort();
+
+  const mapOpts  = ['<option value="">All Maps</option>',  ...maps.map(m=>`<option value="${esc(m)}" ${_demoFilters.map===m?'selected':''}>${esc(m)}</option>`)].join('');
+  const teamOpts = ['<option value="">All Teams</option>', ...teams.map(t=>`<option value="${esc(t)}" ${_demoFilters.team===t?'selected':''}>${esc(t)}</option>`)].join('');
+
+  // Apply filters
+  const f = _demoFilters;
+  const filtered = data.filter(d => {
+    if (f.map  && d.mapname !== f.map) return false;
+    if (f.team && d.team1_name !== f.team && d.team2_name !== f.team) return false;
+    if (f.search) {
+      const q = f.search.toLowerCase();
+      const hay = [d.name,d.mapname,d.team1_name,d.team2_name].join(' ').toLowerCase();
+      if (!hay.includes(q)) return false;
+    }
+    return true;
+  });
+
+  const rows = filtered.map(d => {
+    const date = d.filename_ts ? new Date(d.filename_ts).toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'}) : (d.modified_at||'—');
+    const mapImg = d.mapname && MAP_IMGS[d.mapname]
+      ? `<img src="${MAP_IMGS[d.mapname]}" style="width:52px;height:34px;object-fit:cover;border-radius:3px;flex-shrink:0" onerror="this.style.display='none'">`
+      : `<div style="width:52px;height:34px;background:var(--surface2);border-radius:3px;display:flex;align-items:center;justify-content:center;flex-shrink:0"><span style="font-size:8px;color:var(--muted2);font-family:'Rajdhani',sans-serif;font-weight:700;text-transform:uppercase">${esc(d.mapname||'?')}</span></div>`;
+    const score = (d.team1_score!==''&&d.team1_score!=null)
+      ? `<span style="color:var(--ct);font-weight:800">${d.team1_score}</span><span style="color:var(--muted2);margin:0 4px">:</span><span style="color:var(--t);font-weight:800">${d.team2_score}</span>`
+      : '';
+    const teams = (d.team1_name||d.team2_name)
+      ? `<div style="font-size:12px;color:var(--muted2);margin-top:2px">${esc(d.team1_name||'?')} <span style="color:var(--border2)">vs</span> ${esc(d.team2_name||'?')}</div>`
+      : '';
+    return `<div class="card" style="display:flex;align-items:center;gap:14px;padding:12px 16px;margin-bottom:8px">
+      ${mapImg}
+      <div style="flex:1;min-width:0">
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+          <div style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:14px;color:var(--white);text-transform:uppercase;letter-spacing:1px">${esc(d.mapname||d.name)}</div>
+          ${score ? `<div style="font-family:'Rajdhani',sans-serif;font-size:14px">${score}</div>` : ''}
+        </div>
+        ${teams}
+        <div style="font-size:11px;color:var(--muted2);margin-top:3px">${date} · ${esc(d.size_formatted||'')}</div>
+      </div>
+      <a href="${esc(d.download_url)}" download style="text-decoration:none">
+        <button style="padding:8px 14px;background:var(--orange-glow);border:1px solid var(--orange);border-radius:3px;color:var(--orange);font-family:'Rajdhani',sans-serif;font-weight:700;font-size:12px;letter-spacing:1px;text-transform:uppercase;cursor:pointer;white-space:nowrap">⬇ Download</button>
+      </a>
+    </div>`;
+  }).join('') || '<div class="empty">No demos match your filters.</div>';
+
+  el.innerHTML = `
+    <div class="page-title">Demo Browser <span class="sub">${filtered.length} of ${data.length} demos</span></div>
+    <div class="card" style="padding:14px 16px;margin-bottom:14px;display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+      <input id="demo-search" type="text" placeholder="Search…" value="${esc(f.search)}"
+        oninput="_demoFilters.search=this.value;renderDemos()"
+        style="flex:1;min-width:140px;padding:8px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:3px;color:var(--white);font-family:'Rajdhani',sans-serif;font-size:13px;outline:none">
+      <select onchange="_demoFilters.map=this.value;renderDemos()"
+        style="padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:3px;color:var(--white);font-family:'Rajdhani',sans-serif;font-size:13px;cursor:pointer">${mapOpts}</select>
+      <select onchange="_demoFilters.team=this.value;renderDemos()"
+        style="padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:3px;color:var(--white);font-family:'Rajdhani',sans-serif;font-size:13px;cursor:pointer">${teamOpts}</select>
+      <button onclick="_demoFilters={map:'',team:'',search:''};renderDemos()"
+        style="padding:8px 12px;background:transparent;border:1px solid var(--border);border-radius:3px;color:var(--muted2);font-family:'Rajdhani',sans-serif;font-size:12px;cursor:pointer;letter-spacing:1px">✕ Clear</button>
+    </div>
+    ${rows}`;
+}
+
 // Check for ?match= URL param to deep-link
 const urlParams = new URLSearchParams(location.search);
 if(urlParams.get('match')) go('match',{id:urlParams.get('match')});
@@ -1469,6 +1581,7 @@ else go('matches');
 </html>"""
 async def start_http_server():
     app = web.Application()
+    app.router.add_get('/api/specialists',    handle_api_specialists)
     app.router.add_get('/api/player/{name}', handle_api_player)
     app.router.add_get('/api/steam/{steamid64}', handle_api_steam)
     app.router.add_get('/api/matches',       handle_api_matches)
