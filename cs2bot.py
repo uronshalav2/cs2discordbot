@@ -731,32 +731,34 @@ nav{background:#09090b;border-bottom:2px solid var(--border);display:flex;align-
 .adr-highlight{color:var(--orange)}
 
 /* MATCHES LIST */
-.matches-list .match-item{position:relative;overflow:hidden;display:flex;align-items:center;gap:14px;padding:0;border-bottom:3px solid rgba(0,0,0,.8);cursor:pointer;transition:transform .18s ease,box-shadow .18s ease;min-height:96px;border-left:3px solid transparent}
-.matches-list .match-item:hover{transform:scaleX(1.008) translateX(3px);border-left-color:var(--orange);box-shadow:inset 4px 0 18px rgba(255,85,0,.12),4px 0 0 var(--orange)}
-.matches-list .match-item:hover .m-overlay{background:linear-gradient(90deg,rgba(6,8,14,.88) 0%,rgba(6,8,14,.80) 30%,rgba(6,8,14,.52) 60%,rgba(6,8,14,.15) 100%)}
-.matches-list .match-item:hover .m-score{text-shadow:0 0 18px rgba(255,120,40,.5),0 2px 8px rgba(0,0,0,.9)}
-.matches-list .match-item:hover .m-id{color:var(--orange)}
+.matches-list .match-item{position:relative;overflow:hidden;display:flex;align-items:center;gap:14px;padding:0;border-bottom:3px solid rgba(0,0,0,.8);cursor:pointer;transition:transform .22s ease,box-shadow .22s ease,border-left-color .22s ease;min-height:96px;border-left:3px solid transparent;will-change:transform}
+.matches-list .match-item:hover{transform:translateX(4px);border-left-color:var(--orange);box-shadow:inset 4px 0 20px rgba(255,85,0,.1)}
 .matches-list .match-item:last-child{border-bottom:none}
-.match-item .m-bg{position:absolute;inset:0;background-size:cover;background-position:center;z-index:0;transition:transform .3s ease}
-.matches-list .match-item:hover .m-bg{transform:scale(1.03)}
-.match-item .m-overlay{position:absolute;inset:0;background:linear-gradient(90deg,rgba(6,8,14,.97) 0%,rgba(6,8,14,.92) 30%,rgba(6,8,14,.65) 60%,rgba(6,8,14,.25) 100%);z-index:1;transition:background .18s ease}
+.match-item .m-bg{position:absolute;inset:0;background-size:cover;background-position:center;z-index:0;transition:transform .35s ease;will-change:transform}
+.matches-list .match-item:hover .m-bg{transform:scale(1.04)}
+.match-item .m-overlay{position:absolute;inset:0;background:linear-gradient(90deg,rgba(6,8,14,.97) 0%,rgba(6,8,14,.92) 30%,rgba(6,8,14,.65) 60%,rgba(6,8,14,.25) 100%);z-index:1}
+.match-item .m-hover-layer{position:absolute;inset:0;z-index:1;background:linear-gradient(90deg,rgba(255,85,0,.07) 0%,rgba(255,85,0,.03) 30%,transparent 70%);opacity:0;transition:opacity .22s ease}
+.matches-list .match-item:hover .m-hover-layer{opacity:1}
+.matches-list .match-item:hover .m-score{text-shadow:0 0 18px rgba(255,120,40,.45),0 2px 8px rgba(0,0,0,.9)}
+.matches-list .match-item:hover .m-id{color:var(--orange)}
 .match-item .m-content{position:relative;z-index:2;display:flex;align-items:center;gap:14px;width:100%;padding:18px 24px}
-.m-id{font-size:11px;color:rgba(255,255,255,.45);width:42px;font-family:'Rajdhani',sans-serif;font-weight:600;flex-shrink:0;transition:color .18s}
+.m-id{font-size:11px;color:rgba(255,255,255,.45);width:42px;font-family:'Rajdhani',sans-serif;font-weight:600;flex-shrink:0;transition:color .22s ease}
 .m-teams{flex:1}
 .m-teams-str{font-size:13px;color:rgba(255,255,255,.8);margin-bottom:4px;font-weight:500}
-.m-score{font-family:'Rajdhani',sans-serif;font-weight:800;font-size:26px;color:#fff;text-shadow:0 2px 8px rgba(0,0,0,.9),0 0 20px rgba(0,0,0,.5);transition:text-shadow .18s ease}
+.m-score{font-family:'Rajdhani',sans-serif;font-weight:800;font-size:26px;color:#fff;text-shadow:0 2px 8px rgba(0,0,0,.9),0 0 20px rgba(0,0,0,.5);transition:text-shadow .22s ease}
 .m-date{font-size:11px;color:rgba(255,255,255,.5);text-align:right;white-space:nowrap;text-shadow:0 1px 4px rgba(0,0,0,.9)}
 
 /* DEMO CARDS */
-.demo-card{position:relative;overflow:hidden;height:110px;margin-bottom:2px;cursor:pointer;border-left:3px solid transparent;transition:transform .18s ease,box-shadow .18s ease,border-left-color .18s ease}
-.demo-card:hover{transform:scaleX(1.008) translateX(3px);border-left-color:var(--orange);box-shadow:inset 4px 0 18px rgba(255,85,0,.12)}
-.demo-card:hover .demo-bg-img{transform:scale(1.03)}
-.demo-card:hover .demo-overlay{background:linear-gradient(90deg,rgba(4,5,7,.88) 0%,rgba(4,5,7,.78) 35%,rgba(4,5,7,.45) 65%,rgba(4,5,7,.05) 100%)}
-.demo-card:hover .demo-map-label{color:rgba(255,255,255,.65)}
-.demo-bg-img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:0.75;transition:transform .3s ease}
-.demo-overlay{position:absolute;inset:0;background:linear-gradient(90deg,rgba(4,5,7,.95) 0%,rgba(4,5,7,.88) 35%,rgba(4,5,7,.55) 65%,rgba(4,5,7,.1) 100%);transition:background .18s ease}
+.demo-card{position:relative;overflow:hidden;height:110px;margin-bottom:2px;cursor:pointer;border-left:3px solid transparent;transition:transform .22s ease,box-shadow .22s ease,border-left-color .22s ease;will-change:transform}
+.demo-card:hover{transform:translateX(4px);border-left-color:var(--orange);box-shadow:inset 4px 0 20px rgba(255,85,0,.1)}
+.demo-card:hover .demo-bg-img{transform:scale(1.04)}
+.demo-card:hover .demo-map-label{color:rgba(255,255,255,.7)}
+.demo-hover-layer{position:absolute;inset:0;z-index:1;background:linear-gradient(90deg,rgba(255,85,0,.07) 0%,rgba(255,85,0,.03) 30%,transparent 70%);opacity:0;transition:opacity .22s ease;pointer-events:none}
+.demo-card:hover .demo-hover-layer{opacity:1}
+.demo-bg-img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:0.75;transition:transform .35s ease;will-change:transform}
+.demo-overlay{position:absolute;inset:0;background:linear-gradient(90deg,rgba(4,5,7,.95) 0%,rgba(4,5,7,.88) 35%,rgba(4,5,7,.55) 65%,rgba(4,5,7,.1) 100%)}
 .demo-content{position:relative;z-index:2;height:100%;display:flex;align-items:center;padding:0 22px;gap:18px}
-.demo-map-label{font-family:'Rajdhani',sans-serif;font-weight:800;font-size:12px;letter-spacing:3px;text-transform:uppercase;color:rgba(255,255,255,.45);margin-bottom:4px;text-shadow:0 1px 4px rgba(0,0,0,.8);transition:color .18s ease}
+.demo-map-label{font-family:'Rajdhani',sans-serif;font-weight:800;font-size:12px;letter-spacing:3px;text-transform:uppercase;color:rgba(255,255,255,.45);margin-bottom:4px;text-shadow:0 1px 4px rgba(0,0,0,.8);transition:color .22s ease}
 
 /* PROFILE */
 .profile-top{--sx:50%;--sy:50%;background:linear-gradient(135deg,rgba(255,85,0,.11) 0%,rgba(10,12,14,.7) 50%,rgba(255,85,0,.05) 100%);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);border:1px solid rgba(255,85,0,.28);border-radius:10px;padding:22px 24px;margin-bottom:12px;display:flex;align-items:center;gap:20px;box-shadow:0 0 40px rgba(255,85,0,.12),0 8px 32px rgba(0,0,0,.55),inset 0 1px 0 rgba(255,255,255,.08);position:relative;overflow:hidden}
@@ -797,6 +799,26 @@ nav{background:#09090b;border-bottom:2px solid var(--border);display:flex;align-
 .podium-card:hover{transform:translateY(-3px);box-shadow:0 0 30px rgba(255,85,0,.2),0 12px 40px rgba(0,0,0,.6)!important}
 .podium-shine{position:absolute;inset:0;pointer-events:none;z-index:0;opacity:0;transition:opacity .4s ease;border-radius:inherit;background:radial-gradient(circle at var(--sx,50%) var(--sy,50%),rgba(255,200,100,.25) 0%,rgba(255,85,0,.08) 40%,transparent 65%)}
 .podium-card:hover .podium-shine{opacity:1}
+
+/* H2H CLEAR BUTTON */
+.h2h-clear-btn{padding:3px 10px;background:transparent;border:1px solid var(--border);border-radius:3px;color:var(--muted2);font-size:11px;font-family:'Rajdhani',sans-serif;cursor:pointer;letter-spacing:1px;transition:all .2s;position:relative;overflow:hidden}
+.h2h-clear-btn::before{content:'';position:absolute;inset:0;background:linear-gradient(135deg,rgba(255,255,255,.07) 0%,transparent 60%);pointer-events:none}
+.h2h-clear-btn:hover{background:rgba(255,85,0,.45);border-color:var(--orange2);color:#fff;box-shadow:0 0 18px rgba(255,85,0,.5),0 0 6px rgba(255,85,0,.3),inset 0 1px 0 rgba(255,255,255,.15);text-shadow:0 0 8px rgba(255,180,80,.7);transform:translateY(-1px)}
+.h2h-clear-btn:active{transform:translateY(0);box-shadow:0 0 10px rgba(255,85,0,.35)}
+
+/* H2H PLAYER ROWS */
+.h2h-row{display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:4px;cursor:pointer;border:1px solid transparent;transition:background .15s ease,border-color .15s ease,box-shadow .15s ease,transform .15s ease}
+.h2h-row:hover{background:rgba(255,85,0,.06);border-color:rgba(255,85,0,.25);box-shadow:0 0 12px rgba(255,85,0,.08),inset 0 1px 0 rgba(255,255,255,.04);transform:translateX(2px)}
+.h2h-row.selected{background:rgba(255,255,255,.05);border-color:rgba(255,255,255,.12)}
+.h2h-row.selected:hover{background:rgba(255,85,0,.09);border-color:rgba(255,85,0,.35);box-shadow:0 0 16px rgba(255,85,0,.12),inset 0 1px 0 rgba(255,255,255,.05)}
+
+/* COMPARE BUTTON */
+.compare-btn{width:100%;padding:11px;border-radius:3px;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:13px;letter-spacing:2px;text-transform:uppercase;cursor:pointer;transition:all .2s;position:relative;overflow:hidden}
+.compare-btn::before{content:'';position:absolute;inset:0;background:linear-gradient(135deg,rgba(255,255,255,.08) 0%,transparent 60%);pointer-events:none}
+.compare-btn.active{border:1px solid var(--orange);background:var(--orange-glow);color:var(--orange)}
+.compare-btn.active:hover{background:rgba(255,85,0,.45);border-color:var(--orange2);color:#fff;box-shadow:0 0 24px rgba(255,85,0,.6),0 0 8px rgba(255,85,0,.4),inset 0 1px 0 rgba(255,255,255,.15);text-shadow:0 0 10px rgba(255,180,80,.8);transform:translateY(-1px)}
+.compare-btn.active:active{transform:translateY(0);box-shadow:0 0 12px rgba(255,85,0,.4)}
+.compare-btn.inactive{border:1px solid var(--border);background:transparent;color:var(--muted2);cursor:default}
 
 /* DEMO DOWNLOAD BUTTON */
 .demo-dl-btn{padding:10px 20px;background:rgba(255,85,0,.15);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);border:1px solid var(--orange);border-radius:0;color:var(--orange);font-family:'Rajdhani',sans-serif;font-weight:700;font-size:12px;letter-spacing:1.5px;text-transform:uppercase;cursor:pointer;white-space:nowrap;transition:all .2s;position:relative;overflow:hidden}.demo-dl-btn::before{content:'';position:absolute;inset:0;background:linear-gradient(135deg,rgba(255,255,255,.08) 0%,transparent 60%);pointer-events:none}
@@ -962,6 +984,7 @@ async function loadMatches() {
     <div class="match-item" onclick="go('match',{id:'${m.matchid}'},'matches')">
       <div class="m-bg" style="${bgStyle}"></div>
       <div class="m-overlay"></div>
+      <div class="m-hover-layer"></div>
       <div class="m-content">
         <div class="m-id">#${m.matchid}</div>
         <div class="m-teams">
@@ -1078,7 +1101,7 @@ async function loadMatch(id) {
   const demoBtnHtml = demo.url
     ? `<div class="meta-chip"><a href="${demo.url}" target="_blank"
          style="display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border:1px solid rgba(255,85,0,.5);border-radius:2px;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--orange);background:var(--orange-glow);text-decoration:none">
-         📥 Demo${demo.size?' ('+demo.size+')':''}</a></div>`
+         Demo${demo.size?' ('+demo.size+')':''}</a></div>`
     : '';
 
   document.getElementById('p-match').innerHTML = `
@@ -1326,7 +1349,7 @@ function renderH2HPicker() {
         <div style="font-size:10px;color:var(--muted2);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:2px">Player ${slot+1}</div>
         ${av}
         <div style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:14px;color:#fff">${esc(p._steam_name||p.name)}</div>
-        <button onclick="_h2hSel[${slot}]=null;renderH2HPicker()" style="padding:3px 10px;background:transparent;border:1px solid var(--border);border-radius:3px;color:var(--muted2);font-size:11px;font-family:'Rajdhani',sans-serif;cursor:pointer;letter-spacing:1px">✕ Clear</button>
+        <button onclick="_h2hSel[${slot}]=null;renderH2HPicker()" class="h2h-clear-btn">✕ Clear</button>
       </div>`;
     }
     return `<div style="display:flex;flex-direction:column;align-items:center;gap:6px;flex:1">
@@ -1352,7 +1375,7 @@ function renderH2HPicker() {
       : isP2
       ? `<span style="font-size:9px;padding:1px 6px;border-radius:2px;background:rgba(251,146,60,.2);border:1px solid rgba(251,146,60,.4);color:var(--t);font-family:'Rajdhani',sans-serif;font-weight:700;letter-spacing:1px">P2</span>`
       : '';
-    return `<div onclick="h2hSelect(${i})" style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:4px;cursor:pointer;transition:background .13s;background:${selected?'rgba(255,255,255,.05)':'transparent'};border:1px solid ${selected?'rgba(255,255,255,.12)':'transparent'}">
+    return `<div onclick="h2hSelect(${i})" class="h2h-row${selected?' selected':''}">
       ${av}
       <div style="flex:1;min-width:0">
         <div style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:14px;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(p._steam_name||p.name)}</div>
@@ -1369,8 +1392,7 @@ function renderH2HPicker() {
         <div style="font-family:'Rajdhani',sans-serif;font-weight:800;font-size:20px;color:var(--muted);text-align:center">VS</div>
         ${slotHtml(1,p2)}
       </div>
-      <button onclick="runH2H()" ${canCompare?'':'disabled'}
-        style="width:100%;padding:11px;border:1px solid ${canCompare?'var(--orange)':'var(--border)'};border-radius:3px;background:${canCompare?'var(--orange-glow)':'transparent'};color:${canCompare?'var(--orange)':'var(--muted2)'};font-family:'Rajdhani',sans-serif;font-weight:700;font-size:13px;letter-spacing:2px;text-transform:uppercase;cursor:${canCompare?'pointer':'default'};transition:all .2s">
+      <button onclick="runH2H()" ${canCompare?'':'disabled'} class="compare-btn ${canCompare?'active':'inactive'}">
         ${canCompare?'Compare':'Select 2 players to compare'}
       </button>
     </div>
@@ -1721,6 +1743,7 @@ function renderDemos() {
         ? `<img class="demo-bg-img" src="${mapImg}">`
         : `<div style="position:absolute;inset:0;background:linear-gradient(135deg,#0a0c0e,#141618)"></div>`}
       <div class="demo-overlay"></div>
+      <div class="demo-hover-layer"></div>
       <div class="demo-content">
         <div style="flex:1;min-width:0">
           <div class="demo-map-label">${esc(d.mapname||d.name)}</div>
