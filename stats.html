@@ -1,1 +1,1269 @@
-test
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Reshtan Gaming</title>
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#080a0c;--surface:#0f1012;--surface2:#141618;--border:#1c1e21;--border2:#252729;
+  --orange:#ff5500;--orange2:#ff7733;--orange-glow:rgba(255,85,0,.15);
+  --ct:#5bc4f5;--t:#f0a842;--win:#22c55e;--loss:#ef4444;
+  --text:#a8b0b8;--white:#dde1e7;--muted:#3a3e44;--muted2:#575e68;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;font-size:13px}
+/* NAV */
+nav{background:#09090b;border-bottom:2px solid var(--border);display:flex;align-items:center;padding:0 20px;height:50px;position:sticky;top:0;z-index:200;gap:0}
+.logo{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:26px;letter-spacing:-2px;color:var(--orange);text-transform:uppercase;margin-right:28px;white-space:nowrap;display:flex;align-items:center;line-height:1}
+.tabs{display:flex;gap:0;height:100%;position:relative}
+.tab{height:100%;padding:0 16px;display:flex;align-items:center;font-family:'Rajdhani',sans-serif;font-weight:600;font-size:12px;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted2);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-2px;transition:color .18s,background .18s;position:relative}
+.tab:hover{color:var(--text);background:rgba(255,255,255,.03)}
+.tab.active{color:var(--orange)}
+.tab-indicator{position:absolute;bottom:-2px;height:2px;background:var(--orange);transition:left .25s cubic-bezier(.4,0,.2,1),width .25s cubic-bezier(.4,0,.2,1);pointer-events:none;box-shadow:0 0 8px rgba(255,85,0,.6);border-radius:1px}
+.nav-right{margin-left:auto;display:flex;gap:8px;align-items:center}
+.hamburger{display:none;flex-direction:column;justify-content:center;gap:5px;width:36px;height:36px;cursor:pointer;padding:4px;border-radius:3px;margin-left:auto;flex-shrink:0}
+.hamburger span{display:block;height:2px;background:var(--orange);border-radius:2px;transition:all .25s}
+.hamburger.open span:nth-child(1){transform:translateY(7px) rotate(45deg)}
+.hamburger.open span:nth-child(2){opacity:0}
+.hamburger.open span:nth-child(3){transform:translateY(-7px) rotate(-45deg)}
+.mobile-menu{display:none;position:fixed;top:50px;left:0;right:0;bottom:0;background:rgba(0,0,0,.6);z-index:199;backdrop-filter:blur(4px)}
+.mobile-menu.open{display:block}
+.mobile-drawer{background:#09090b;border-bottom:2px solid var(--border);padding:8px 0}
+.mobile-tab{padding:14px 24px;font-family:'Rajdhani',sans-serif;font-weight:600;font-size:14px;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted2);cursor:pointer;border-left:3px solid transparent;transition:all .15s}
+.mobile-tab:hover{color:var(--text);background:rgba(255,255,255,.03)}
+.mobile-tab.active{color:var(--orange);border-left-color:var(--orange);background:var(--orange-glow)}
+.mobile-skins{display:block;padding:14px 24px;font-family:'Rajdhani',sans-serif;font-weight:600;font-size:14px;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted2);text-decoration:none;border-top:1px solid var(--border);margin-top:4px}
+@media(max-width:768px){
+  .tabs{display:none}
+  .nav-right{display:none}
+  .hamburger{display:flex}
+}
+.btn-sm{padding:5px 12px;border:1px solid var(--border2);border-radius:3px;font-size:11px;font-family:'Rajdhani',sans-serif;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:var(--muted2);cursor:pointer;transition:all .18s;white-space:nowrap}
+.btn-sm:hover{border-color:var(--orange);color:var(--orange)}
+.btn-sm.active-btn{border-color:var(--orange);color:var(--orange);background:var(--orange-glow)}
+#app{max-width:1100px;margin:0 auto;padding:20px 16px}
+.page-title{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:20px;letter-spacing:1px;text-transform:uppercase;color:var(--white);margin-bottom:16px;display:flex;align-items:center;gap:10px}
+.page-title .sub{font-size:11px;color:var(--muted2);font-weight:500;letter-spacing:.5px;text-transform:none;font-family:'Inter',sans-serif}
+.page-panel{opacity:1;transform:translateY(0);transition:opacity .22s ease,transform .22s ease}
+.page-panel.page-out{opacity:0;transform:translateY(6px);pointer-events:none}
+.page-panel.page-in{animation:pageIn .22s ease forwards}
+@keyframes pageIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+.empty{padding:52px 24px;text-align:center;color:var(--muted2);display:flex;flex-direction:column;align-items:center;gap:12px}
+.empty svg{opacity:.25}
+.empty-title{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:16px;letter-spacing:1px;text-transform:uppercase;color:var(--muted2)}
+.empty-sub{font-size:12px;color:var(--muted2);opacity:.7}
+.card{background:#0c0e10;border:1px solid var(--border);border-radius:4px;overflow:hidden}
+.lb-wrap{overflow-x:auto;border:1px solid rgba(255,85,0,.3)!important;box-shadow:0 0 20px rgba(255,85,0,.06),inset 0 1px 0 rgba(255,255,255,.04)!important;border-radius:4px}
+.lb-table{width:100%;border-collapse:collapse;min-width:680px}
+.lb-table thead tr{background:rgba(0,0,0,.6)}
+.lb-table th{padding:8px 12px;text-align:right;font-family:'Rajdhani',sans-serif;font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--muted2);border-bottom:1px solid var(--border);white-space:nowrap;user-select:none}
+.lb-table th.sortable{cursor:pointer;transition:color .15s}
+.lb-table th.sortable:hover{color:var(--text)}
+.lb-table th.sort-active{color:var(--orange)}
+.lb-table th.sort-active::after{content:' ▼';font-size:8px;opacity:.8}
+.lb-table th:first-child,.lb-table th:nth-child(2){text-align:left}
+.lb-table td{padding:9px 12px;text-align:right;border-bottom:1px solid var(--border);font-size:13px;white-space:nowrap}
+.lb-table td:first-child{text-align:center;width:40px;font-family:'Rajdhani',sans-serif;font-weight:700;color:var(--muted)}
+.lb-table td:nth-child(2){text-align:left}
+.lb-table tbody tr{cursor:pointer;transition:background .12s,transform .0s}
+.lb-table tbody tr:hover td{background:rgba(255,85,0,.04)}
+.lb-table tbody tr:last-child td{border-bottom:none}
+.lb-table tbody tr.lb-moving{transition:transform .35s cubic-bezier(.4,0,.2,1);will-change:transform}
+.rank-gold td:first-child{color:var(--orange);background:linear-gradient(90deg,rgba(255,85,0,.14) 0%,rgba(255,85,0,.05) 100%)}
+.rank-gold td:nth-child(2){background:linear-gradient(90deg,rgba(255,85,0,.05) 0%,transparent 100%)}
+.rank-silver td:first-child{color:#a0aec0;background:linear-gradient(90deg,rgba(160,174,192,.12) 0%,rgba(160,174,192,.04) 100%)}
+.rank-silver td:nth-child(2){background:linear-gradient(90deg,rgba(160,174,192,.04) 0%,transparent 100%)}
+.rank-bronze td:first-child{color:#b87333;background:linear-gradient(90deg,rgba(184,115,51,.13) 0%,rgba(184,115,51,.05) 100%)}
+.rank-bronze td:nth-child(2){background:linear-gradient(90deg,rgba(184,115,51,.05) 0%,transparent 100%)}
+.spec-rank-gold td:first-child{color:var(--orange);background:linear-gradient(90deg,rgba(255,85,0,.14) 0%,rgba(255,85,0,.05) 100%)}
+.spec-rank-gold td:nth-child(2){background:linear-gradient(90deg,rgba(255,85,0,.05) 0%,transparent 100%)}
+.spec-rank-silver td:first-child{color:#a0aec0;background:linear-gradient(90deg,rgba(160,174,192,.12) 0%,rgba(160,174,192,.04) 100%)}
+.spec-rank-silver td:nth-child(2){background:linear-gradient(90deg,rgba(160,174,192,.04) 0%,transparent 100%)}
+.spec-rank-bronze td:first-child{color:#b87333;background:linear-gradient(90deg,rgba(184,115,51,.13) 0%,rgba(184,115,51,.05) 100%)}
+.spec-rank-bronze td:nth-child(2){background:linear-gradient(90deg,rgba(184,115,51,.05) 0%,transparent 100%)}
+.pname{font-weight:600;color:var(--white);font-family:'Rajdhani',sans-serif;font-size:15px;letter-spacing:.5px}
+.pname:hover{color:var(--orange)}
+.kd-num{font-family:'Rajdhani',sans-serif;font-weight:600;font-size:15px}
+.kd-g{color:var(--win)}.kd-n{color:var(--text)}.kd-b{color:var(--loss)}
+.hs-bar-wrap{display:flex;align-items:center;gap:6px;justify-content:flex-end}
+.hs-bar{height:4px;background:var(--border2);border-radius:2px;width:50px;overflow:hidden;flex-shrink:0}
+.hs-bar-fill{height:100%;background:var(--orange);border-radius:2px;transition:width .4s}
+.hs-val{font-size:11px;color:var(--orange);width:34px;text-align:right}
+.mvp-card{--sx:50%;--sy:50%;background:linear-gradient(135deg,rgba(255,85,0,.12) 0%,rgba(10,12,14,.7) 50%,rgba(255,85,0,.06) 100%);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);border:1px solid rgba(255,85,0,.35);border-radius:10px;padding:20px 24px;display:flex;align-items:center;gap:24px;margin-bottom:12px;position:relative;overflow:hidden;box-shadow:0 0 40px rgba(255,85,0,.15),0 8px 32px rgba(0,0,0,.6),inset 0 1px 0 rgba(255,255,255,.08)}
+.mvp-card::after{content:'';position:absolute;inset:0;background:radial-gradient(circle at var(--sx) var(--sy),rgba(255,140,60,.22) 0%,rgba(255,85,0,.08) 35%,transparent 65%);pointer-events:none;opacity:0;transition:opacity .4s ease}
+.mvp-card::before{content:'MVP';position:absolute;right:20px;top:16px;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:13px;letter-spacing:3px;color:var(--orange);border:1px solid var(--orange);padding:2px 10px;border-radius:2px;background:rgba(255,85,0,.18);box-shadow:0 0 12px rgba(255,85,0,.3),inset 0 1px 0 rgba(255,255,255,.1);z-index:1}
+.mvp-avatar{width:64px;height:64px;border-radius:50%;background:linear-gradient(135deg,var(--orange),var(--orange2));display:flex;align-items:center;justify-content:center;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:24px;color:#000;flex-shrink:0;border:2px solid rgba(255,85,0,.4)}
+.mvp-info{flex:1}
+.mvp-name{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:22px;color:var(--white);letter-spacing:.5px;margin-bottom:4px}
+.mvp-stats{display:flex;gap:20px;flex-wrap:wrap}
+.mvp-stat{display:flex;flex-direction:column}
+.mvp-val{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:20px;color:var(--white);line-height:1}
+.mvp-lbl{font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--muted2);margin-top:2px}
+.awards-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px}
+.award-card{--sx:50%;--sy:50%;background:linear-gradient(135deg,rgba(255,85,0,.09) 0%,rgba(10,12,14,.65) 60%,rgba(255,85,0,.04) 100%);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);border:1px solid rgba(255,85,0,.22);border-radius:8px;padding:12px 14px;display:flex;align-items:center;gap:12px;box-shadow:0 0 20px rgba(255,85,0,.08),0 4px 16px rgba(0,0,0,.45),inset 0 1px 0 rgba(255,255,255,.06);position:relative;overflow:hidden}
+.award-card::after{content:'';position:absolute;inset:0;background:radial-gradient(circle at var(--sx) var(--sy),rgba(255,140,60,.2) 0%,rgba(255,85,0,.06) 40%,transparent 65%);pointer-events:none;opacity:0;transition:opacity .4s ease}
+.award-avatar{width:36px;height:36px;border-radius:50%;background:var(--surface);border:1px solid var(--border2);display:flex;align-items:center;justify-content:center;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:14px;color:var(--text);flex-shrink:0}
+.award-name{font-family:'Rajdhani',sans-serif;font-weight:600;font-size:14px;color:var(--white)}
+.award-val{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:22px;color:var(--white);margin-left:auto;line-height:1}
+.award-lbl{font-size:10px;color:var(--muted2);text-align:right;margin-top:1px}
+.match-header-card{background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:18px 22px;margin-bottom:12px}
+.match-score-row{display:flex;align-items:center;gap:12px;margin-bottom:6px}
+.team-block{flex:1}
+.team-nm{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:17px;letter-spacing:.5px;text-transform:uppercase}
+.team-sc{font-family:'Rajdhani',sans-serif;font-weight:800;font-size:52px;line-height:1}
+.score-mid{display:flex;flex-direction:column;align-items:center;gap:2px;padding:0 12px}
+.score-colon{font-family:'Rajdhani',sans-serif;font-size:32px;color:var(--muted)}
+.match-meta-row{display:flex;gap:16px;margin-top:8px}
+.meta-chip{font-size:11px;color:var(--muted2);display:flex;align-items:center;gap:5px}
+.meta-chip strong{color:var(--text)}
+.winner-tag{display:inline-block;padding:2px 10px;border:1px solid var(--win);border-radius:2px;font-family:'Rajdhani',sans-serif;font-weight:600;font-size:11px;letter-spacing:1px;text-transform:uppercase;color:var(--win);background:rgba(34,197,94,.08)}
+.filter-bar{display:flex;gap:6px;margin-bottom:10px;align-items:center}
+.f-btn{padding:4px 12px;border:1px solid var(--border2);border-radius:2px;font-size:11px;font-family:'Rajdhani',sans-serif;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:var(--muted2);cursor:pointer;transition:all .15s}
+.f-btn:hover{color:var(--text);border-color:var(--border2)}
+.f-btn.on{color:var(--orange);border-color:var(--orange);background:var(--orange-glow)}
+.sb-table{width:100%;border-collapse:collapse;min-width:620px}
+.sb-table th{padding:7px 10px;text-align:right;font-family:'Rajdhani',sans-serif;font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--muted2);background:rgba(0,0,0,.55);border-bottom:1px solid var(--border);white-space:nowrap}
+.sb-table th:first-child{text-align:left}
+.sb-table td{padding:9px 10px;text-align:right;border-bottom:1px solid var(--border);font-size:13px}
+.sb-table td:first-child{text-align:left;color:var(--white);font-family:'Rajdhani',sans-serif;font-weight:600;font-size:14px;cursor:pointer;letter-spacing:.3px}
+.sb-table td:first-child:hover{color:var(--orange)}
+.sb-table tbody tr:last-child td{border-bottom:none}
+.sb-table tbody tr:hover td{background:rgba(255,255,255,.02)}
+.team-divider td{padding:5px 10px;background:rgba(0,0,0,.3);font-family:'Rajdhani',sans-serif;font-weight:700;font-size:11px;letter-spacing:2px;text-transform:uppercase}
+.ct-div td{color:var(--ct);border-top:2px solid rgba(91,196,245,.2)}
+.t-div td{color:var(--t);border-top:2px solid rgba(240,168,66,.2)}
+.kda-cell{font-family:'Rajdhani',sans-serif;font-weight:600;font-size:14px}
+.adr-highlight{color:var(--orange)}
+.matches-list .match-item{position:relative;overflow:hidden;display:flex;align-items:center;gap:14px;padding:0;border-bottom:3px solid rgba(0,0,0,.8);cursor:pointer;transition:transform .22s ease,box-shadow .22s ease,border-left-color .22s ease;min-height:96px;border-left:3px solid transparent;will-change:transform}
+.matches-list .match-item:hover{transform:translateX(4px);border-left-color:var(--orange);box-shadow:inset 4px 0 20px rgba(255,85,0,.1)}
+.matches-list .match-item:last-child{border-bottom:none}
+.match-item .m-bg{position:absolute;inset:0;background-size:cover;background-position:center;z-index:0;transition:transform .35s ease;will-change:transform}
+.matches-list .match-item:hover .m-bg{transform:scale(1.04)}
+.match-item .m-overlay{position:absolute;inset:0;background:linear-gradient(90deg,rgba(6,8,14,.97) 0%,rgba(6,8,14,.92) 30%,rgba(6,8,14,.65) 60%,rgba(6,8,14,.25) 100%);z-index:1}
+.match-item .m-hover-layer{position:absolute;inset:0;z-index:1;background:linear-gradient(90deg,rgba(255,85,0,.07) 0%,rgba(255,85,0,.03) 30%,transparent 70%);opacity:0;transition:opacity .22s ease}
+.matches-list .match-item:hover .m-hover-layer{opacity:1}
+.matches-list .match-item:hover .m-score{text-shadow:0 0 18px rgba(255,120,40,.45),0 2px 8px rgba(0,0,0,.9)}
+.matches-list .match-item:hover .m-id{color:var(--orange)}
+.match-item .m-content{position:relative;z-index:2;display:flex;align-items:center;gap:14px;width:100%;padding:18px 24px}
+.m-id{font-size:11px;color:rgba(255,255,255,.45);width:42px;font-family:'Rajdhani',sans-serif;font-weight:600;flex-shrink:0;transition:color .22s ease}
+.m-teams{flex:1}
+.m-teams-str{font-size:13px;color:rgba(255,255,255,.8);margin-bottom:4px;font-weight:500}
+.m-score{font-family:'Rajdhani',sans-serif;font-weight:800;font-size:26px;color:#fff;text-shadow:0 2px 8px rgba(0,0,0,.9),0 0 20px rgba(0,0,0,.5);transition:text-shadow .22s ease}
+.m-date{font-size:11px;color:rgba(255,255,255,.5);text-align:right;white-space:nowrap;text-shadow:0 1px 4px rgba(0,0,0,.9)}
+.demo-card{position:relative;overflow:hidden;height:110px;margin-bottom:2px;cursor:pointer;border-left:3px solid transparent;transition:transform .22s ease,box-shadow .22s ease,border-left-color .22s ease;will-change:transform}
+.demo-card:hover{transform:translateX(4px);border-left-color:var(--orange);box-shadow:inset 4px 0 20px rgba(255,85,0,.1)}
+.demo-card:hover .demo-bg-img{transform:scale(1.04)}
+.demo-card:hover .demo-map-label{color:rgba(255,255,255,.7)}
+.demo-hover-layer{position:absolute;inset:0;z-index:1;background:linear-gradient(90deg,rgba(255,85,0,.07) 0%,rgba(255,85,0,.03) 30%,transparent 70%);opacity:0;transition:opacity .22s ease;pointer-events:none}
+.demo-card:hover .demo-hover-layer{opacity:1}
+.demo-bg-img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:0.75;transition:transform .35s ease;will-change:transform}
+.demo-overlay{position:absolute;inset:0;background:linear-gradient(90deg,rgba(4,5,7,.95) 0%,rgba(4,5,7,.88) 35%,rgba(4,5,7,.55) 65%,rgba(4,5,7,.1) 100%)}
+.demo-content{position:relative;z-index:2;height:100%;display:flex;align-items:center;padding:0 22px;gap:18px}
+.demo-map-label{font-family:'Rajdhani',sans-serif;font-weight:800;font-size:12px;letter-spacing:3px;text-transform:uppercase;color:rgba(255,255,255,.45);margin-bottom:4px;text-shadow:0 1px 4px rgba(0,0,0,.8);transition:color .22s ease}
+.profile-top{--sx:50%;--sy:50%;background:linear-gradient(135deg,rgba(255,85,0,.11) 0%,rgba(10,12,14,.7) 50%,rgba(255,85,0,.05) 100%);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);border:1px solid rgba(255,85,0,.28);border-radius:10px;padding:22px 24px;margin-bottom:12px;display:flex;align-items:center;gap:20px;box-shadow:0 0 40px rgba(255,85,0,.12),0 8px 32px rgba(0,0,0,.55),inset 0 1px 0 rgba(255,255,255,.08);position:relative;overflow:hidden}
+.profile-top::after{content:'';position:absolute;inset:0;background:radial-gradient(circle at var(--sx) var(--sy),rgba(255,140,60,.18) 0%,rgba(255,85,0,.06) 40%,transparent 65%);pointer-events:none;opacity:0;transition:opacity .4s ease}
+.p-avatar{width:68px;height:68px;border-radius:4px;background:linear-gradient(135deg,var(--orange),#c43a00);display:flex;align-items:center;justify-content:center;font-family:'Rajdhani',sans-serif;font-weight:800;font-size:26px;color:#000;flex-shrink:0}
+.p-name{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:28px;color:var(--white);letter-spacing:.5px;line-height:1;margin-bottom:4px}
+.p-sub{font-size:11px;color:var(--muted2)}
+.stats-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:1px;background:var(--border);border-top:1px solid var(--border)}
+@media(max-width:600px){.stats-grid{grid-template-columns:repeat(3,1fr)}}
+.stat-box{background:#0a0c0e;padding:14px 16px;transition:background .15s}
+.stat-box:hover{background:#0e1012}
+.stat-box:nth-child(-n+6){background:linear-gradient(180deg,rgba(255,85,0,.07) 0%,#0a0c0e 100%)}
+.stat-box:nth-child(-n+6):hover{background:linear-gradient(180deg,rgba(255,85,0,.13) 0%,#0c0e10 100%)}
+.stat-val{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:22px;line-height:1;color:var(--white);margin-bottom:3px}
+.stat-lbl{font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--muted2)}
+.ph-table{width:100%;border-collapse:collapse;min-width:560px}
+.ph-table th{padding:7px 10px;text-align:right;font-family:'Rajdhani',sans-serif;font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--muted2);background:rgba(0,0,0,.3);border-bottom:1px solid var(--border)}
+.ph-table th:first-child{text-align:left}
+.ph-table td{padding:9px 10px;text-align:right;border-bottom:1px solid var(--border);font-size:13px}
+.ph-table td:first-child{text-align:left;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:14px;color:var(--white)}
+.ph-table tbody tr{cursor:pointer;transition:background .12s}
+.ph-table tbody tr:hover td{background:rgba(255,85,0,.03)}
+.ph-table tbody tr:last-child td{border-bottom:none}
+.side-ct{display:inline-block;padding:1px 6px;border-radius:2px;font-size:10px;font-family:'Rajdhani',sans-serif;font-weight:700;letter-spacing:1px;background:rgba(91,196,245,.1);color:var(--ct);border:1px solid rgba(91,196,245,.25)}
+.side-t{display:inline-block;padding:1px 6px;border-radius:2px;font-size:10px;font-family:'Rajdhani',sans-serif;font-weight:700;letter-spacing:1px;background:rgba(240,168,66,.1);color:var(--t);border:1px solid rgba(240,168,66,.25)}
+.shine-card{transition:box-shadow .2s,border-color .2s}
+.shine-card:hover{border-color:rgba(255,85,0,.55)!important;box-shadow:0 0 40px rgba(255,85,0,.18),0 8px 32px rgba(0,0,0,.6),inset 0 1px 0 rgba(255,255,255,.08)!important}
+.mvp-card.shine-active::after,.award-card.shine-active::after,.profile-top.shine-active::after{opacity:1}
+.podium-card{transition:transform .2s,box-shadow .2s,border-color .2s}
+.podium-card:hover{transform:translateY(-3px);box-shadow:0 0 30px rgba(255,85,0,.2),0 12px 40px rgba(0,0,0,.6)!important}
+.podium-shine{position:absolute;inset:0;pointer-events:none;z-index:0;opacity:0;transition:opacity .4s ease;border-radius:inherit;background:radial-gradient(circle at var(--sx,50%) var(--sy,50%),rgba(255,200,100,.25) 0%,rgba(255,85,0,.08) 40%,transparent 65%)}
+.podium-card:hover .podium-shine{opacity:1}
+.h2h-result-body{overflow:hidden;max-height:0;transition:max-height .4s ease;position:relative;z-index:1}
+.h2h-result-body.open{max-height:1200px}
+.h2h-result-divider{border-bottom:1px solid rgba(255,85,0,.15);margin:0 -20px;display:none}
+.h2h-result-body.open ~ .h2h-result-divider{display:block}
+.h2h-top-card{--sx:50%;--sy:50%;background:linear-gradient(135deg,rgba(255,85,0,.12) 0%,rgba(10,12,14,.7) 50%,rgba(255,85,0,.06) 100%);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);border:1px solid rgba(255,85,0,.35);border-radius:10px;padding:20px 22px;position:relative;overflow:hidden;box-shadow:0 0 40px rgba(255,85,0,.15),0 8px 32px rgba(0,0,0,.6),inset 0 1px 0 rgba(255,255,255,.08)}
+.h2h-top-card::after{content:'';position:absolute;inset:0;background:radial-gradient(circle at var(--sx) var(--sy),rgba(255,140,60,.22) 0%,rgba(255,85,0,.08) 35%,transparent 65%);pointer-events:none;opacity:0;transition:opacity .4s ease}
+.h2h-top-card.shine-active::after{opacity:1}
+.h2h-clear-btn{padding:3px 10px;background:transparent;border:1px solid var(--border);border-radius:3px;color:var(--muted2);font-size:11px;font-family:'Rajdhani',sans-serif;cursor:pointer;letter-spacing:1px;transition:all .2s;position:relative;overflow:hidden}
+.h2h-clear-btn::before{content:'';position:absolute;inset:0;background:linear-gradient(135deg,rgba(255,255,255,.07) 0%,transparent 60%);pointer-events:none}
+.h2h-clear-btn:hover{background:rgba(255,85,0,.45);border-color:var(--orange2);color:#fff;box-shadow:0 0 18px rgba(255,85,0,.5),0 0 6px rgba(255,85,0,.3),inset 0 1px 0 rgba(255,255,255,.15);text-shadow:0 0 8px rgba(255,180,80,.7);transform:translateY(-1px)}
+.h2h-clear-btn:active{transform:translateY(0);box-shadow:0 0 10px rgba(255,85,0,.35)}
+.h2h-row{display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:4px;cursor:pointer;border:1px solid transparent;transition:background .15s ease,border-color .15s ease,box-shadow .15s ease,transform .15s ease}
+.h2h-row:hover{background:rgba(255,85,0,.06);border-color:rgba(255,85,0,.25);box-shadow:0 0 12px rgba(255,85,0,.08),inset 0 1px 0 rgba(255,255,255,.04);transform:translateX(2px)}
+.h2h-row.selected{background:rgba(255,255,255,.05);border-color:rgba(255,255,255,.12)}
+.h2h-row.selected:hover{background:rgba(255,85,0,.09);border-color:rgba(255,85,0,.35);box-shadow:0 0 16px rgba(255,85,0,.12),inset 0 1px 0 rgba(255,255,255,.05)}
+.compare-btn{width:100%;padding:11px;border-radius:3px;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:13px;letter-spacing:2px;text-transform:uppercase;cursor:pointer;transition:all .2s;position:relative;overflow:hidden}
+.compare-btn::before{content:'';position:absolute;inset:0;background:linear-gradient(135deg,rgba(255,255,255,.08) 0%,transparent 60%);pointer-events:none}
+.compare-btn.active{border:1px solid var(--orange);background:var(--orange-glow);color:var(--orange)}
+.compare-btn.active:hover{background:rgba(255,85,0,.45);border-color:var(--orange2);color:#fff;box-shadow:0 0 24px rgba(255,85,0,.6),0 0 8px rgba(255,85,0,.4),inset 0 1px 0 rgba(255,255,255,.15);text-shadow:0 0 10px rgba(255,180,80,.8);transform:translateY(-1px)}
+.compare-btn.active:active{transform:translateY(0);box-shadow:0 0 12px rgba(255,85,0,.4)}
+.compare-btn.inactive{border:1px solid var(--border);background:transparent;color:var(--muted2);cursor:default}
+.demo-dl-btn{padding:10px 20px;background:rgba(255,85,0,.15);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);border:1px solid var(--orange);border-radius:0;color:var(--orange);font-family:'Rajdhani',sans-serif;font-weight:700;font-size:12px;letter-spacing:1.5px;text-transform:uppercase;cursor:pointer;white-space:nowrap;transition:all .2s;position:relative;overflow:hidden}
+.demo-dl-btn::before{content:'';position:absolute;inset:0;background:linear-gradient(135deg,rgba(255,255,255,.08) 0%,transparent 60%);pointer-events:none}
+.demo-dl-btn:hover{background:rgba(255,85,0,.45);border-color:var(--orange2);color:#fff;box-shadow:0 0 24px rgba(255,85,0,.6),0 0 8px rgba(255,85,0,.4),inset 0 1px 0 rgba(255,255,255,.15);text-shadow:0 0 10px rgba(255,180,80,.8);transform:translateY(-1px)}
+.demo-dl-btn:active{transform:translateY(0);box-shadow:0 0 12px rgba(255,85,0,.4)}
+.back-btn{display:inline-flex;align-items:center;gap:5px;padding:5px 12px;border:1px solid var(--border2);border-radius:3px;font-size:11px;color:var(--muted2);cursor:pointer;margin-bottom:14px;font-family:'Rajdhani',sans-serif;font-weight:600;letter-spacing:1px;text-transform:uppercase;transition:all .18s}
+.back-btn:hover{color:var(--orange);border-color:var(--orange)}
+.loading{padding:48px;text-align:center;color:var(--muted2)}
+.spin{display:inline-block;width:18px;height:18px;border:2px solid var(--border2);border-top-color:var(--orange);border-radius:50%;animation:spin .6s linear infinite;margin-bottom:8px}
+@keyframes spin{to{transform:rotate(360deg)}}
+.empty{padding:40px;text-align:center;color:var(--muted2)}
+.ovx{overflow-x:auto}
+</style>
+</head>
+<body>
+<nav>
+  <div class="logo"><span style="font-size:22px;font-weight:800;letter-spacing:-1px">R</span><span style="font-size:22px;font-weight:300;letter-spacing:-1px;color:var(--orange2)">G</span></div>
+  <div class="tabs">
+    <div class="tab active" data-p="matches">Matches</div>
+    <div class="tab" data-p="leaderboard">Leaderboard</div>
+    <div class="tab" data-p="maps">Maps</div>
+    <div class="tab" data-p="h2h">Head-to-Head</div>
+    <div class="tab" data-p="specialists">Specialists</div>
+    <div class="tab" data-p="demos">Demos</div>
+    <div class="tab-indicator" id="tab-indicator"></div>
+  </div>
+  <div class="nav-right">
+    <a href="https://skins.fsho.st" target="_blank" class="btn-sm" style="text-decoration:none">🎨 Skins</a>
+  </div>
+  <div class="hamburger" id="hamburger" onclick="toggleMenu()">
+    <span></span><span></span><span></span>
+  </div>
+</nav>
+<div class="mobile-menu" id="mobile-menu" onclick="closeMenu()">
+  <div class="mobile-drawer" onclick="event.stopPropagation()">
+    <div class="mobile-tab active" data-p="matches" onclick="go('matches');closeMenu()">Matches</div>
+    <div class="mobile-tab" data-p="leaderboard" onclick="go('leaderboard');closeMenu()">Leaderboard</div>
+    <div class="mobile-tab" data-p="maps" onclick="go('maps');closeMenu()">Maps</div>
+    <div class="mobile-tab" data-p="h2h" onclick="go('h2h');closeMenu()">Head-to-Head</div>
+    <div class="mobile-tab" data-p="specialists" onclick="go('specialists');closeMenu()">Specialists</div>
+    <div class="mobile-tab" data-p="demos" onclick="go('demos');closeMenu()">Demos</div>
+    <a href="https://skins.fsho.st" target="_blank" class="mobile-skins" onclick="closeMenu()">🎨 Skins</a>
+  </div>
+</div>
+
+<div id="app">
+  <div id="p-matches" class="page-panel"></div>
+  <div id="p-leaderboard" class="page-panel" style="display:none"></div>
+  <div id="p-maps" class="page-panel" style="display:none"></div>
+  <div id="p-h2h" class="page-panel" style="display:none"></div>
+  <div id="p-specialists" class="page-panel" style="display:none"></div>
+  <div id="p-demos" class="page-panel" style="display:none"></div>
+  <div id="p-player" class="page-panel" style="display:none"></div>
+  <div id="p-match" class="page-panel" style="display:none"></div>
+</div>
+
+<script>
+const MAP_IMG_BASE = 'https://raw.githubusercontent.com/ghostcap-gaming/cs2-map-images/refs/heads/main/cs2';
+const MAP_IMGS = {
+  'de_mirage':   `${MAP_IMG_BASE}/de_mirage.png`,
+  'de_dust2':    `${MAP_IMG_BASE}/de_dust2.png`,
+  'de_inferno':  `${MAP_IMG_BASE}/de_inferno.png`,
+  'de_nuke':     `${MAP_IMG_BASE}/de_nuke.png`,
+  'de_ancient':  `${MAP_IMG_BASE}/de_ancient.png`,
+  'de_anubis':   `${MAP_IMG_BASE}/de_anubis.png`,
+  'de_vertigo':  `${MAP_IMG_BASE}/de_vertigo.png`,
+  'de_overpass': `${MAP_IMG_BASE}/de_overpass.png`,
+};
+function mapThumb(mapname, h=48, w=80) {
+  const url = MAP_IMGS[mapname];
+  if (!url) return `<div style="width:${w}px;height:${h}px;background:var(--surface2);border-radius:3px;display:flex;align-items:center;justify-content:center;flex-shrink:0"><span style="font-size:9px;color:var(--muted2);font-family:'Rajdhani',sans-serif;font-weight:700;letter-spacing:1px;text-transform:uppercase">${esc(mapname||'?')}</span></div>`;
+  return `<div style="width:${w}px;height:${h}px;border-radius:3px;overflow:hidden;flex-shrink:0;position:relative">
+    <img src="${url}" style="width:100%;height:100%;object-fit:cover" onerror="this.parentElement.style.background='var(--surface2)'">
+  </div>`;
+}
+function toggleMenu() {
+  document.getElementById('hamburger').classList.toggle('open');
+  document.getElementById('mobile-menu').classList.toggle('open');
+}
+function closeMenu() {
+  document.getElementById('hamburger').classList.remove('open');
+  document.getElementById('mobile-menu').classList.remove('open');
+}
+function moveTabIndicator(page) {
+  const indicator = document.getElementById('tab-indicator');
+  const activeTab = document.querySelector(`.tab[data-p="${page}"]`);
+  if (!indicator || !activeTab) return;
+  const tabsEl = activeTab.parentElement;
+  const tabsRect = tabsEl.getBoundingClientRect();
+  const tabRect = activeTab.getBoundingClientRect();
+  indicator.style.left = (tabRect.left - tabsRect.left) + 'px';
+  indicator.style.width = tabRect.width + 'px';
+}
+const _pages = ['matches','leaderboard','maps','h2h','specialists','demos','player','match'];
+let _back = null;
+function go(page, params, back) {
+  params = params || {};
+  back   = back   || null;
+  const current = _pages.find(function(pg){ return document.getElementById('p-'+pg).style.display !== 'none'; });
+  const incoming = document.getElementById('p-'+page);
+  function doSwitch() {
+    _pages.forEach(function(pg) {
+      const el = document.getElementById('p-'+pg);
+      el.style.display = (pg===page) ? '' : 'none';
+      el.classList.remove('page-in','page-out');
+    });
+    incoming.classList.add('page-in');
+    document.querySelectorAll('.tab').forEach(function(t){ t.classList.toggle('active', t.dataset.p===page); });
+    document.querySelectorAll('.mobile-tab').forEach(function(t){ t.classList.toggle('active', t.dataset.p===page); });
+    moveTabIndicator(page);
+    _back = back;
+    if(page==='matches')     loadMatches();
+    if(page==='leaderboard') loadLeaderboard();
+    if(page==='maps')        loadMaps();
+    if(page==='h2h')         loadH2H();
+    if(page==='specialists') loadSpecialists();
+    if(page==='demos')       loadDemos();
+    if(page==='player')      loadPlayer(params.name);
+    if(page==='match')       loadMatch(params.id);
+  }
+  if (current && current !== page) {
+    var outEl = document.getElementById('p-'+current);
+    outEl.classList.add('page-out');
+    setTimeout(doSwitch, 200);
+  } else {
+    doSwitch();
+  }
+}
+document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',()=>go(t.dataset.p)));
+function animateCount(el, target, opts={}) {
+  const duration = opts.duration || 900;
+  const decimals = opts.decimals ?? 0;
+  const suffix   = opts.suffix   || '';
+  const prefix   = opts.prefix   || '';
+  const start    = performance.now();
+  const from     = 0;
+  const isFloat  = decimals > 0;
+  function step(now) {
+    const t = Math.min((now - start) / duration, 1);
+    const ease = t === 1 ? 1 : 1 - Math.pow(2, -10 * t);
+    const val = from + (target - from) * ease;
+    el.textContent = prefix + (isFloat ? val.toFixed(decimals) : Math.floor(val).toLocaleString()) + suffix;
+    if (t < 1) requestAnimationFrame(step);
+    else el.textContent = prefix + (isFloat ? target.toFixed(decimals) : Number(target).toLocaleString()) + suffix;
+  }
+  requestAnimationFrame(step);
+}
+function attachCounters(root) {
+  (root || document).querySelectorAll('[data-count]').forEach(el => {
+    if (el._counted) return;
+    el._counted = true;
+    const target   = parseFloat(el.dataset.count);
+    const decimals = parseInt(el.dataset.dec  || '0');
+    const suffix   = el.dataset.suffix || '';
+    animateCount(el, target, {decimals, suffix, duration: 800});
+  });
+}
+const _counterObs = new MutationObserver(() => attachCounters());
+_counterObs.observe(document.getElementById('app'), {childList:true, subtree:true});
+const EMPTY_ICONS = {
+  matches: `<svg width="64" height="64" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="8" y="14" width="48" height="36" rx="3" stroke="#ff5500" stroke-width="2" fill="none"/><path d="M8 22h48" stroke="#ff5500" stroke-width="2"/><circle cx="32" cy="38" r="7" stroke="#ff5500" stroke-width="2" fill="none"/><path d="M32 35v3l2 2" stroke="#ff5500" stroke-width="1.5" stroke-linecap="round"/></svg>`,
+  leaderboard: `<svg width="64" height="64" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="10" y="30" width="12" height="24" rx="2" stroke="#ff5500" stroke-width="2" fill="none"/><rect x="26" y="20" width="12" height="34" rx="2" stroke="#ff5500" stroke-width="2" fill="none"/><rect x="42" y="38" width="12" height="16" rx="2" stroke="#ff5500" stroke-width="2" fill="none"/><path d="M32 10l1.5 3h3.5l-2.8 2.1 1 3.4L32 16.7l-3.2 1.8 1-3.4L27 13h3.5z" fill="#ff5500" opacity=".6"/></svg>`,
+  maps: `<svg width="64" height="64" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M10 18l14-6 16 8 14-6v30l-14 6-16-8-14 6V18z" stroke="#ff5500" stroke-width="2" fill="none"/><path d="M24 12v32M40 20v32" stroke="#ff5500" stroke-width="1.5" stroke-dasharray="3 3"/><circle cx="32" cy="30" r="4" stroke="#ff5500" stroke-width="2" fill="none"/></svg>`,
+  h2h: `<svg width="64" height="64" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="20" cy="22" r="8" stroke="#ff5500" stroke-width="2" fill="none"/><circle cx="44" cy="22" r="8" stroke="#ff5500" stroke-width="2" fill="none"/><path d="M8 46c0-6.6 5.4-12 12-12h4M44 34h4c6.6 0 12 5.4 12 12" stroke="#ff5500" stroke-width="2" stroke-linecap="round" fill="none"/><path d="M28 32h8M32 28v8" stroke="#ff5500" stroke-width="2" stroke-linecap="round"/></svg>`,
+  specialists: `<svg width="64" height="64" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M32 10l4 12h13l-10 8 4 12-11-8-11 8 4-12-10-8h13z" stroke="#ff5500" stroke-width="2" fill="none"/><circle cx="32" cy="46" r="4" stroke="#ff5500" stroke-width="2" fill="none"/><path d="M32 50v6" stroke="#ff5500" stroke-width="2" stroke-linecap="round"/></svg>`,
+  demos: `<svg width="64" height="64" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="10" y="14" width="44" height="30" rx="3" stroke="#ff5500" stroke-width="2" fill="none"/><path d="M20 50h24M32 44v6" stroke="#ff5500" stroke-width="2" stroke-linecap="round"/><path d="M27 24l12 7-12 7V24z" stroke="#ff5500" stroke-width="2" fill="none" stroke-linejoin="round"/></svg>`,
+  default: `<svg width="64" height="64" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="32" cy="32" r="22" stroke="#ff5500" stroke-width="2" fill="none"/><path d="M32 22v12M32 38v4" stroke="#ff5500" stroke-width="2.5" stroke-linecap="round"/></svg>`,
+};
+function emptyState(type, title, sub) {
+  const icon = EMPTY_ICONS[type] || EMPTY_ICONS.default;
+  return `<div class="empty">${icon}<div class="empty-title">${title}</div><div class="empty-sub">${sub||''}</div></div>`;
+}
+const esc = s=>String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+const num = n=>n!=null?Number(n).toLocaleString():'-';
+const kdc = v=>{const f=parseFloat(v);return f>=1.3?'kd-g':f>=0.9?'kd-n':'kd-b'};
+const kdf = v=>{const f=parseFloat(v);return f>=1.3?'win':f>=0.9?'text':'loss'};
+const fmtDate = s=>{
+  if(!s)return'-';
+  const norm = String(s).replace(/(\.\d{3})\d*(Z?)$/, '$1$2');
+  const d = new Date(norm);
+  if(isNaN(d)) return String(s).replace('T',' ').slice(0,16);
+  return d.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});
+};
+const initials = n=>(n||'?').split(/[ _]/).slice(0,2).map(w=>w[0]||'').join('').toUpperCase().slice(0,2)||'?';
+function spin(id){document.getElementById(id).innerHTML='<div class="loading"><div class="spin"></div><br>Loading\u2026</div>'}
+let _demosCache = null;
+async function getDemos() {
+  if (_demosCache) return _demosCache;
+  _demosCache = await fetch('/api/demos').then(r=>r.json()).catch(()=>[]);
+  return _demosCache;
+}
+function findDemo(endTimeStr, windowMs=10*60*1000) {
+  if (!_demosCache || !endTimeStr) return null;
+  const matchEnd = new Date(endTimeStr).getTime();
+  if (isNaN(matchEnd)) return null;
+  let best = null, bestDelta = Infinity;
+  for (const d of _demosCache) {
+    if (!d.filename_ts) continue;
+    const demoTs = new Date(d.filename_ts).getTime();
+    const delta = Math.abs(demoTs - matchEnd);
+    if (delta <= windowMs && delta < bestDelta) { best = d; bestDelta = delta; }
+  }
+  return best;
+}
+function demoBtn(demo, small=false) {
+  if (!demo || !demo.download_url) return '';
+  const size = demo.size_formatted ? ` (${demo.size_formatted})` : '';
+  return `<a href="${demo.download_url}" target="_blank" onclick="event.stopPropagation()" style="display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border:1px solid rgba(255,85,0,.5);border-radius:2px;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--orange);background:var(--orange-glow);text-decoration:none;white-space:nowrap" title="${demo.name}">📥 Demo${size}</a>`;
+}
+async function loadMatches() {
+  spin('p-matches');
+  const data = await fetch('/api/matches?limit=30').then(r=>r.json()).catch(()=>[]);
+  if(!Array.isArray(data)||!data.length){
+    document.getElementById('p-matches').innerHTML=emptyState('matches','No Matches Yet','Completed matches will appear here');return;
+  }
+  const items = data.map(m=>{
+    const bgStyle = MAP_IMGS[m.mapname] ? `background-image:url('${MAP_IMGS[m.mapname]}')` : 'background:var(--surface2)';
+    return `
+    <div class="match-item" onclick="go('match',{id:'${m.matchid}'},'matches')">
+      <div class="m-bg" style="${bgStyle}"></div>
+      <div class="m-overlay"></div>
+      <div class="m-hover-layer"></div>
+      <div class="m-content">
+        <div class="m-id">#${m.matchid}</div>
+        <div class="m-teams">
+          <div class="m-teams-str">${esc(m.team1_name||'Team 1')} <span style="color:var(--muted2)">vs</span> ${esc(m.team2_name||'Team 2')}</div>
+          <div class="m-score">${m.map_team1_score??m.team1_score??0} : ${m.map_team2_score??m.team2_score??0}</div>
+        </div>
+        <div class="m-date">${fmtDate(m.end_time)}</div>
+      </div>
+    </div>`;
+  }).join('');
+  document.getElementById('p-matches').innerHTML = `
+    <div class="matches-list" style="border-radius:4px;overflow:hidden">${items}</div>`;
+}
+async function loadMatch(id) {
+  spin('p-match');
+  const d = await fetch('/api/match/'+id).then(r=>r.json()).catch(()=>({error:'fetch failed'}));
+  if(d.error){document.getElementById('p-match').innerHTML=`<div class="empty">${d.error}</div>`;return}
+  const meta=d.meta||{}, maps=d.maps||[], players=d.players||[], demo=d.demo||{};
+  function splitTeams(arr) {
+    const t1 = arr.filter(p=>String(p.team||'').toLowerCase()==='team1');
+    const t2 = arr.filter(p=>String(p.team||'').toLowerCase()==='team2');
+    const n1  = (t1[0]||{}).team_name || meta.team1_name || 'Team 1';
+    const n2  = (t2[0]||{}).team_name || meta.team2_name || 'Team 2';
+    return {t1, t2, n1, n2};
+  }
+  const mvp = players.reduce((b,p)=>{
+    const s = p.rating!=null?parseFloat(p.rating)*100:parseInt(p.kills||0);
+    const bs= b?(b.rating!=null?parseFloat(b.rating)*100:parseInt(b.kills||0)):-1;
+    return s>bs?p:b;
+  }, null);
+  const byKills  = [...players].sort((a,b)=>parseInt(b.kills||0)-parseInt(a.kills||0));
+  const byDmg    = [...players].sort((a,b)=>parseInt(b.damage||0)-parseInt(a.damage||0));
+  const byRating = [...players].filter(p=>p.rating!=null).sort((a,b)=>parseFloat(b.rating)-parseFloat(a.rating));
+  const steamCache = {};
+  await Promise.all([...new Map(players.map(p=>[p.steamid64,p])).values()].map(async p => {
+    if (p.steamid64 && p.steamid64 !== '0') {
+      const s = await fetch('/api/steam/'+p.steamid64).then(r=>r.json()).catch(()=>({}));
+      if (s.avatar) steamCache[p.steamid64] = s.avatar;
+    }
+  }));
+  function playerAvatar(p, size=40) {
+    const img = steamCache[p?.steamid64];
+    if (img) return `<img src="${img}" style="width:${size}px;height:${size}px;border-radius:50%;object-fit:cover;border:2px solid var(--border2);flex-shrink:0" onerror="this.style.display='none'">`;
+    return `<div style="width:${size}px;height:${size}px;border-radius:50%;background:linear-gradient(135deg,var(--orange),var(--orange2));display:flex;align-items:center;justify-content:center;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:${Math.floor(size*0.35)}px;color:#000;flex-shrink:0">${initials(p?.name)}</div>`;
+  }
+  const mvpHtml = mvp ? `
+    <div class="mvp-card">
+      ${playerAvatar(mvp, 64)}
+      <div class="mvp-info">
+        <div class="mvp-name">${esc(mvp.name)}</div>
+        <div class="mvp-stats">
+          <div class="mvp-stat"><div class="mvp-val">${mvp.kills??0} / ${mvp.deaths??0} / ${mvp.assists??0}</div><div class="mvp-lbl">K / D / A</div></div>
+          <div class="mvp-stat"><div class="mvp-val"><span data-count="${mvp.adr!=null?parseFloat(mvp.adr):0}" data-dec="1">${mvp.adr!=null?parseFloat(mvp.adr).toFixed(1):'—'}</span></div><div class="mvp-lbl">ADR</div></div>
+          <div class="mvp-stat"><div class="mvp-val"><span data-count="${mvp.hs_pct!=null?parseFloat(mvp.hs_pct):0}" data-dec="1" data-suffix="%">${mvp.hs_pct!=null?parseFloat(mvp.hs_pct).toFixed(1)+'%':'—'}</span></div><div class="mvp-lbl">HS%</div></div>
+          <div class="mvp-stat"><div class="mvp-val" style="color:var(--${kdf(mvp.kills&&mvp.deaths?(mvp.kills/mvp.deaths).toFixed(2):'0')})"><span data-count="${mvp.kills&&mvp.deaths?(mvp.kills/mvp.deaths).toFixed(2):0}" data-dec="2">${mvp.kills&&mvp.deaths?(mvp.kills/mvp.deaths).toFixed(2):'—'}</span></div><div class="mvp-lbl">K/D</div></div>
+          ${mvp.rating!=null?`<div class="mvp-stat"><div class="mvp-val" style="color:#a78bfa"><span data-count="${parseFloat(mvp.rating).toFixed(2)}" data-dec="2">${parseFloat(mvp.rating).toFixed(2)}</span></div><div class="mvp-lbl">Rating</div></div>`:''}
+          ${mvp.kast!=null?`<div class="mvp-stat"><div class="mvp-val"><span data-count="${parseFloat(mvp.kast).toFixed(1)}" data-dec="1" data-suffix="%">${parseFloat(mvp.kast).toFixed(1)}%</span></div><div class="mvp-lbl">KAST</div></div>`:''}
+        </div>
+      </div>
+    </div>` : '';
+  const awardsHtml = `<div class="awards-grid">
+    ${byKills[0]?`<div class="award-card">${playerAvatar(byKills[0],36)}<div><div class="award-name">${esc(byKills[0].name)}</div><div style="font-size:10px;color:var(--muted2)">Most Kills</div></div><div style="margin-left:auto;text-align:right"><div class="award-val" data-count="${byKills[0].kills}" data-dec="0">${byKills[0].kills}</div></div></div>`:''}
+    ${byDmg[0]?`<div class="award-card">${playerAvatar(byDmg[0],36)}<div><div class="award-name">${esc(byDmg[0].name)}</div><div style="font-size:10px;color:var(--muted2)">Most Damage</div></div><div style="margin-left:auto;text-align:right"><div class="award-val" data-count="${byDmg[0].damage??0}" data-dec="0">${num(byDmg[0].damage)}</div></div></div>`:''}
+    ${byRating[0]?`<div class="award-card">${playerAvatar(byRating[0],36)}<div><div class="award-name">${esc(byRating[0].name)}</div><div style="font-size:10px;color:var(--muted2)">Best Rating</div></div><div style="margin-left:auto;text-align:right"><div class="award-val" style="color:#a78bfa" data-count="${parseFloat(byRating[0].rating).toFixed(2)}" data-dec="2">${parseFloat(byRating[0].rating).toFixed(2)}</div></div></div>`:''}
+  </div>`;
+  const mapsHtml = maps.map(m=>{
+    const mapPlayers = players.filter(p=>(p.mapnumber??1)===(m.mapnumber??1));
+    const {t1, t2, n1, n2} = splitTeams(mapPlayers);
+    return `
+      <div style="margin-bottom:14px">
+        <div class="card ovx">
+          <table class="sb-table">
+            <thead><tr>
+              <th>Player</th><th>K</th><th>D</th><th>A</th>
+              <th>K/D</th><th>ADR</th><th>HS%</th><th>Dmg</th><th>5K</th><th>1vX</th>
+              <th>Rating</th><th>KAST</th><th>3K</th><th>4K</th><th title="Opening Kills / Deaths">OK/OD</th>
+            </tr></thead>
+            <tbody>
+              <tr class="team-divider ct-div"><td colspan="15">${esc(n1)}</td></tr>
+              ${sbRows(t1, steamCache)}
+              <tr class="team-divider t-div"><td colspan="15">${esc(n2)}</td></tr>
+              ${sbRows(t2, steamCache)}
+            </tbody>
+          </table>
+        </div>
+      </div>`;
+  }).join('');
+  const t1name = meta.team1_name||'Team 1';
+  const t2name = meta.team2_name||'Team 2';
+  const s1 = meta.team1_score??0;
+  const s2 = meta.team2_score??0;
+  const won = meta.winner || (s1>s2?t1name:s2>s1?t2name:null);
+  const demoBtnHtml = demo.url
+    ? `<div class="meta-chip"><a href="${demo.url}" target="_blank"
+         style="display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border:1px solid rgba(255,85,0,.5);border-radius:2px;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--orange);background:var(--orange-glow);text-decoration:none">
+         Demo${demo.size?' ('+demo.size+')':''}</a></div>`
+    : '';
+  document.getElementById('p-match').innerHTML = `
+    <div class="back-btn" onclick="go(_back||'matches')">← Back</div>
+    <div style="position:relative;border-radius:6px;overflow:hidden;margin-bottom:12px;min-height:200px">
+      ${maps[0]?.mapname && MAP_IMGS[maps[0].mapname]
+        ? `<img src="${MAP_IMGS[maps[0].mapname]}" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:0.85">`
+        : `<div style="position:absolute;inset:0;background:linear-gradient(135deg,#0d1117,#1a2332)"></div>`}
+      <div style="position:absolute;inset:0;background:linear-gradient(to bottom,rgba(0,0,0,.15) 0%,rgba(0,0,0,.55) 100%)"></div>
+      <div style="position:relative;z-index:2;padding:22px 26px">
+        <div style="font-family:'Rajdhani',sans-serif;font-weight:800;font-size:12px;letter-spacing:3px;text-transform:uppercase;color:rgba(255,255,255,.6);margin-bottom:16px">${maps[0]?.mapname?esc(maps[0].mapname):''}</div>
+        <div style="background:rgba(10,13,20,.45);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:18px 22px;">
+          <div class="match-score-row">
+            <div class="team-block">
+              <div class="team-nm" style="color:var(--ct)">${esc(t1name)}</div>
+              <div class="team-sc" style="color:var(--ct)">${s1}</div>
+            </div>
+            <div class="score-mid"><div class="score-colon">:</div></div>
+            <div class="team-block" style="text-align:right">
+              <div class="team-nm" style="color:var(--t);text-align:right">${esc(t2name)}</div>
+              <div class="team-sc" style="color:var(--t)">${s2}</div>
+            </div>
+          </div>
+          <div class="match-meta-row" style="margin-top:14px">
+            <div class="meta-chip">Match <strong>#${meta.matchid||id}</strong></div>
+            ${fmtDate(meta.end_time)?`<div class="meta-chip">${fmtDate(meta.end_time)}</div>`:''}
+            ${won?`<div class="meta-chip"><span class="winner-tag">Winner: ${esc(won)}</span></div>`:''}
+            ${demoBtnHtml}
+          </div>
+        </div>
+      </div>
+    </div>
+    ${mvpHtml}
+    ${awardsHtml}
+    ${mapsHtml}`;
+}
+function sbRows(arr, steamCache={}) {
+  if (!arr.length) return `<tr><td colspan="15" style="text-align:center;color:var(--muted);padding:12px">—</td></tr>`;
+  return [...arr].sort((a,b)=>{
+    const sa = a.rating!=null?parseFloat(a.rating)*100:parseInt(a.kills||0);
+    const sb2 = b.rating!=null?parseFloat(b.rating)*100:parseInt(b.kills||0);
+    return sb2-sa;
+  }).map(p=>{
+    const kd     = p.deaths>0?(p.kills/p.deaths).toFixed(2):parseFloat(p.kills||0).toFixed(2);
+    const adrVal = p.adr!=null?parseFloat(p.adr).toFixed(1):'—';
+    const hsVal  = p.hs_pct!=null?parseFloat(p.hs_pct).toFixed(1)+'%':'—';
+    const kastVal= p.kast!=null?parseFloat(p.kast).toFixed(1)+'%':'—';
+    const fiveK  = p.enemies5k??0;
+    const fourK  = p.enemies4k??0;
+    const threeK = p.enemies3k??0;
+    const rSty   = p.rating!=null?(parseFloat(p.rating)>=1.15?'style="color:#a78bfa;font-weight:700"':parseFloat(p.rating)<0.85?'style="color:var(--loss)"':''):'';
+    const avatar = steamCache[p.steamid64]
+      ? `<img src="${steamCache[p.steamid64]}" style="width:22px;height:22px;border-radius:50%;object-fit:cover;vertical-align:middle;margin-right:7px;border:1px solid var(--border2)" onerror="this.style.display='none'">`
+      : `<span style="display:inline-block;width:22px;height:22px;border-radius:50%;background:var(--surface2);line-height:22px;text-align:center;font-size:9px;font-family:'Rajdhani',sans-serif;font-weight:700;color:var(--muted2);vertical-align:middle;margin-right:7px">${initials(p.name)}</span>`;
+    return `<tr>
+      <td onclick="go('player',{name:'${esc(p.name)}'},'match')" style="cursor:pointer"><div style="display:flex;align-items:center">${avatar}${esc(p.name)}</div></td>
+      <td class="kda-cell">${p.kills??0}</td>
+      <td class="kda-cell">${p.deaths??0}</td>
+      <td class="kda-cell">${p.assists??0}</td>
+      <td class="kda-cell ${kdc(kd)}">${kd}</td>
+      <td class="adr-highlight">${adrVal}</td>
+      <td>${hsVal}</td>
+      <td>${num(p.damage)}</td>
+      <td>${fiveK}</td>
+      <td>${p.v1_wins??0}</td>
+      <td ${rSty}>${p.rating!=null?parseFloat(p.rating).toFixed(2):'—'}</td>
+      <td style="color:var(--muted2)">${kastVal}</td>
+      <td style="color:var(--muted2)">${threeK}</td>
+      <td style="color:var(--muted2)">${fourK}</td>
+      <td style="font-size:11px;color:var(--muted2)">${p.opening_kills??'—'}/${p.opening_deaths??'—'}</td>
+    </tr>`;
+  }).join('');
+}
+async function loadPlayer(name) {
+  spin('p-player');
+  const [data, ] = await Promise.all([
+    fetch('/api/player/'+encodeURIComponent(name)).then(r=>r.json()).catch(()=>({})),
+  ]);
+  if (data.error) {
+    document.getElementById('p-player').innerHTML = `<div class="empty">${data.error}</div>`;
+    return;
+  }
+  const c = data.career || {};
+  const recent = data.recent_matches || [];
+  let steam = {};
+  if (c.steamid64 && c.steamid64 !== '0') {
+    steam = await fetch('/api/steam/'+c.steamid64).then(r=>r.json()).catch(()=>({}));
+  }
+  const kd = parseFloat(c.kd ?? 0);
+  const kdCls = kd>=1.3?'kd-g':kd>=0.9?'kd-n':'kd-b';
+  const avatarHtml = steam.avatar
+    ? `<img src="${steam.avatar}" style="width:68px;height:68px;border-radius:4px;object-fit:cover;border:2px solid var(--border2)" alt="${esc(name)}">`
+    : `<div class="p-avatar">${initials(name)}</div>`;
+  const profileLink = steam.profile_url
+    ? `<a href="${steam.profile_url}" target="_blank" style="color:var(--orange);text-decoration:none;font-size:11px">View Steam Profile ↗</a>`
+    : '';
+  const countryFlag = steam.country
+    ? `<img src="https://flagcdn.com/24x18/${steam.country.toLowerCase()}.png" style="border-radius:2px;vertical-align:middle;margin-right:6px;height:16px" onerror="this.style.display='none'" title="${steam.country}"> `
+    : '';
+  const statsGrid = [
+    {label:'Kills',     raw: c.kills,         dec:0},
+    {label:'Deaths',    raw: c.deaths,        dec:0},
+    {label:'Assists',   raw: c.assists,       dec:0},
+    {label:'K/D',       raw: kd,              dec:2, cls:kdCls},
+    {label:'ADR',       raw: c.adr,           dec:1},
+    {label:'HS%',       raw: c.hs_pct,        dec:1, suffix:'%'},
+    {label:'Matches',   raw: c.matches,       dec:0},
+    {label:'Damage',    raw: c.total_damage,  dec:0},
+    {label:'Aces (5K)', raw: c.aces,          dec:0},
+    {label:'Clutches',  raw: c.clutch_1v1,    dec:0},
+    {label:'Entry Wins',raw: c.entry_wins,    dec:0},
+    {label:'Headshots', raw: c.headshots,     dec:0},
+  ].map(s => {
+    const v = s.raw ?? 0;
+    const cls = s.cls ? ` class="${s.cls}"` : '';
+    const valEl = `<span${cls} data-count="${v}" data-dec="${s.dec}" data-suffix="${s.suffix||''}">${s.dec>0?parseFloat(v).toFixed(s.dec):Number(v).toLocaleString()}${s.suffix||''}</span>`;
+    return `<div class="stat-box"><div class="stat-val">${valEl}</div><div class="stat-lbl">${s.label}</div></div>`;
+  }).join('');
+  const recentRows = recent.map(m => {
+    const won = m.winner && (m.winner.toLowerCase().includes(m.team?.toLowerCase() ?? ''));
+    const result = won ? `<span style="color:var(--win)">W</span>` : `<span style="color:var(--loss)">L</span>`;
+    const kd2 = m.deaths>0?(m.kills/m.deaths).toFixed(2):parseFloat(m.kills||0).toFixed(2);
+    return `<tr onclick="go('match',{id:'${m.matchid}'},'player')">
+      <td>${result} <span style="color:var(--muted);font-size:11px">#${m.matchid}</span></td>
+      <td>${esc(m.mapname||'?')}</td>
+      <td>${m.kills??0} / ${m.deaths??0} / ${m.assists??0}</td>
+      <td class="${m.deaths>0&&m.kills/m.deaths>=1.3?'kd-g':m.deaths>0&&m.kills/m.deaths>=0.9?'kd-n':'kd-b'}">${kd2}</td>
+      <td class="adr-highlight">${m.adr!=null?parseFloat(m.adr).toFixed(1):'—'}</td>
+      <td>${m.hs_pct!=null?parseFloat(m.hs_pct).toFixed(1)+'%':'—'}</td>
+      <td>${num(m.damage)}</td>
+      <td style="font-size:11px;color:var(--muted2)">${m.team1_name??'?'} vs ${m.team2_name??'?'}</td>
+    </tr>`;
+  }).join('');
+  document.getElementById('p-player').innerHTML = `
+    <div class="back-btn" onclick="go(_back||'leaderboard')">← Back</div>
+    <div class="profile-top">
+      ${avatarHtml}
+      <div style="flex:1">
+        <div class="p-name">${countryFlag}${esc(steam.name || name)}</div>
+        <div class="p-sub">${steam.real_name ? esc(steam.real_name)+' • ' : ''}${c.matches??0} matches played</div>
+        <div style="margin-top:6px">${profileLink}</div>
+      </div>
+    </div>
+    <div class="card" style="margin-bottom:12px">
+      <div class="stats-grid">${statsGrid}</div>
+    </div>
+    ${recent.length ? `
+    <div class="page-title" style="font-size:16px;margin-bottom:10px">Match History</div>
+    <div class="card ovx">
+      <table class="ph-table">
+        <thead><tr>
+          <th>Match</th><th>Map</th><th>K/D/A</th><th>K/D</th><th>ADR</th><th>HS%</th><th>Dmg</th><th>Teams</th>
+        </tr></thead>
+        <tbody>${recentRows}</tbody>
+      </table>
+    </div>` : ''}`;
+}
+async function loadMaps() {
+  const el = document.getElementById('p-maps');
+  el.innerHTML = '<div class="loading"><div class="spin"></div><br>Loading\u2026</div>';
+  const [dbStats, demos] = await Promise.all([
+    fetch('/api/mapstats').then(r=>r.json()).catch(()=>[]),
+    fetch('/api/demos').then(r=>r.json()).catch(()=>[]),
+  ]);
+  const demoCounts = {};
+  (Array.isArray(demos)?demos:[]).forEach(d => {
+    const mn = d.mapname;
+    if (!mn) return;
+    demoCounts[mn] = (demoCounts[mn] || 0) + 1;
+  });
+  const dbByMap = {};
+  (Array.isArray(dbStats)?dbStats:[]).forEach(m => { dbByMap[m.mapname] = m; });
+  const allMaps = [...new Set([
+    ...Object.keys(demoCounts),
+    ...Object.keys(dbByMap),
+  ])].sort((a,b) => (demoCounts[b]||0) - (demoCounts[a]||0));
+  if (!allMaps.length) {
+    el.innerHTML = emptyState('maps','No Map Data','Play some matches to see map statistics'); return;
+  }
+  const cards = allMaps.map(mapname => {
+    const demoTotal = demoCounts[mapname] || 0;
+    const db        = dbByMap[mapname] || {};
+    const avgRnd    = db.avg_rounds  ? parseFloat(db.avg_rounds).toFixed(1)  : '—';
+    const maxRnd    = db.max_rounds  ? parseInt(db.max_rounds)                : '—';
+    const mapImg    = MAP_IMGS[mapname];
+    return `
+    <div style="position:relative;border-radius:6px;overflow:hidden;margin-bottom:12px;border:1px solid rgba(255,255,255,.06)">
+      <div style="position:relative;height:160px">
+        ${mapImg
+          ? `<img src="${mapImg}" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:0.82">`
+          : `<div style="position:absolute;inset:0;background:linear-gradient(135deg,#0d1117,#1a2332)"></div>`}
+        <div style="position:absolute;inset:0;background:linear-gradient(to bottom,rgba(0,0,0,.08) 0%,rgba(0,0,0,.55) 100%)"></div>
+        <div style="position:relative;z-index:2;height:100%;display:flex;flex-direction:column;justify-content:flex-end;padding:16px 20px">
+          <div style="font-family:'Rajdhani',sans-serif;font-weight:800;font-size:13px;letter-spacing:3px;text-transform:uppercase;color:rgba(255,255,255,.55);margin-bottom:8px;text-shadow:0 1px 4px rgba(0,0,0,.8)">${esc(mapname)}</div>
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+            <div style="display:inline-flex;align-items:center;gap:10px;background:rgba(10,13,20,.5);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border:1px solid rgba(255,255,255,.1);border-radius:6px;padding:8px 16px">
+              <div style="font-family:'Rajdhani',sans-serif;font-weight:900;font-size:34px;color:#fff;line-height:1">${demoTotal}</div>
+              <div style="font-size:11px;color:rgba(255,255,255,.6);text-transform:uppercase;letter-spacing:1.5px;line-height:1.4">Games<br>Played</div>
+            </div>
+            ${avgRnd !== '—' ? `<div style="display:inline-flex;align-items:center;gap:10px;background:rgba(10,13,20,.5);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border:1px solid rgba(255,255,255,.1);border-radius:6px;padding:8px 16px">
+              <div style="font-family:'Rajdhani',sans-serif;font-weight:900;font-size:34px;color:#fff;line-height:1">${avgRnd}</div>
+              <div style="font-size:11px;color:rgba(255,255,255,.6);text-transform:uppercase;letter-spacing:1.5px;line-height:1.4">Avg<br>Rounds</div>
+            </div>` : ''}
+            ${maxRnd !== '—' ? `<div style="display:inline-flex;align-items:center;gap:10px;background:rgba(10,13,20,.5);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border:1px solid rgba(255,255,255,.1);border-radius:6px;padding:8px 16px">
+              <div style="font-family:'Rajdhani',sans-serif;font-weight:900;font-size:34px;color:#fff;line-height:1">${maxRnd}</div>
+              <div style="font-size:11px;color:rgba(255,255,255,.6);text-transform:uppercase;letter-spacing:1.5px;line-height:1.4">Most<br>Rounds</div>
+            </div>` : ''}
+          </div>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+  el.innerHTML = cards;
+}
+let _h2hPlayers = null;
+let _h2hSel = [null, null];
+async function loadH2H() {
+  const el = document.getElementById('p-h2h');
+  el.innerHTML = '<div class="loading"><div class="spin"></div><br>Loading players\u2026</div>';
+  if (!_h2hPlayers) {
+    const data = await fetch('/api/leaderboard').then(r=>r.json()).catch(()=>[]);
+    await Promise.all(data.slice(0,30).map(async p => {
+      if (p.steamid64 && p.steamid64 !== '0') {
+        const s = await fetch('/api/steam/'+p.steamid64).then(r=>r.json()).catch(()=>({}));
+        if (s.avatar) p._steam_avatar = s.avatar;
+        if (s.name)   p._steam_name   = s.name;
+      }
+    }));
+    _h2hPlayers = data;
+  }
+  renderH2HPicker();
+}
+function renderH2HPicker() {
+  const el = document.getElementById('p-h2h');
+  const players = _h2hPlayers || [];
+  const [p1, p2] = _h2hSel;
+  const slotHtml = (slot, p) => {
+    if (p) {
+      const av = p._steam_avatar
+        ? `<img src="${p._steam_avatar}" style="width:48px;height:48px;border-radius:50%;object-fit:cover;border:2px solid ${slot===0?'var(--ct)':'var(--t)'}">` 
+        : `<div style="width:48px;height:48px;border-radius:50%;background:var(--surface2);border:2px solid ${slot===0?'var(--ct)':'var(--t)'};display:flex;align-items:center;justify-content:center;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:16px;color:${slot===0?'var(--ct)':'var(--t)'}">${initials(p.name)}</div>`;
+      return `<div style="display:flex;flex-direction:column;align-items:center;gap:6px;flex:1">
+        <div style="font-size:10px;color:var(--muted2);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:2px">Player ${slot+1}</div>
+        ${av}
+        <div style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:14px;color:#fff">${esc(p._steam_name||p.name)}</div>
+        <button onclick="_h2hSel[${slot}]=null;renderH2HPicker()" class="h2h-clear-btn">✕ Clear</button>
+      </div>`;
+    }
+    return `<div style="display:flex;flex-direction:column;align-items:center;gap:6px;flex:1">
+      <div style="font-size:10px;color:var(--muted2);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:2px">Player ${slot+1}</div>
+      <div style="width:48px;height:48px;border-radius:50%;border:2px dashed ${slot===0?'rgba(56,189,248,.4)':'rgba(251,146,60,.4)'};display:flex;align-items:center;justify-content:center">
+        <span style="font-size:22px;color:var(--muted2)">?</span>
+      </div>
+      <div style="font-size:12px;color:var(--muted2)">Select below</div>
+    </div>`;
+  };
+  const canCompare = p1 && p2 && p1.name !== p2.name;
+  const cards = players.map((p,i) => {
+    const isP1 = p1 && p1.name === p.name;
+    const isP2 = p2 && p2.name === p.name;
+    const selected = isP1 || isP2;
+    const av = p._steam_avatar
+      ? `<img src="${p._steam_avatar}" style="width:38px;height:38px;border-radius:50%;object-fit:cover;flex-shrink:0">`
+      : `<div style="width:38px;height:38px;border-radius:50%;background:var(--surface2);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:13px;color:var(--muted2)">${initials(p.name)}</div>`;
+    const badge = isP1
+      ? `<span style="font-size:9px;padding:1px 6px;border-radius:2px;background:rgba(56,189,248,.2);border:1px solid rgba(56,189,248,.4);color:var(--ct);font-family:'Rajdhani',sans-serif;font-weight:700;letter-spacing:1px">P1</span>`
+      : isP2
+      ? `<span style="font-size:9px;padding:1px 6px;border-radius:2px;background:rgba(251,146,60,.2);border:1px solid rgba(251,146,60,.4);color:var(--t);font-family:'Rajdhani',sans-serif;font-weight:700;letter-spacing:1px">P2</span>`
+      : '';
+    return `<div onclick="h2hSelect(${i})" class="h2h-row${selected?' selected':''}">
+      ${av}
+      <div style="flex:1;min-width:0">
+        <div style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:14px;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(p._steam_name||p.name)}</div>
+        <div style="font-size:11px;color:var(--muted2)">${p.kills??0} kills · ${parseFloat(p.kd??0).toFixed(2)} K/D · ${p.matches??0} matches</div>
+      </div>
+      ${badge}
+    </div>`;
+  }).join('');
+  el.innerHTML = `
+    <div class="h2h-top-card" style="margin-bottom:12px;overflow:hidden">
+      <div id="h2h-picker-inner">
+        <div style="display:grid;grid-template-columns:1fr 48px 1fr;align-items:center;gap:12px;margin-bottom:18px">
+          ${slotHtml(0,p1)}
+          <div style="font-family:'Rajdhani',sans-serif;font-weight:800;font-size:20px;color:var(--muted);text-align:center">VS</div>
+          ${slotHtml(1,p2)}
+        </div>
+        <button onclick="runH2H()" ${canCompare?'':'disabled'} class="compare-btn ${canCompare?'active':'inactive'}">
+          ${canCompare?'Compare':'Select 2 players to compare'}
+        </button>
+      </div>
+      <div class="h2h-result-body" id="h2h-result-body"></div>
+    </div>
+    <div class="card" style="padding:8px 8px;max-height:380px;overflow-y:auto">${cards}</div>`;
+}
+function h2hSelect(idx) {
+  const p = _h2hPlayers[idx];
+  if (_h2hSel[0] && _h2hSel[0].name === p.name) { _h2hSel[0] = null; }
+  else if (_h2hSel[1] && _h2hSel[1].name === p.name) { _h2hSel[1] = null; }
+  else if (!_h2hSel[0]) { _h2hSel[0] = p; }
+  else if (!_h2hSel[1]) { _h2hSel[1] = p; }
+  else { _h2hSel[0] = _h2hSel[1]; _h2hSel[1] = p; }
+  renderH2HPicker();
+}
+async function runH2H() {
+  const [p1, p2] = _h2hSel;
+  const body = document.getElementById('h2h-result-body');
+  if (!p1 || !p2 || !body) return;
+  body.innerHTML = '<div class="loading" style="padding:20px"><div class="spin"></div><br>Loading\u2026</div>';
+  body.classList.add('open');
+  const picker = document.getElementById('h2h-picker-inner');
+  if (picker) { picker.style.maxHeight = picker.scrollHeight + 'px'; picker.style.overflow='hidden'; picker.style.transition='max-height .35s ease,opacity .25s ease'; requestAnimationFrame(()=>{ picker.style.maxHeight='0'; picker.style.opacity='0'; }); }
+  const data = await fetch(`/api/h2h?p1=${encodeURIComponent(p1.name)}&p2=${encodeURIComponent(p2.name)}`).then(r=>r.json()).catch(()=>({}));
+  if (data.error || !data.p1 || !data.p2) {
+    body.innerHTML = `<div class="empty" style="padding:16px">${data.error || 'One or both players not found.'}</div>`; return;
+  }
+  const d1 = data.p1, d2 = data.p2;
+  const st1 = {avatar: p1._steam_avatar, name: p1._steam_name};
+  const st2 = {avatar: p2._steam_avatar, name: p2._steam_name};
+  function avatar(p, st, size=56) {
+    return st.avatar
+      ? `<img src="${st.avatar}" style="width:${size}px;height:${size}px;border-radius:50%;object-fit:cover;border:2px solid var(--border2)">`
+      : `<div style="width:${size}px;height:${size}px;border-radius:50%;background:linear-gradient(135deg,var(--orange),var(--orange2));display:flex;align-items:center;justify-content:center;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:${Math.floor(size*.35)}px;color:#000">${initials(p.name)}</div>`;
+  }
+  const stats = [
+    {label:'Matches',   k:'matches'},
+    {label:'Kills',     k:'kills'},
+    {label:'Deaths',    k:'deaths'},
+    {label:'Assists',   k:'assists'},
+    {label:'K/D',       k:'kd',      dec:2},
+    {label:'ADR',       k:'adr',     dec:1},
+    {label:'HS%',       k:'hs_pct',  dec:1, suffix:'%'},
+    {label:'Damage',    k:'damage'},
+    {label:'Aces',      k:'aces'},
+    {label:'Clutches',  k:'clutch_wins'},
+    {label:'Entry Wins',k:'entry_wins'},
+  ];
+  const rows = stats.map(s => {
+    const v1 = parseFloat(d1[s.k]??0), v2 = parseFloat(d2[s.k]??0);
+    const fmt = v => s.dec ? v.toFixed(s.dec)+(s.suffix||'') : Number(v).toLocaleString()+(s.suffix||'');
+    const w1 = v1 > v2, w2 = v2 > v1;
+    return `<tr style="border-bottom:1px solid var(--border)">
+      <td style="padding:10px 14px;text-align:right;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:16px;color:${w1?'var(--win)':'var(--white)'}">${fmt(v1)}</td>
+      <td style="padding:10px 14px;text-align:center;font-size:10px;color:var(--muted2);letter-spacing:1px;text-transform:uppercase;white-space:nowrap">${s.label}</td>
+      <td style="padding:10px 14px;text-align:left;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:16px;color:${w2?'var(--win)':'var(--white)'}">${fmt(v2)}</td>
+    </tr>`;
+  }).join('');
+  body.innerHTML = `
+    <div style="border-top:1px solid rgba(255,85,0,.15);margin:0 -20px"></div>
+    <div style="display:grid;grid-template-columns:1fr 60px 1fr;align-items:center;padding:20px 14px 14px">
+      <div style="display:flex;flex-direction:column;align-items:center;gap:8px;cursor:pointer" onclick="go('player',{name:'${esc(d1.name)}'},'h2h')">
+        ${avatar(d1,st1)}
+        <div style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:16px;color:var(--ct);text-align:center">${esc(st1.name||d1.name)}</div>
+      </div>
+      <div style="font-family:'Rajdhani',sans-serif;font-weight:800;font-size:20px;color:var(--muted);text-align:center">VS</div>
+      <div style="display:flex;flex-direction:column;align-items:center;gap:8px;cursor:pointer" onclick="go('player',{name:'${esc(d2.name)}'},'h2h')">
+        ${avatar(d2,st2)}
+        <div style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:16px;color:var(--t);text-align:center">${esc(st2.name||d2.name)}</div>
+      </div>
+    </div>
+    <table style="width:100%;border-collapse:collapse">
+      <tbody>${rows}</tbody>
+    </table>
+    <div style="padding:12px 0 4px;text-align:center">
+      <button onclick="h2hBack()" class="h2h-clear-btn" style="padding:6px 20px;font-size:12px;letter-spacing:1.5px">← Back</button>
+    </div>`;
+}
+function h2hBack() {
+  const body = document.getElementById('h2h-result-body');
+  const picker = document.getElementById('h2h-picker-inner');
+  if (body) { body.classList.remove('open'); setTimeout(()=>{ body.innerHTML=''; },400); }
+  if (picker) { picker.style.maxHeight = '500px'; picker.style.opacity = '1'; }
+}
+let _lbSort = 'kills';
+async function loadLeaderboard() {
+  const el = document.getElementById('p-leaderboard');
+  el.innerHTML = '<div class="loading"><div class="spin"></div><br>Loading\u2026</div>';
+  const data = await fetch('/api/leaderboard').then(r=>r.json()).catch(()=>[]);
+  if (!Array.isArray(data) || !data.length) {
+    el.innerHTML = emptyState('leaderboard','No Player Data','Stats will appear after matches are completed');
+    return;
+  }
+  await Promise.all(data.slice(0, 20).map(async p => {
+    if (p.steamid64 && p.steamid64 !== '0') {
+      try {
+        const s = await fetch('/api/steam/'+p.steamid64).then(r=>r.json()).catch(()=>({}));
+        if (s.avatar) p._steam_avatar = s.avatar;
+        if (s.name)   p._steam_name   = s.name;
+      } catch(_) {}
+    }
+  }));
+  renderLeaderboard(data, _lbSort);
+}
+function renderLeaderboard(data, sortKey) {
+  _lbSort = sortKey;
+  const el = document.getElementById('p-leaderboard');
+  const cols = [
+    {key:'kills',       label:'Kills'},
+    {key:'deaths',      label:'Deaths'},
+    {key:'assists',     label:'Assists'},
+    {key:'kd',          label:'K/D'},
+    {key:'adr',         label:'ADR'},
+    {key:'hs_pct',      label:'HS%'},
+    {key:'damage',      label:'Damage'},
+    {key:'matches',     label:'Matches'},
+    {key:'aces',        label:'5K'},
+    {key:'clutch_wins', label:'Clutches'},
+  ];
+  const sorted = [...data].sort((a,b) => parseFloat(b[sortKey]??0) - parseFloat(a[sortKey]??0));
+  const tbody = document.querySelector('#lb-tbody');
+  if (!tbody) {
+    const headers = cols.map(c =>
+      `<th class="sortable${c.key===sortKey?' sort-active':''}" data-sort="${c.key}">${c.label}</th>`
+    ).join('');
+    const rowsHtml = sorted.map((p, i) => {
+      const rank = i + 1;
+      const kd = parseFloat(p.kd??0);
+      const kdCls = kd>=1.3?'kd-g':kd>=0.9?'kd-n':'kd-b';
+      const hsPct = parseFloat(p.hs_pct??0);
+      const hsBar = `<div class="hs-bar-wrap"><div class="hs-bar"><div class="hs-bar-fill" style="width:${Math.min(hsPct,100)}%"></div></div><span class="hs-val">${hsPct.toFixed(1)}%</span></div>`;
+      const avatarEl = p._steam_avatar
+        ? `<img src="${p._steam_avatar}" style="width:24px;height:24px;border-radius:50%;object-fit:cover;vertical-align:middle;margin-right:8px;border:1px solid var(--border2)" alt="">`
+        : `<span style="display:inline-block;width:24px;height:24px;border-radius:50%;background:var(--surface2);vertical-align:middle;margin-right:8px;text-align:center;line-height:24px;font-size:10px;font-family:'Rajdhani',sans-serif;font-weight:700;color:var(--muted2)">${initials(p.name)}</span>`;
+      const rankColors = ['var(--orange)','#a0aec0','#b87333'];
+      const rankStyle = rank<=3 ? `color:${rankColors[rank-1]};font-family:'Rajdhani',sans-serif;font-weight:800;font-size:15px` : 'color:var(--muted2)';
+      const rankCls = rank===1?'rank-gold':rank===2?'rank-silver':rank===3?'rank-bronze':'';
+      return `<tr class="${rankCls}" data-sid="${esc(p.steamid64||p.name)}" onclick="go('player',{name:'${esc(p.name)}'},'leaderboard')">
+        <td style="${rankStyle}">${rank}</td>
+        <td>${avatarEl}<span class="pname">${esc(p._steam_name||p.name)}</span></td>
+        <td>${p.kills??0}</td>
+        <td>${p.deaths??0}</td>
+        <td>${p.assists??0}</td>
+        <td class="kd-num ${kdCls}">${kd.toFixed(2)}</td>
+        <td class="adr-highlight">${p.adr!=null?parseFloat(p.adr).toFixed(1):'—'}</td>
+        <td>${hsBar}</td>
+        <td>${p.damage!=null?Number(p.damage).toLocaleString():'—'}</td>
+        <td>${p.matches??0}</td>
+        <td>${p.aces??0}</td>
+        <td>${p.clutch_wins??0}</td>
+      </tr>`;
+    }).join('');
+    const top3 = sorted.slice(0,3);
+    const podiumCard = (p, rank) => {
+      if (!p) return '';
+      const colors      = ['var(--orange)','#a0aec0','#b87333'];
+      const glowColors  = ['rgba(255,85,0,.18)','rgba(160,174,192,.14)','rgba(184,115,51,.15)'];
+      const borderColors= ['rgba(255,85,0,.35)','rgba(160,174,192,.3)','rgba(184,115,51,.3)'];
+      const rankLabels  = ['1ST','2ND','3RD'];
+      const c = colors[rank];
+      const avatarEl = p._steam_avatar
+        ? `<img src="${p._steam_avatar}" style="width:56px;height:56px;border-radius:50%;object-fit:cover;border:2px solid ${c};margin-bottom:10px" alt="${esc(p.name)}">`
+        : `<div style="width:56px;height:56px;border-radius:50%;background:var(--surface);border:2px solid ${c};display:flex;align-items:center;justify-content:center;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:20px;color:${c};margin:0 auto 10px">${initials(p.name)}</div>`;
+      return `<div class="podium-card" data-rank="${rank}" style="flex:1;background:${glowColors[rank]};backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border:1px solid ${borderColors[rank]};border-top:2px solid ${c};border-radius:6px;padding:18px 14px;text-align:center;cursor:pointer;position:relative;overflow:hidden;" onclick="go('player',{name:'${esc(p.name)}'},'leaderboard')">
+        <div class="podium-shine"></div>
+        <div style="position:absolute;top:10px;left:14px;font-family:'Rajdhani',sans-serif;font-weight:800;font-size:11px;letter-spacing:2px;color:${c};opacity:.9">${rankLabels[rank]}</div>
+        <div style="margin-top:6px;position:relative;z-index:1">${avatarEl}</div>
+        <div style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:15px;color:#fff;margin-bottom:12px;position:relative;z-index:1">${esc(p._steam_name||p.name)}</div>
+        <div style="display:flex;justify-content:center;gap:16px;flex-wrap:wrap;position:relative;z-index:1">
+          <div><div style="font-family:'Rajdhani',sans-serif;font-weight:800;font-size:20px;color:#fff" data-count="${p.kills??0}" data-dec="0">${p.kills??0}</div><div style="font-size:10px;color:rgba(255,255,255,.5);letter-spacing:1px;text-transform:uppercase">Kills</div></div>
+          <div><div style="font-family:'Rajdhani',sans-serif;font-weight:800;font-size:20px;color:#fff" data-count="${parseFloat(p.kd??0).toFixed(2)}" data-dec="2">${parseFloat(p.kd??0).toFixed(2)}</div><div style="font-size:10px;color:rgba(255,255,255,.5);letter-spacing:1px;text-transform:uppercase">K/D</div></div>
+          <div><div style="font-family:'Rajdhani',sans-serif;font-weight:800;font-size:20px;color:#fff" data-count="${p.matches??0}" data-dec="0">${p.matches??0}</div><div style="font-size:10px;color:rgba(255,255,255,.5);letter-spacing:1px;text-transform:uppercase">Matches</div></div>
+        </div>
+      </div>`;
+    };
+    window._lbData = data;
+    el.innerHTML = `
+      <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">
+        ${top3.map((p,i)=>podiumCard(p,i)).join('')}
+      </div>
+      <div class="card lb-wrap">
+        <table class="lb-table">
+          <thead><tr id="lb-thead">
+            <th>#</th><th>Player</th>${headers}
+          </tr></thead>
+          <tbody id="lb-tbody">${rowsHtml}</tbody>
+        </table>
+      </div>`;
+    document.querySelectorAll('#lb-thead th.sortable').forEach(th => {
+      th.addEventListener('click', () => sortLeaderboard(th.dataset.sort));
+    });
+    return;
+  }
+  sortLeaderboard(sortKey, true);
+}
+function sortLeaderboard(sortKey, _internal) {
+  const data = window._lbData;
+  if (!data) return;
+  _lbSort = sortKey;
+  const tbody = document.getElementById('lb-tbody');
+  const thead = document.getElementById('lb-thead');
+  if (!tbody || !thead) { renderLeaderboard(data, sortKey); return; }
+  thead.querySelectorAll('th.sortable').forEach(th => {
+    th.classList.toggle('sort-active', th.dataset.sort === sortKey);
+  });
+  const rows = Array.from(tbody.querySelectorAll('tr'));
+  const firstPos = new Map();
+  rows.forEach(tr => { firstPos.set(tr.dataset.sid, tr.getBoundingClientRect().top); });
+  const sorted = [...data].sort((a,b) => parseFloat(b[sortKey]??0) - parseFloat(a[sortKey]??0));
+  sorted.forEach((p, i) => {
+    const sid = p.steamid64 || p.name;
+    const tr = tbody.querySelector(`tr[data-sid="${CSS.escape(sid)}"]`);
+    if (!tr) return;
+    const rank = i + 1;
+    tr.className = rank===1?'rank-gold':rank===2?'rank-silver':rank===3?'rank-bronze':'';
+    const rankColors = ['var(--orange)','#a0aec0','#b87333'];
+    const rankTd = tr.querySelector('td:first-child');
+    if (rankTd) {
+      rankTd.textContent = rank;
+      rankTd.style.cssText = rank<=3 ? `color:${rankColors[rank-1]};font-family:'Rajdhani',sans-serif;font-weight:800;font-size:15px` : 'color:var(--muted2)';
+    }
+    tbody.appendChild(tr);
+  });
+  rows.forEach(tr => {
+    const sid = tr.dataset.sid;
+    const first = firstPos.get(sid);
+    const last = tr.getBoundingClientRect().top;
+    const delta = first - last;
+    if (Math.abs(delta) < 1) return;
+    tr.style.transition = 'none';
+    tr.style.transform = `translateY(${delta}px)`;
+    tr.classList.add('lb-moving');
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        tr.style.transition = '';
+        tr.style.transform = '';
+        tr.addEventListener('transitionend', () => { tr.classList.remove('lb-moving'); tr.style.transform = ''; }, {once: true});
+      });
+    });
+  });
+}
+let _specTab = 'clutch';
+let _specData = null;
+async function loadSpecialists() {
+  const el = document.getElementById('p-specialists');
+  if (_specData) { renderSpecialists(_specData, _specTab); return; }
+  el.innerHTML = '<div class="loading"><div class="spin"></div><br>Loading\u2026</div>';
+  const data = await fetch('/api/specialists').then(r=>r.json()).catch(()=>[]);
+  if (!Array.isArray(data) || !data.length) {
+    el.innerHTML = emptyState('specialists','No Specialist Data','Clutch kings, entry fraggers and more will appear here'); return;
+  }
+  await Promise.all(data.map(async p => {
+    if (p.steamid64 && p.steamid64 !== '0') {
+      try {
+        const s = await fetch('/api/steam/'+p.steamid64).then(r=>r.json()).catch(()=>({}));
+        if (s.avatar) p._steam_avatar = s.avatar;
+      } catch(_) {}
+    }
+  }));
+  _specData = data;
+  renderSpecialists(data, _specTab);
+}
+function renderSpecialists(data, tab) {
+  _specTab = tab;
+  const el = document.getElementById('p-specialists');
+  const tabs = [
+    {id:'clutch',  label:'Clutch Kings'},
+    {id:'entry',   label:'Entry Fraggers'},
+    {id:'flash',   label:'Flash Kings'},
+    {id:'utility', label:'Utility'},
+  ];
+  const tabsHtml = tabs.map(t => `
+    <div onclick="renderSpecialists(window._specData,'${t.id}')"
+      style="padding:8px 20px;border-radius:3px;cursor:pointer;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:13px;letter-spacing:1.5px;text-transform:uppercase;transition:all .15s;${tab===t.id?'background:var(--orange);color:#000;':'background:var(--surface2);color:var(--muted2);border:1px solid var(--border);'}">${t.label}</div>
+  `).join('');
+  let sorted, cols, getValue;
+  if (tab === 'clutch') {
+    sorted = [...data].sort((a,b) => (b.clutch_total||0)-(a.clutch_total||0));
+    cols = [{label:'1v1 Wins'},{label:'1v2 Wins'},{label:'Total Clutches'}];
+    getValue = p => `<td style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:18px;color:var(--ct);text-align:center">${p.clutch_1v1??0}</td><td style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:18px;color:var(--t);text-align:center">${p.clutch_1v2??0}</td><td style="font-family:'Rajdhani',sans-serif;font-weight:800;font-size:20px;color:var(--orange);text-align:center">${p.clutch_total??0}</td>`;
+  } else if (tab === 'entry') {
+    sorted = [...data].sort((a,b) => (b.entry_wins||0)-(a.entry_wins||0));
+    cols = [{label:'Entry Wins'},{label:'Attempts'},{label:'Success Rate'}];
+    getValue = p => `<td style="font-family:'Rajdhani',sans-serif;font-weight:800;font-size:20px;color:var(--orange);text-align:center">${p.entry_wins??0}</td><td style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:18px;color:var(--muted2);text-align:center">${p.entry_attempts??0}</td><td style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:18px;color:var(--win);text-align:center">${p.entry_rate!=null?p.entry_rate+'%':'—'}</td>`;
+  } else if (tab === 'flash') {
+    sorted = [...data].sort((a,b) => (b.flash_successes||0)-(a.flash_successes||0));
+    cols = [{label:'Total Flashes'},{label:'Per Map'},{label:'Matches'}];
+    getValue = p => `<td style="font-family:'Rajdhani',sans-serif;font-weight:800;font-size:20px;color:var(--orange);text-align:center">${p.flash_successes??0}</td><td style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:18px;color:var(--win);text-align:center">${p.flashes_per_map??'—'}</td><td style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:18px;color:var(--muted2);text-align:center">${p.matches??0}</td>`;
+  } else {
+    sorted = [...data].sort((a,b) => (b.utility_damage||0)-(a.utility_damage||0));
+    cols = [{label:'Total Util DMG'},{label:'Per Map'},{label:'Matches'}];
+    getValue = p => `<td style="font-family:'Rajdhani',sans-serif;font-weight:800;font-size:20px;color:var(--orange);text-align:center">${p.utility_damage!=null?Number(p.utility_damage).toLocaleString():'—'}</td><td style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:18px;color:var(--win);text-align:center">${p.util_dmg_per_map??'—'}</td><td style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:18px;color:var(--muted2);text-align:center">${p.matches??0}</td>`;
+  }
+  const rankColors = ['var(--orange)','#a0aec0','#b87333'];
+  const headerCols = cols.map(c=>`<th style="padding:8px 16px;text-align:center;font-family:'Rajdhani',sans-serif;font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--muted2)">${c.label}</th>`).join('');
+  const rows = sorted.map((p,i) => {
+    const rank = i+1;
+    const rankStr = rank <= 3
+      ? `<span style="font-size:18px;color:${rankColors[rank-1]};font-family:'Rajdhani',sans-serif;font-weight:800">${rank}</span>`
+      : `<span style="font-size:14px;color:var(--muted2);font-family:'Rajdhani',sans-serif;font-weight:700">${rank}</span>`;
+    const avatarEl = p._steam_avatar
+      ? `<img src="${p._steam_avatar}" style="width:30px;height:30px;border-radius:50%;object-fit:cover;vertical-align:middle;margin-right:10px;border:1px solid var(--border2)" alt="">`
+      : `<span style="display:inline-block;width:30px;height:30px;border-radius:50%;background:var(--surface2);vertical-align:middle;margin-right:10px;text-align:center;line-height:30px;font-size:11px;font-family:'Rajdhani',sans-serif;font-weight:700;color:var(--muted2)">${initials(p.name)}</span>`;
+    const rankCls = rank===1?'spec-rank-gold':rank===2?'spec-rank-silver':rank===3?'spec-rank-bronze':'';
+    return `<tr class="${rankCls}" onclick="go('player',{name:'${esc(p.name)}'},'specialists')" style="cursor:pointer;border-bottom:1px solid var(--border)">
+      <td style="padding:10px 14px;text-align:center;width:48px">${rankStr}</td>
+      <td style="padding:10px 14px">${avatarEl}<span style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:15px;color:var(--white);vertical-align:middle">${esc(p.name)}</span></td>
+      ${getValue(p)}
+    </tr>`;
+  }).join('');
+  window._specData = data;
+  el.innerHTML = `
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px">${tabsHtml}</div>
+    <div class="card lb-wrap">
+      <table class="lb-table" style="width:100%;border-collapse:collapse">
+        <thead><tr style="background:rgba(0,0,0,.35)">
+          <th style="padding:8px 14px;width:48px"></th>
+          <th style="padding:8px 14px;text-align:left;font-family:'Rajdhani',sans-serif;font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--muted2)">Player</th>
+          ${headerCols}
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
+}
+let _demoData = null;
+let _demoFilters = {map:''};
+async function loadDemos() {
+  const el = document.getElementById('p-demos');
+  if (_demoData) { renderDemos(); return; }
+  el.innerHTML = '<div class="loading"><div class="spin"></div><br>Loading demos\u2026</div>';
+  const data = await fetch('/api/demos').then(r=>r.json()).catch(()=>[]);
+  if (!Array.isArray(data) || !data.length) {
+    el.innerHTML = emptyState('demos','No Demos Found','Demo files will appear here once uploaded'); return;
+  }
+  _demoData = data;
+  renderDemos();
+}
+function renderDemos() {
+  const el = document.getElementById('p-demos');
+  const data = _demoData || [];
+  const maps = [...new Set(data.map(d=>d.mapname).filter(Boolean))].sort();
+  const mapOpts = ['<option value="">All Maps</option>', ...maps.map(m=>`<option value="${esc(m)}" ${_demoFilters.map===m?'selected':''}>${esc(m)}</option>`)].join('');
+  const filtered = data.filter(d => !_demoFilters.map || d.mapname === _demoFilters.map);
+  const rows = filtered.map(d => {
+    let dateStr = '—', timeStr = '';
+    if (d.filename_ts) {
+      const dt = new Date(d.filename_ts);
+      dateStr = dt.toLocaleDateString('en-GB', {day:'2-digit', month:'short', year:'numeric'});
+      timeStr = dt.toLocaleTimeString('en-GB', {hour:'2-digit', minute:'2-digit'});
+    } else if (d.modified_at) {
+      dateStr = d.modified_at;
+    }
+    const mapImg = d.mapname && MAP_IMGS[d.mapname] ? MAP_IMGS[d.mapname] : null;
+    const score = (d.team1_score !== '' && d.team1_score != null)
+      ? `<span style="color:var(--ct);font-family:'Rajdhani',sans-serif;font-weight:800;font-size:26px">${d.team1_score}</span><span style="color:rgba(255,255,255,.4);margin:0 8px;font-family:'Rajdhani',sans-serif;font-size:22px">:</span><span style="color:var(--t);font-family:'Rajdhani',sans-serif;font-weight:800;font-size:26px">${d.team2_score}</span>`
+      : '';
+    const teamsLine = (d.team1_name || d.team2_name)
+      ? `<div style="font-size:13px;color:rgba(255,255,255,.7);margin-top:4px">
+           <span style="color:var(--ct)">${esc(d.team1_name||'?')}</span>
+           <span style="margin:0 6px;color:rgba(255,255,255,.35)">vs</span>
+           <span style="color:var(--t)">${esc(d.team2_name||'?')}</span>
+         </div>`
+      : '';
+    return `<div class="demo-card">
+      ${mapImg
+        ? `<img class="demo-bg-img" src="${mapImg}">`
+        : `<div style="position:absolute;inset:0;background:linear-gradient(135deg,#0a0c0e,#141618)"></div>`}
+      <div class="demo-overlay"></div>
+      <div class="demo-hover-layer"></div>
+      <div class="demo-content">
+        <div style="flex:1;min-width:0">
+          <div class="demo-map-label">${esc(d.mapname||d.name)}</div>
+          <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+            ${score}
+            ${teamsLine}
+          </div>
+          <div style="font-size:11px;color:rgba(255,255,255,.35);margin-top:5px;text-shadow:0 1px 3px rgba(0,0,0,.9)">${dateStr}${timeStr?' · '+timeStr:''} · ${esc(d.size_formatted||'')}</div>
+        </div>
+        <a href="${esc(d.download_url)}" download style="text-decoration:none;flex-shrink:0">
+          <button class="demo-dl-btn">Download</button>
+        </a>
+      </div>
+    </div>`;
+  }).join('') || emptyState('demos','No Demos Match Your Filter','Try clearing the map filter');
+  el.innerHTML = `
+    <div style="padding:14px 0;margin-bottom:10px;display:flex;gap:10px;align-items:center">
+      <select onchange="_demoFilters.map=this.value;renderDemos()"
+        style="padding:9px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:3px;color:var(--white);font-family:'Rajdhani',sans-serif;font-size:13px;cursor:pointer;min-width:160px">${mapOpts}</select>
+      <button onclick="_demoFilters={map:''};renderDemos()"
+        style="padding:9px 14px;background:transparent;border:1px solid var(--border);border-radius:3px;color:var(--muted2);font-family:'Rajdhani',sans-serif;font-size:12px;cursor:pointer;letter-spacing:1px">✕ Clear</button>
+    </div>
+    ${rows}`;
+}
+function getShineTarget(el) {
+  return el.classList.contains('podium-card') ? el.querySelector('.podium-shine') : el;
+}
+function setShinePos(el, x, y) {
+  el.style.setProperty('--sx', x.toFixed(1) + '%');
+  el.style.setProperty('--sy', y.toFixed(1) + '%');
+}
+function animateShineToCenter(el, fromX, fromY) {
+  const duration = 400;
+  const startTime = performance.now();
+  const targetX = 50, targetY = 50;
+  function step(now) {
+    const t = Math.min((now - startTime) / duration, 1);
+    const ease = 1 - Math.pow(1 - t, 3);
+    const x = fromX + (targetX - fromX) * ease;
+    const y = fromY + (targetY - fromY) * ease;
+    setShinePos(el, x, y);
+    if (t < 1) requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
+function attachShineToEl(el) {
+  if (el._shineAttached) return;
+  el._shineAttached = true;
+  let curX = 50, curY = 50;
+  function showGlow() { el.classList.add('shine-active'); }
+  function hideGlow() { el.classList.remove('shine-active'); animateShineToCenter(getShineTarget(el), curX, curY); }
+  function track(clientX, clientY) {
+    const r = el.getBoundingClientRect();
+    curX = ((clientX - r.left) / r.width  * 100);
+    curY = ((clientY - r.top)  / r.height * 100);
+    setShinePos(getShineTarget(el), curX, curY);
+  }
+  el.addEventListener('mouseenter', () => showGlow());
+  el.addEventListener('mousemove',  e => track(e.clientX, e.clientY));
+  el.addEventListener('mouseleave', () => hideGlow());
+  el.addEventListener('touchstart', e => { const t = e.touches[0]; track(t.clientX, t.clientY); showGlow(); }, {passive:true});
+  el.addEventListener('touchmove', e => { const t = e.touches[0]; track(t.clientX, t.clientY); }, {passive:true});
+  el.addEventListener('touchend', () => hideGlow());
+}
+function attachShine(selector) {
+  document.querySelectorAll(selector).forEach(el => attachShineToEl(el));
+}
+const _shineObs = new MutationObserver(() => {
+  attachShine('.mvp-card');
+  attachShine('.award-card');
+  attachShine('.profile-top');
+  attachShine('.podium-card');
+  attachShine('.h2h-top-card');
+});
+_shineObs.observe(document.getElementById('app'), {childList:true, subtree:true});
+const urlParams = new URLSearchParams(location.search);
+if(urlParams.get('match')) go('match',{id:urlParams.get('match')});
+else go('matches');
+</script>
+</body>
+</html>
