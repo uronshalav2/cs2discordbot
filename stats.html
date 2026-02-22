@@ -161,24 +161,22 @@ nav{background:#09090b;border-bottom:2px solid var(--border);display:flex;align-
 .adr-highlight{color:var(--orange)}
 
 /* MATCHES LIST */
-.matches-list .match-item{position:relative;overflow:hidden;display:flex;align-items:center;gap:14px;padding:0;border-bottom:1px solid rgba(255,85,0,.15);cursor:pointer;transition:transform .22s ease,box-shadow .22s ease,border-color .22s ease;min-height:96px;border-left:none;border-right:1px solid rgba(255,85,0,.1);will-change:transform;box-shadow:0 0 12px rgba(255,85,0,.04)}
-.matches-list .match-item:hover{transform:translateX(4px);border-color:rgba(255,85,0,.45);box-shadow:0 0 22px rgba(255,85,0,.18),inset 4px 0 20px rgba(255,85,0,.1)}
+.matches-list .match-item{position:relative;overflow:hidden;display:flex;align-items:flex-end;padding:0;border-bottom:1px solid rgba(255,85,0,.15);cursor:pointer;transition:transform .22s ease,box-shadow .22s ease,border-color .22s ease;min-height:140px;border-left:none;border-right:1px solid rgba(255,85,0,.1);will-change:transform}
+.matches-list .match-item:hover{transform:translateX(4px);border-color:rgba(255,85,0,.45);box-shadow:0 0 22px rgba(255,85,0,.18)}
 .matches-list .match-item:last-child{border-bottom:1px solid rgba(255,85,0,.15)}
 .match-item .m-bg{position:absolute;inset:0;background-size:cover;background-position:center;z-index:0;transition:transform .35s ease;will-change:transform}
 .matches-list .match-item:hover .m-bg{transform:scale(1.04)}
-.match-item .m-overlay{position:absolute;inset:0;background:linear-gradient(90deg,rgba(6,8,14,.92) 0%,rgba(6,8,14,.82) 35%,rgba(6,8,14,.45) 70%,rgba(6,8,14,.1) 100%);z-index:1}
-.match-item .m-hover-layer{position:absolute;inset:0;z-index:1;background:linear-gradient(90deg,rgba(255,85,0,.07) 0%,rgba(255,85,0,.03) 30%,transparent 70%);opacity:0;transition:opacity .22s ease}
+.match-item .m-overlay{position:absolute;inset:0;background:linear-gradient(to top,rgba(6,8,14,.72) 0%,rgba(6,8,14,.3) 50%,rgba(6,8,14,.08) 100%);z-index:1}
+.match-item .m-hover-layer{position:absolute;inset:0;z-index:1;background:rgba(255,85,0,.04);opacity:0;transition:opacity .22s ease}
 .matches-list .match-item:hover .m-hover-layer{opacity:1}
-.matches-list .match-item:hover .m-score{text-shadow:0 0 18px rgba(255,120,40,.45),0 2px 8px rgba(0,0,0,.9)}
+.match-item .m-content{position:relative;z-index:2;display:flex;align-items:center;gap:8px;width:100%;padding:14px 16px;flex-wrap:wrap}
+.m-id{font-size:11px;color:rgba(255,255,255,.22);font-family:'Rajdhani',sans-serif;font-weight:600;flex-shrink:0;transition:color .22s ease;position:absolute;top:10px;left:12px}
 .matches-list .match-item:hover .m-id{color:var(--orange)}
-.match-item .m-content{position:relative;z-index:2;display:flex;align-items:flex-end;gap:10px;width:100%;padding:14px 20px;flex-wrap:wrap}
-.m-pill{display:inline-flex;align-items:center;gap:8px;background:rgba(10,13,20,.55);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border:1px solid rgba(255,255,255,.1);border-radius:6px;padding:6px 12px;transition:border-color .22s}
-.matches-list .match-item:hover .m-pill{border-color:rgba(255,85,0,.25)}
-.m-id{font-size:11px;color:rgba(255,255,255,.22);font-family:'Rajdhani',sans-serif;font-weight:600;flex-shrink:0;transition:color .22s ease;align-self:center}
-.m-teams{flex:1}
-.m-teams-str{font-size:13px;color:rgba(255,255,255,.8);margin-bottom:4px;font-weight:500}
-.m-score{font-family:'Rajdhani',sans-serif;font-weight:800;font-size:26px;color:#fff;text-shadow:0 2px 8px rgba(0,0,0,.9),0 0 20px rgba(0,0,0,.5);transition:text-shadow .22s ease}
-.m-date{font-size:11px;color:var(--orange);text-align:right;white-space:nowrap;text-shadow:0 0 10px rgba(255,85,0,.7),0 1px 4px rgba(0,0,0,.9);opacity:.85}
+.m-pill{display:inline-flex;align-items:center;gap:8px;background:rgba(10,13,20,.6);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border:1px solid rgba(255,255,255,.12);border-radius:6px;padding:7px 12px;transition:border-color .22s}
+.matches-list .match-item:hover .m-pill{border-color:rgba(255,85,0,.3)}
+.m-score{font-family:'Rajdhani',sans-serif;font-weight:900;font-size:28px;color:#fff;line-height:1;text-shadow:0 2px 8px rgba(0,0,0,.6)}
+.m-teams-str{font-size:11px;color:rgba(255,255,255,.7);line-height:1.4}
+.m-date-pill{font-size:11px;color:var(--orange);line-height:1;text-shadow:0 0 10px rgba(255,85,0,.6);white-space:nowrap}
 
 /* DEMO CARDS */
 .demo-card{position:relative;overflow:hidden;height:110px;margin-bottom:2px;cursor:pointer;border-left:3px solid transparent;transition:transform .22s ease,box-shadow .22s ease,border-left-color .22s ease;will-change:transform}
@@ -576,7 +574,7 @@ async function loadMatches() {
         <div class="m-id">#${m.matchid}</div>
         <div class="m-pill">
           <div class="m-score">${m.map_team1_score??m.team1_score??0} : ${m.map_team2_score??m.team2_score??0}</div>
-          <div class="m-teams-str">${esc(m.team1_name||'Team 1')}<br><span style="color:var(--muted2);font-size:10px">vs</span><br>${esc(m.team2_name||'Team 2')}</div>
+          <div class="m-teams-str">${esc(m.team1_name||'Team 1')}<br><span style="opacity:.55;font-size:10px">vs</span><br>${esc(m.team2_name||'Team 2')}</div>
         </div>
         <div class="m-pill"><div class="m-date-pill">${fmtDate(m.end_time)}</div></div>
       </div>
@@ -1661,12 +1659,10 @@ function predictOpenPicker(teamIdx) {
   const listEl   = document.getElementById('predict-picker-list');
   if (!pickerEl || !listEl) return;
   const [t1, t2] = _predictTeams;
-
-  // Only show players not already on either team
   const allSelected = new Set([...t1, ...t2].map(p => p.name));
   const available = (_predictPlayers || []).filter(p => !allSelected.has(p.name));
 
-  const rows = available.length ? available.map((p, i) => {
+  const rows = available.length ? available.map(p => {
     const globalIdx = _predictPlayers.indexOf(p);
     const av = p._steam_avatar
       ? `<img src="${p._steam_avatar}" style="width:34px;height:34px;border-radius:50%;object-fit:cover;flex-shrink:0">`
@@ -1686,12 +1682,11 @@ function predictOpenPicker(teamIdx) {
       <span onclick="document.getElementById('predict-picker').style.display='none'" style="cursor:pointer;color:var(--muted2);font-size:18px;line-height:1">&times;</span>
     </div>
     ${rows}`;
-
   pickerEl.style.display = 'block';
 }
 
 function predictAdd(teamIdx, playerIdx) {
-  const p    = _predictPlayers[playerIdx];
+  const p = _predictPlayers[playerIdx];
   const team = _predictTeams[teamIdx];
   if (team.length < 5 && !team.some(x=>x.name===p.name)) team.push(p);
   document.getElementById('predict-picker').style.display = 'none';
@@ -1739,13 +1734,12 @@ function buildPrediction(t1, t2) {
       ${av}
       <div style="min-width:0;flex:1">
         <div style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:12px;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(p._steam_name||p.name)}</div>
-        <div class="pred-role">${label}</div>
+        <div style="font-size:9px;letter-spacing:1px;text-transform:uppercase;color:var(--muted2);margin-top:1px">${label}</div>
       </div>
     </div>`;
   }
 
   function avg(team, key) { return team.reduce((s,p)=>s+parseFloat(p[key]??0),0)/team.length; }
-
   const stats = [
     {label:'K/D Ratio', k:'kd',      fmt: v=>v.toFixed(2)},
     {label:'ADR',       k:'adr',     fmt: v=>v.toFixed(1)},
@@ -1754,7 +1748,6 @@ function buildPrediction(t1, t2) {
     {label:'Rating',    k:'rating',  fmt: v=>v.toFixed(2)},
     {label:'Matches',   k:'matches', fmt: v=>Math.round(v)},
   ];
-
   const statRows = stats.map(s => {
     const a1 = avg(t1, s.k), a2 = avg(t2, s.k);
     const w1 = a1 >= a2;
@@ -1766,7 +1759,6 @@ function buildPrediction(t1, t2) {
   }).join('');
 
   const r1 = roles(t1), r2 = roles(t2);
-
   return `
     <div class="card" style="padding:20px;margin-bottom:10px">
       <div style="text-align:center;margin-bottom:12px">
@@ -1783,9 +1775,7 @@ function buildPrediction(t1, t2) {
         <div class="pred-bar-t1" style="width:${pct1}%">A</div>
         <div class="pred-bar-t2" style="width:${pct2}%">B</div>
       </div>
-      <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--muted2)">
-        <span>Team A</span><span>Team B</span>
-      </div>
+      <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--muted2)"><span>Team A</span><span>Team B</span></div>
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
       <div class="card" style="padding:14px">
