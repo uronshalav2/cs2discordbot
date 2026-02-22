@@ -593,6 +593,7 @@ def _build_stats_html() -> str:
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Reshtan Gaming</title>
+<link rel="icon" type="image/png" href="https://images.seeklogo.com/logo-png/53/1/counter-strike-2-logo-png_seeklogo-534313.png">
 <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
 :root{
@@ -676,9 +677,9 @@ nav{background:#09090b;border-bottom:2px solid var(--border);display:flex;align-
 .hs-val{font-size:11px;color:var(--orange);width:34px;text-align:right}
 
 /* MVP CARD */
-.mvp-card{background:rgba(10,12,14,.55);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border:1px solid rgba(255,85,0,.2);border-radius:8px;padding:20px 24px;display:flex;align-items:center;gap:24px;margin-bottom:12px;position:relative;overflow:hidden;box-shadow:0 8px 32px rgba(0,0,0,.5),inset 0 1px 0 rgba(255,255,255,.05)}
-.mvp-card::after{content:'';position:absolute;inset:0;background:linear-gradient(135deg,rgba(255,85,0,.06) 0%,rgba(255,85,0,.02) 50%,transparent 100%);pointer-events:none}
-.mvp-card::before{content:'MVP';position:absolute;right:20px;top:16px;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:13px;letter-spacing:3px;color:var(--orange);border:1px solid var(--orange);padding:2px 10px;border-radius:2px;background:rgba(255,85,0,.1)}
+.mvp-card{background:linear-gradient(135deg,rgba(255,85,0,.12) 0%,rgba(10,12,14,.7) 50%,rgba(255,85,0,.06) 100%);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);border:1px solid rgba(255,85,0,.35);border-radius:10px;padding:20px 24px;display:flex;align-items:center;gap:24px;margin-bottom:12px;position:relative;overflow:hidden;box-shadow:0 0 40px rgba(255,85,0,.15),0 8px 32px rgba(0,0,0,.6),inset 0 1px 0 rgba(255,255,255,.08)}
+.mvp-card::after{content:'';position:absolute;inset:0;background:linear-gradient(135deg,rgba(255,85,0,.1) 0%,rgba(255,120,0,.04) 40%,transparent 70%);pointer-events:none}
+.mvp-card::before{content:'MVP';position:absolute;right:20px;top:16px;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:13px;letter-spacing:3px;color:var(--orange);border:1px solid var(--orange);padding:2px 10px;border-radius:2px;background:rgba(255,85,0,.18);box-shadow:0 0 12px rgba(255,85,0,.3),inset 0 1px 0 rgba(255,255,255,.1)}
 .mvp-avatar{width:64px;height:64px;border-radius:50%;background:linear-gradient(135deg,var(--orange),var(--orange2));display:flex;align-items:center;justify-content:center;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:24px;color:#000;flex-shrink:0;border:2px solid rgba(255,85,0,.4)}
 .mvp-info{flex:1}
 .mvp-name{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:22px;color:var(--white);letter-spacing:.5px;margin-bottom:4px}
@@ -689,7 +690,7 @@ nav{background:#09090b;border-bottom:2px solid var(--border);display:flex;align-
 
 /* AWARD CARDS */
 .awards-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px}
-.award-card{background:rgba(10,12,14,.55);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border:1px solid rgba(255,255,255,.07);border-radius:6px;padding:12px 14px;display:flex;align-items:center;gap:12px;box-shadow:0 4px 16px rgba(0,0,0,.4),inset 0 1px 0 rgba(255,255,255,.04)}
+.award-card{background:linear-gradient(135deg,rgba(255,85,0,.09) 0%,rgba(10,12,14,.65) 60%,rgba(255,85,0,.04) 100%);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);border:1px solid rgba(255,85,0,.22);border-radius:8px;padding:12px 14px;display:flex;align-items:center;gap:12px;box-shadow:0 0 20px rgba(255,85,0,.08),0 4px 16px rgba(0,0,0,.45),inset 0 1px 0 rgba(255,255,255,.06)}
 .award-avatar{width:36px;height:36px;border-radius:50%;background:var(--surface);border:1px solid var(--border2);display:flex;align-items:center;justify-content:center;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:14px;color:var(--text);flex-shrink:0}
 .award-name{font-family:'Rajdhani',sans-serif;font-weight:600;font-size:14px;color:var(--white)}
 .award-val{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:22px;color:var(--white);margin-left:auto;line-height:1}
@@ -743,13 +744,14 @@ nav{background:#09090b;border-bottom:2px solid var(--border);display:flex;align-
 .m-date{font-size:11px;color:rgba(255,255,255,.5);text-align:right;white-space:nowrap;text-shadow:0 1px 4px rgba(0,0,0,.9)}
 
 /* PROFILE */
-.profile-top{background:rgba(10,12,14,.6);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border:1px solid rgba(255,255,255,.07);border-radius:8px;padding:22px 24px;margin-bottom:12px;display:flex;align-items:center;gap:20px;box-shadow:0 8px 32px rgba(0,0,0,.5),inset 0 1px 0 rgba(255,255,255,.05)}
+.profile-top{background:linear-gradient(135deg,rgba(255,85,0,.11) 0%,rgba(10,12,14,.7) 50%,rgba(255,85,0,.05) 100%);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);border:1px solid rgba(255,85,0,.28);border-radius:10px;padding:22px 24px;margin-bottom:12px;display:flex;align-items:center;gap:20px;box-shadow:0 0 40px rgba(255,85,0,.12),0 8px 32px rgba(0,0,0,.55),inset 0 1px 0 rgba(255,255,255,.08)}
 .p-avatar{width:68px;height:68px;border-radius:4px;background:linear-gradient(135deg,var(--orange),#c43a00);display:flex;align-items:center;justify-content:center;font-family:'Rajdhani',sans-serif;font-weight:800;font-size:26px;color:#000;flex-shrink:0}
 .p-name{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:28px;color:var(--white);letter-spacing:.5px;line-height:1;margin-bottom:4px}
 .p-sub{font-size:11px;color:var(--muted2)}
 .stats-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:1px;background:var(--border);border-top:1px solid var(--border)}
 @media(max-width:600px){.stats-grid{grid-template-columns:repeat(3,1fr)}}
-.stat-box{background:#0c0e10;padding:14px 16px}
+.stat-box{background:linear-gradient(180deg,rgba(255,85,0,.05) 0%,#0a0c0e 100%);padding:14px 16px;transition:background .15s}
+.stat-box:hover{background:linear-gradient(180deg,rgba(255,85,0,.1) 0%,#0c0e10 100%)}
 .stat-val{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:22px;line-height:1;color:var(--white);margin-bottom:3px}
 .stat-lbl{font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--muted2)}
 
@@ -779,7 +781,7 @@ nav{background:#09090b;border-bottom:2px solid var(--border);display:flex;align-
 </head>
 <body>
 <nav>
-  <div class="logo"><svg style="width:22px;height:22px;margin-right:8px;vertical-align:middle;flex-shrink:0" viewBox="0 0 50 50" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="25" cy="25" r="24" stroke="#ff5500" stroke-width="2"/><path d="M10 25c0-8.3 6.7-15 15-15s15 6.7 15 15-6.7 15-15 15S10 33.3 10 25z" fill="#ff5500" opacity=".15"/><path d="M16 20h8l-3 5h6l-7 10 2-7h-5l-1-8z" fill="#ff5500"/><path d="M28 18h6l-2 4h4l-8 12 1-6h-4l3-10z" fill="#ff7733" opacity=".7"/></svg>Reshtan Gaming</div>
+  <div class="logo"><img src="https://images.seeklogo.com/logo-png/53/1/counter-strike-2-logo-png_seeklogo-534313.png" style="width:26px;height:26px;margin-right:9px;vertical-align:middle;flex-shrink:0;object-fit:contain;filter:brightness(0) saturate(100%) invert(40%) sepia(90%) saturate(700%) hue-rotate(355deg) brightness(110%)" alt="CS2">Reshtan Gaming</div>
   <div class="tabs">
     <div class="tab active" data-p="matches">Matches</div>
     <div class="tab" data-p="leaderboard">Leaderboard</div>
@@ -2944,14 +2946,18 @@ async def debugdemos_cmd(inter: discord.Interaction, refresh: bool = False):
                 size = demo.get('size_formatted', '?')
                 lines.append(f"**Match #{matchid}**")
                 lines.append(f"  └─ {name} ({size})")
+            
             if len(matchid_map) > 15:
                 lines.append(f"\n...and {len(matchid_map) - 15} more")
+            
             # Show cache info
             if _MATCHID_CACHE_TIME:
                 age = (datetime.now() - _MATCHID_CACHE_TIME).total_seconds()
                 lines.append(f"\n📊 Cache age: {age:.0f}s (refreshes every {_CACHE_TTL_SECONDS}s)")
+    
     except Exception as e:
         lines.append(f"\n❌ Error: {e}")
+    
     message = "\n".join(lines)
     if len(message) > 2000:
         chunks = [message[i:i+2000] for i in range(0, len(message), 2000)]
@@ -2959,6 +2965,9 @@ async def debugdemos_cmd(inter: discord.Interaction, refresh: bool = False):
             await inter.followup.send(chunk, ephemeral=True)
     else:
         await inter.followup.send(message, ephemeral=True)
+
+
 if not TOKEN:
     raise SystemExit("TOKEN missing.")
+
 bot.run(TOKEN)
