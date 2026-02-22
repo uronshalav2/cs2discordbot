@@ -677,7 +677,7 @@ nav{background:#09090b;border-bottom:2px solid var(--border);display:flex;align-
 
 /* MVP CARD */
 .mvp-card{--sx:50%;--sy:50%;background:linear-gradient(135deg,rgba(255,85,0,.12) 0%,rgba(10,12,14,.7) 50%,rgba(255,85,0,.06) 100%);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);border:1px solid rgba(255,85,0,.35);border-radius:10px;padding:20px 24px;display:flex;align-items:center;gap:24px;margin-bottom:12px;position:relative;overflow:hidden;box-shadow:0 0 40px rgba(255,85,0,.15),0 8px 32px rgba(0,0,0,.6),inset 0 1px 0 rgba(255,255,255,.08)}
-.mvp-card::after{content:'';position:absolute;inset:0;background:radial-gradient(circle at var(--sx) var(--sy),rgba(255,140,60,.18) 0%,rgba(255,85,0,.06) 35%,transparent 65%);pointer-events:none;transition:background .05s}
+.mvp-card::after{content:'';position:absolute;inset:0;background:radial-gradient(circle at var(--sx) var(--sy),rgba(255,140,60,.22) 0%,rgba(255,85,0,.08) 35%,transparent 65%);pointer-events:none;opacity:0;transition:opacity .4s ease}
 .mvp-card::before{content:'MVP';position:absolute;right:20px;top:16px;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:13px;letter-spacing:3px;color:var(--orange);border:1px solid var(--orange);padding:2px 10px;border-radius:2px;background:rgba(255,85,0,.18);box-shadow:0 0 12px rgba(255,85,0,.3),inset 0 1px 0 rgba(255,255,255,.1);z-index:1}
 .mvp-avatar{width:64px;height:64px;border-radius:50%;background:linear-gradient(135deg,var(--orange),var(--orange2));display:flex;align-items:center;justify-content:center;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:24px;color:#000;flex-shrink:0;border:2px solid rgba(255,85,0,.4)}
 .mvp-info{flex:1}
@@ -690,7 +690,7 @@ nav{background:#09090b;border-bottom:2px solid var(--border);display:flex;align-
 /* AWARD CARDS */
 .awards-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px}
 .award-card{--sx:50%;--sy:50%;background:linear-gradient(135deg,rgba(255,85,0,.09) 0%,rgba(10,12,14,.65) 60%,rgba(255,85,0,.04) 100%);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);border:1px solid rgba(255,85,0,.22);border-radius:8px;padding:12px 14px;display:flex;align-items:center;gap:12px;box-shadow:0 0 20px rgba(255,85,0,.08),0 4px 16px rgba(0,0,0,.45),inset 0 1px 0 rgba(255,255,255,.06);position:relative;overflow:hidden}
-.award-card::after{content:'';position:absolute;inset:0;background:radial-gradient(circle at var(--sx) var(--sy),rgba(255,140,60,.16) 0%,rgba(255,85,0,.05) 40%,transparent 65%);pointer-events:none;transition:background .05s}
+.award-card::after{content:'';position:absolute;inset:0;background:radial-gradient(circle at var(--sx) var(--sy),rgba(255,140,60,.2) 0%,rgba(255,85,0,.06) 40%,transparent 65%);pointer-events:none;opacity:0;transition:opacity .4s ease}
 .award-avatar{width:36px;height:36px;border-radius:50%;background:var(--surface);border:1px solid var(--border2);display:flex;align-items:center;justify-content:center;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:14px;color:var(--text);flex-shrink:0}
 .award-name{font-family:'Rajdhani',sans-serif;font-weight:600;font-size:14px;color:var(--white)}
 .award-val{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:22px;color:var(--white);margin-left:auto;line-height:1}
@@ -745,7 +745,7 @@ nav{background:#09090b;border-bottom:2px solid var(--border);display:flex;align-
 
 /* PROFILE */
 .profile-top{--sx:50%;--sy:50%;background:linear-gradient(135deg,rgba(255,85,0,.11) 0%,rgba(10,12,14,.7) 50%,rgba(255,85,0,.05) 100%);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);border:1px solid rgba(255,85,0,.28);border-radius:10px;padding:22px 24px;margin-bottom:12px;display:flex;align-items:center;gap:20px;box-shadow:0 0 40px rgba(255,85,0,.12),0 8px 32px rgba(0,0,0,.55),inset 0 1px 0 rgba(255,255,255,.08);position:relative;overflow:hidden}
-.profile-top::after{content:'';position:absolute;inset:0;background:radial-gradient(circle at var(--sx) var(--sy),rgba(255,140,60,.15) 0%,rgba(255,85,0,.05) 40%,transparent 65%);pointer-events:none;transition:background .05s}
+.profile-top::after{content:'';position:absolute;inset:0;background:radial-gradient(circle at var(--sx) var(--sy),rgba(255,140,60,.18) 0%,rgba(255,85,0,.06) 40%,transparent 65%);pointer-events:none;opacity:0;transition:opacity .4s ease}
 .p-avatar{width:68px;height:68px;border-radius:4px;background:linear-gradient(135deg,var(--orange),#c43a00);display:flex;align-items:center;justify-content:center;font-family:'Rajdhani',sans-serif;font-weight:800;font-size:26px;color:#000;flex-shrink:0}
 .p-name{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:28px;color:var(--white);letter-spacing:.5px;line-height:1;margin-bottom:4px}
 .p-sub{font-size:11px;color:var(--muted2)}
@@ -773,6 +773,15 @@ nav{background:#09090b;border-bottom:2px solid var(--border);display:flex;align-
 /* POINTER SHINE */
 .shine-card{transition:box-shadow .2s,border-color .2s}
 .shine-card:hover{border-color:rgba(255,85,0,.55)!important;box-shadow:0 0 40px rgba(255,85,0,.18),0 8px 32px rgba(0,0,0,.6),inset 0 1px 0 rgba(255,255,255,.08)!important}
+.mvp-card.shine-active::after,
+.award-card.shine-active::after,
+.profile-top.shine-active::after{opacity:1}
+
+/* PODIUM CARDS */
+.podium-card{transition:transform .2s,box-shadow .2s,border-color .2s}
+.podium-card:hover{transform:translateY(-3px);box-shadow:0 0 30px rgba(255,85,0,.2),0 12px 40px rgba(0,0,0,.6)!important}
+.podium-shine{position:absolute;inset:0;pointer-events:none;z-index:0;opacity:0;transition:opacity .4s ease;border-radius:inherit;background:radial-gradient(circle at var(--sx,50%) var(--sy,50%),rgba(255,200,100,.25) 0%,rgba(255,85,0,.08) 40%,transparent 65%)}
+.podium-card:hover .podium-shine{opacity:1}
 
 /* DEMO DOWNLOAD BUTTON */
 .demo-dl-btn{padding:10px 20px;background:rgba(255,85,0,.15);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);border:1px solid var(--orange);border-radius:0;color:var(--orange);font-family:'Rajdhani',sans-serif;font-weight:700;font-size:12px;letter-spacing:1.5px;text-transform:uppercase;cursor:pointer;white-space:nowrap;transition:all .2s;position:relative;overflow:hidden}
@@ -1518,32 +1527,20 @@ function renderLeaderboard(data, sortKey) {
   const top3 = sorted.slice(0,3);
   const podiumCard = (p, rank) => {
     if (!p) return '';
-    const colors     = ['var(--orange)','#a0aec0','#b87333'];
-    const glowColors = ['rgba(255,85,0,.18)','rgba(160,174,192,.14)','rgba(184,115,51,.15)'];
-    const borderColors = ['rgba(255,85,0,.35)','rgba(160,174,192,.3)','rgba(184,115,51,.3)'];
-    const rankLabels = ['1ST','2ND','3RD'];
+    const colors      = ['var(--orange)','#a0aec0','#b87333'];
+    const glowColors  = ['rgba(255,85,0,.18)','rgba(160,174,192,.14)','rgba(184,115,51,.15)'];
+    const borderColors= ['rgba(255,85,0,.35)','rgba(160,174,192,.3)','rgba(184,115,51,.3)'];
+    const rankLabels  = ['1ST','2ND','3RD'];
     const c = colors[rank];
     const avatarEl = p._steam_avatar
       ? `<img src="${p._steam_avatar}" style="width:56px;height:56px;border-radius:50%;object-fit:cover;border:2px solid ${c};margin-bottom:10px" alt="${esc(p.name)}">`
       : `<div style="width:56px;height:56px;border-radius:50%;background:var(--surface);border:2px solid ${c};display:flex;align-items:center;justify-content:center;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:20px;color:${c};margin:0 auto 10px">${initials(p.name)}</div>`;
-    return `<div style="
-        flex:1;
-        background:${glowColors[rank]};
-        backdrop-filter:blur(12px);
-        -webkit-backdrop-filter:blur(12px);
-        border:1px solid ${borderColors[rank]};
-        border-top:2px solid ${c};
-        border-radius:6px;
-        padding:18px 14px;
-        text-align:center;
-        cursor:pointer;
-        position:relative;
-        overflow:hidden;
-      " onclick="go('player',{name:'${esc(p.name)}'},'leaderboard')">
+    return `<div class="podium-card" data-rank="${rank}" style="--card-color:${c};--glow:${glowColors[rank]};--bdr:${borderColors[rank]};flex:1;background:${glowColors[rank]};backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border:1px solid ${borderColors[rank]};border-top:2px solid ${c};border-radius:6px;padding:18px 14px;text-align:center;cursor:pointer;position:relative;overflow:hidden;" onclick="go('player',{name:'${esc(p.name)}'},'leaderboard')">
+      <div class="podium-shine"></div>
       <div style="position:absolute;top:10px;left:14px;font-family:'Rajdhani',sans-serif;font-weight:800;font-size:11px;letter-spacing:2px;color:${c};opacity:.9">${rankLabels[rank]}</div>
-      <div style="margin-top:6px">${avatarEl}</div>
-      <div style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:15px;color:#fff;margin-bottom:12px">${esc(p._steam_name||p.name)}</div>
-      <div style="display:flex;justify-content:center;gap:16px;flex-wrap:wrap">
+      <div style="margin-top:6px;position:relative;z-index:1">${avatarEl}</div>
+      <div style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:15px;color:#fff;margin-bottom:12px;position:relative;z-index:1">${esc(p._steam_name||p.name)}</div>
+      <div style="display:flex;justify-content:center;gap:16px;flex-wrap:wrap;position:relative;z-index:1">
         <div><div style="font-family:'Rajdhani',sans-serif;font-weight:800;font-size:20px;color:#fff">${p.kills??0}</div><div style="font-size:10px;color:rgba(255,255,255,.5);letter-spacing:1px;text-transform:uppercase">Kills</div></div>
         <div><div style="font-family:'Rajdhani',sans-serif;font-weight:800;font-size:20px;color:#fff">${parseFloat(p.kd??0).toFixed(2)}</div><div style="font-size:10px;color:rgba(255,255,255,.5);letter-spacing:1px;text-transform:uppercase">K/D</div></div>
         <div><div style="font-family:'Rajdhani',sans-serif;font-weight:800;font-size:20px;color:#fff">${p.matches??0}</div><div style="font-size:10px;color:rgba(255,255,255,.5);letter-spacing:1px;text-transform:uppercase">Matches</div></div>
@@ -1737,30 +1734,91 @@ function renderDemos() {
 }
 
 // ── Pointer shine effect on glassy cards ─────────────────────────────────────
-function applyShine(el, e) {
-  const r = el.getBoundingClientRect();
-  const x = ((e.clientX - r.left) / r.width  * 100).toFixed(1);
-  const y = ((e.clientY - r.top)  / r.height * 100).toFixed(1);
-  el.style.setProperty('--sx', x + '%');
-  el.style.setProperty('--sy', y + '%');
+function getShineTarget(el) {
+  // For ::after pseudo-elements (mvp-card, award-card, profile-top) we set vars on el itself.
+  // For podium-card we set on the .podium-shine child div.
+  return el.classList.contains('podium-card') ? el.querySelector('.podium-shine') : el;
 }
-function clearShine(el) {
-  el.style.setProperty('--sx', '50%');
-  el.style.setProperty('--sy', '50%');
+
+function setShinePos(el, x, y) {
+  el.style.setProperty('--sx', x.toFixed(1) + '%');
+  el.style.setProperty('--sy', y.toFixed(1) + '%');
 }
+
+function animateShineToCenter(el, fromX, fromY) {
+  // Animate --sx/--sy from current position back to 50% 50% over ~400ms
+  const duration = 400;
+  const startTime = performance.now();
+  const targetX = 50, targetY = 50;
+
+  function step(now) {
+    const t = Math.min((now - startTime) / duration, 1);
+    const ease = 1 - Math.pow(1 - t, 3); // ease-out cubic
+    const x = fromX + (targetX - fromX) * ease;
+    const y = fromY + (targetY - fromY) * ease;
+    setShinePos(el, x, y);
+    if (t < 1) requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
+
+function attachShineToEl(el) {
+  if (el._shineAttached) return;
+  el._shineAttached = true;
+
+  let curX = 50, curY = 50;
+  let leaveTimer = null;
+
+  // Show glow
+  function showGlow() {
+    if (leaveTimer) { clearTimeout(leaveTimer); leaveTimer = null; }
+    el.style.setProperty('--shine-opacity', '1');
+    // For pseudo-element cards, force opacity via a class
+    el.classList.add('shine-active');
+  }
+
+  // Hide glow with fade + position animation
+  function hideGlow() {
+    el.classList.remove('shine-active');
+    animateShineToCenter(getShineTarget(el), curX, curY);
+  }
+
+  // Track position
+  function track(clientX, clientY) {
+    const r = el.getBoundingClientRect();
+    curX = ((clientX - r.left) / r.width  * 100);
+    curY = ((clientY - r.top)  / r.height * 100);
+    setShinePos(getShineTarget(el), curX, curY);
+  }
+
+  // Mouse
+  el.addEventListener('mouseenter', () => showGlow());
+  el.addEventListener('mousemove',  e => track(e.clientX, e.clientY));
+  el.addEventListener('mouseleave', () => hideGlow());
+
+  // Touch
+  el.addEventListener('touchstart', e => {
+    const t = e.touches[0];
+    track(t.clientX, t.clientY);
+    showGlow();
+  }, {passive:true});
+  el.addEventListener('touchmove', e => {
+    const t = e.touches[0];
+    track(t.clientX, t.clientY);
+  }, {passive:true});
+  el.addEventListener('touchend', () => hideGlow());
+}
+
 function attachShine(selector) {
-  document.querySelectorAll(selector).forEach(el => {
-    el.classList.add('shine-live');
-    el.addEventListener('mousemove', e => applyShine(el, e));
-    el.addEventListener('mouseleave', e => clearShine(el));
-  });
+  document.querySelectorAll(selector).forEach(el => attachShineToEl(el));
 }
+
 // Re-attach whenever new content is injected
-const _origInner = Object.getOwnPropertyDescriptor(Element.prototype, 'innerHTML');
 const _shineObs = new MutationObserver(() => {
   attachShine('.mvp-card');
   attachShine('.award-card');
   attachShine('.profile-top');
+  attachShine('.podium-card');
 });
 _shineObs.observe(document.getElementById('app'), {childList:true, subtree:true});
 
