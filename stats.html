@@ -161,7 +161,7 @@ nav{background:#09090b;border-bottom:2px solid var(--border);display:flex;align-
 .adr-highlight{color:var(--orange)}
 
 /* MATCHES LIST */
-.matches-list .match-item{position:relative;overflow:hidden;display:flex;align-items:center;gap:14px;padding:0;border-bottom:1px solid rgba(255,85,0,.15);cursor:pointer;transition:transform .22s ease,box-shadow .22s ease,border-color .22s ease;min-height:96px;border-left:none;border-right:1px solid rgba(255,85,0,.1);will-change:transform;box-shadow:0 0 12px rgba(255,85,0,.04),inset 0 0 30px rgba(255,85,0,.02)}
+.matches-list .match-item{position:relative;overflow:hidden;display:flex;align-items:center;gap:14px;padding:0;border-bottom:1px solid rgba(255,85,0,.15);cursor:pointer;transition:transform .22s ease,box-shadow .22s ease,border-color .22s ease;min-height:96px;border-left:none;border-right:1px solid rgba(255,85,0,.1);will-change:transform;box-shadow:0 0 12px rgba(255,85,0,.04)}
 .matches-list .match-item:hover{transform:translateX(4px);border-color:rgba(255,85,0,.45);box-shadow:0 0 22px rgba(255,85,0,.18),inset 4px 0 20px rgba(255,85,0,.1)}
 .matches-list .match-item:last-child{border-bottom:1px solid rgba(255,85,0,.15)}
 .match-item .m-bg{position:absolute;inset:0;background-size:cover;background-position:center;z-index:0;transition:transform .35s ease;will-change:transform}
@@ -270,6 +270,22 @@ nav{background:#09090b;border-bottom:2px solid var(--border);display:flex;align-
 .back-btn{display:inline-flex;align-items:center;gap:5px;padding:5px 12px;border:1px solid var(--border2);border-radius:3px;font-size:11px;color:var(--muted2);cursor:pointer;margin-bottom:14px;font-family:'Rajdhani',sans-serif;font-weight:600;letter-spacing:1px;text-transform:uppercase;transition:all .18s}
 .back-btn:hover{color:var(--orange);border-color:var(--orange)}
 
+/* PREDICT PAGE */
+.predict-team-box{background:linear-gradient(135deg,rgba(255,85,0,.07) 0%,rgba(10,12,14,.8) 100%);border:1px solid rgba(255,85,0,.2);border-radius:8px;padding:14px}
+.predict-slot{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:5px;border:1px solid var(--border);background:var(--surface);margin-bottom:6px;cursor:pointer;transition:all .15s;min-height:48px}
+.predict-slot:hover{border-color:rgba(255,85,0,.4);background:rgba(255,85,0,.04)}
+.predict-slot.filled{border-color:rgba(255,85,0,.35);background:rgba(255,85,0,.06)}
+.predict-slot.empty-slot{border-style:dashed;border-color:var(--muted);justify-content:center;color:var(--muted2);font-size:12px;font-family:'Rajdhani',sans-serif;letter-spacing:1px}
+.predict-slot.empty-slot:hover{border-color:var(--orange);color:var(--orange)}
+.predict-player-row{display:flex;align-items:center;gap:10px;padding:8px 10px;cursor:pointer;transition:background .12s;border-bottom:1px solid var(--border)}
+.predict-player-row:last-child{border-bottom:none}
+.predict-player-row:hover{background:rgba(255,85,0,.05)}
+.predict-player-row.in-team1,.predict-player-row.in-team2{pointer-events:none;opacity:.4}
+.pred-bar-wrap{height:28px;border-radius:4px;overflow:hidden;display:flex;margin:16px 0;background:var(--surface)}
+.pred-bar-t1{background:linear-gradient(90deg,rgba(255,85,0,.9),rgba(255,85,0,.6));height:100%;transition:width .8s cubic-bezier(.4,0,.2,1);display:flex;align-items:center;justify-content:flex-end;padding-right:10px;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:14px;color:#fff}
+.pred-bar-t2{background:linear-gradient(90deg,rgba(91,196,245,.6),rgba(91,196,245,.9));height:100%;transition:width .8s cubic-bezier(.4,0,.2,1);display:flex;align-items:center;padding-left:10px;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:14px;color:#fff}
+.pred-role{font-size:9px;letter-spacing:1px;text-transform:uppercase;color:var(--muted2);margin-top:1px}
+
 /* UTIL */
 .loading{padding:48px;text-align:center;color:var(--muted2)}
 .spin{display:inline-block;width:160px;height:auto;margin-bottom:0;
@@ -298,6 +314,7 @@ nav{background:#09090b;border-bottom:2px solid var(--border);display:flex;align-
     <div class="tab" data-p="h2h">Head-to-Head</div>
     <div class="tab" data-p="specialists">Specialists</div>
     <div class="tab" data-p="demos">Demos</div>
+    <div class="tab" data-p="predict">Predict</div>
     <div class="tab-indicator" id="tab-indicator"></div>
   </div>
   <div class="nav-right">
@@ -315,6 +332,7 @@ nav{background:#09090b;border-bottom:2px solid var(--border);display:flex;align-
     <div class="mobile-tab" data-p="h2h" onclick="_navStack=[];go('h2h');closeMenu()">Head-to-Head</div>
     <div class="mobile-tab" data-p="specialists" onclick="_navStack=[];go('specialists');closeMenu()">Specialists</div>
     <div class="mobile-tab" data-p="demos" onclick="_navStack=[];go('demos');closeMenu()">Demos</div>
+    <div class="mobile-tab" data-p="predict" onclick="_navStack=[];go('predict');closeMenu()">Predict</div>
     <a href="https://skins.fsho.st" target="_blank" class="mobile-skins" onclick="closeMenu()">🎨 Skins</a>
   </div>
 </div>
@@ -326,6 +344,7 @@ nav{background:#09090b;border-bottom:2px solid var(--border);display:flex;align-
   <div id="p-h2h" class="page-panel" style="display:none"></div>
   <div id="p-specialists" class="page-panel" style="display:none"></div>
   <div id="p-demos" class="page-panel" style="display:none"></div>
+  <div id="p-predict" class="page-panel" style="display:none"></div>
   <div id="p-player" class="page-panel" style="display:none"></div>
   <div id="p-match" class="page-panel" style="display:none"></div>
 </div>
@@ -373,7 +392,7 @@ function moveTabIndicator(page) {
   indicator.style.width = tabRect.width + 'px';
 }
 
-const _pages = ['matches','leaderboard','maps','h2h','specialists','demos','player','match'];
+const _pages = ['matches','leaderboard','maps','h2h','specialists','demos','player','match','predict'];
 
 // Navigation stack — each entry is {page, params}
 let _navStack = [];
@@ -412,6 +431,7 @@ function go(page, params, back) {
     if(page==='demos')       loadDemos();
     if(page==='player')      loadPlayer(params.name);
     if(page==='match')       loadMatch(params.id);
+    if(page==='predict')     loadPredict();
   }
 
   if (current && current !== page) {
@@ -1559,6 +1579,239 @@ const _shineObs = new MutationObserver(() => {
   attachShine('.h2h-top-card');
 });
 _shineObs.observe(document.getElementById('app'), {childList:true, subtree:true});
+
+
+// ── Predict Page ──────────────────────────────────────────────────────────────
+let _predictPlayers = null;
+let _predictTeams   = [[], []];
+
+async function loadPredict() {
+  const el = document.getElementById('p-predict');
+  el.innerHTML = '<div class="loading"><img class="spin" src="https://upload.wikimedia.org/wikipedia/commons/2/26/Counter-Strike_vertical_logo_%282023%29.svg" alt="CS2"></div>';
+  if (!_predictPlayers) {
+    const data = await fetch('/api/leaderboard').then(r=>r.json()).catch(()=>[]);
+    await Promise.all(data.slice(0,40).map(async p => {
+      if (p.steamid64 && p.steamid64 !== '0') {
+        const s = await fetch('/api/steam/'+p.steamid64).then(r=>r.json()).catch(()=>({}));
+        if (s.avatar) p._steam_avatar = s.avatar;
+        if (s.name)   p._steam_name   = s.name;
+      }
+    }));
+    _predictPlayers = data;
+  }
+  renderPredict();
+}
+
+function renderPredict() {
+  const el = document.getElementById('p-predict');
+  const [t1, t2] = _predictTeams;
+  const players   = _predictPlayers || [];
+  const canPredict = t1.length === 5 && t2.length === 5;
+
+  function teamSlots(teamIdx) {
+    const team  = _predictTeams[teamIdx];
+    const color = teamIdx === 0 ? 'var(--orange)' : 'var(--ct)';
+    const out   = [];
+    for (let i = 0; i < 5; i++) {
+      const p = team[i];
+      if (p) {
+        const av = p._steam_avatar
+          ? `<img src="${p._steam_avatar}" style="width:30px;height:30px;border-radius:50%;object-fit:cover;flex-shrink:0;border:1px solid ${color}">`
+          : `<div style="width:30px;height:30px;border-radius:50%;background:var(--surface2);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:11px;color:var(--muted2)">${initials(p.name)}</div>`;
+        out.push(`<div class="predict-slot filled" onclick="predictRemove(${teamIdx},${i})">
+          ${av}
+          <div style="flex:1;min-width:0">
+            <div style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:13px;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(p._steam_name||p.name)}</div>
+            <div style="font-size:10px;color:var(--muted2)">K/D ${parseFloat(p.kd??0).toFixed(2)} &middot; ADR ${parseFloat(p.adr??0).toFixed(0)}</div>
+          </div>
+          <span style="font-size:10px;color:var(--muted2);flex-shrink:0">x</span>
+        </div>`);
+      } else {
+        out.push(`<div class="predict-slot empty-slot" onclick="predictOpenPicker(${teamIdx})">+ Add Player</div>`);
+      }
+    }
+    return out.join('');
+  }
+
+  const resultHtml = canPredict
+    ? buildPrediction(t1, t2)
+    : `<div style="padding:28px;text-align:center;color:var(--muted2);font-size:12px;letter-spacing:.5px">
+        ${5-t1.length > 0 ? `Team A needs ${5-t1.length} more. ` : ''}${5-t2.length > 0 ? `Team B needs ${5-t2.length} more.` : ''}
+       </div>`;
+
+  el.innerHTML = `
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
+      <div class="predict-team-box">
+        <div style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:11px;letter-spacing:2px;text-transform:uppercase;color:var(--orange);margin-bottom:10px">Team A</div>
+        ${teamSlots(0)}
+      </div>
+      <div class="predict-team-box" style="border-color:rgba(91,196,245,.2);background:linear-gradient(135deg,rgba(91,196,245,.06) 0%,rgba(10,12,14,.8) 100%)">
+        <div style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:11px;letter-spacing:2px;text-transform:uppercase;color:var(--ct);margin-bottom:10px">Team B</div>
+        ${teamSlots(1)}
+      </div>
+    </div>
+    <div id="predict-result">${resultHtml}</div>
+    <div id="predict-picker" style="display:none;margin-top:10px">
+      <div class="card" style="padding:0;max-height:360px;overflow-y:auto" id="predict-picker-list"></div>
+    </div>`;
+}
+
+function predictOpenPicker(teamIdx) {
+  const pickerEl = document.getElementById('predict-picker');
+  const listEl   = document.getElementById('predict-picker-list');
+  if (!pickerEl || !listEl) return;
+  const [t1, t2] = _predictTeams;
+  const players  = _predictPlayers || [];
+
+  const rows = players.map((p, i) => {
+    const inT1 = t1.some(x=>x.name===p.name);
+    const inT2 = t2.some(x=>x.name===p.name);
+    const av = p._steam_avatar
+      ? `<img src="${p._steam_avatar}" style="width:34px;height:34px;border-radius:50%;object-fit:cover;flex-shrink:0">`
+      : `<div style="width:34px;height:34px;border-radius:50%;background:var(--surface2);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:12px;color:var(--muted2)">${initials(p.name)}</div>`;
+    const badge = inT1
+      ? `<span style="font-size:9px;padding:1px 6px;border-radius:2px;background:rgba(255,85,0,.15);border:1px solid rgba(255,85,0,.35);color:var(--orange);font-family:'Rajdhani',sans-serif;font-weight:700;letter-spacing:1px">Team A</span>`
+      : inT2
+      ? `<span style="font-size:9px;padding:1px 6px;border-radius:2px;background:rgba(91,196,245,.12);border:1px solid rgba(91,196,245,.3);color:var(--ct);font-family:'Rajdhani',sans-serif;font-weight:700;letter-spacing:1px">Team B</span>`
+      : '';
+    return `<div class="predict-player-row${inT1?' in-team1':inT2?' in-team2':''}" onclick="${(inT1||inT2)?'':'predictAdd('+teamIdx+','+i+')'}">
+      ${av}
+      <div style="flex:1;min-width:0">
+        <div style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:14px;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(p._steam_name||p.name)}</div>
+        <div style="font-size:11px;color:var(--muted2)">${p.kills??0} kills &middot; ${parseFloat(p.kd??0).toFixed(2)} K/D &middot; ${parseFloat(p.adr??0).toFixed(0)} ADR &middot; ${p.matches??0} matches</div>
+      </div>
+      ${badge}
+    </div>`;
+  }).join('');
+
+  listEl.innerHTML = `
+    <div style="padding:10px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;background:#0c0e10;z-index:1">
+      <span style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:11px;letter-spacing:2px;text-transform:uppercase;color:${teamIdx===0?'var(--orange)':'var(--ct)'}">Adding to Team ${teamIdx===0?'A':'B'}</span>
+      <span onclick="document.getElementById('predict-picker').style.display='none'" style="cursor:pointer;color:var(--muted2);font-size:18px;line-height:1">&times;</span>
+    </div>
+    ${rows}`;
+
+  pickerEl.style.display = 'block';
+}
+
+function predictAdd(teamIdx, playerIdx) {
+  const p    = _predictPlayers[playerIdx];
+  const team = _predictTeams[teamIdx];
+  if (team.length < 5 && !team.some(x=>x.name===p.name)) team.push(p);
+  document.getElementById('predict-picker').style.display = 'none';
+  renderPredict();
+}
+
+function predictRemove(teamIdx, slotIdx) {
+  _predictTeams[teamIdx].splice(slotIdx, 1);
+  renderPredict();
+}
+
+function buildPrediction(t1, t2) {
+  function score(p) {
+    return parseFloat(p.kd??1)*30 + parseFloat(p.adr??70)*0.25 +
+           parseFloat(p.hs_pct??40)*0.15 + parseFloat(p.kast??70)*0.15 +
+           parseFloat(p.rating??1)*20 + Math.min(parseFloat(p.matches??1),50)*0.1;
+  }
+  const s1 = t1.reduce((s,p)=>s+score(p),0);
+  const s2 = t2.reduce((s,p)=>s+score(p),0);
+  const pct1 = Math.round(s1/(s1+s2)*100);
+  const pct2 = 100-pct1;
+  const winner = pct1>pct2?'A':pct2>pct1?'B':null;
+  const wColor = winner==='A'?'var(--orange)':'var(--ct)';
+
+  function roles(team) {
+    const byKD   = [...team].sort((a,b)=>parseFloat(b.kd??0)-parseFloat(a.kd??0));
+    const byADR  = [...team].sort((a,b)=>parseFloat(b.adr??0)-parseFloat(a.adr??0));
+    const byHS   = [...team].sort((a,b)=>parseFloat(b.hs_pct??0)-parseFloat(a.hs_pct??0));
+    const byKAST = [...team].sort((a,b)=>parseFloat(b.kast??0)-parseFloat(a.kast??0));
+    return [
+      {label:'Best Fragger',  p: byKD[0]},
+      {label:'Entry Fragger', p: byADR[0]},
+      {label:'Sniper',        p: byHS[0]},
+      {label:'Support',       p: byKAST[0]},
+      {label:'IGL / Anchor',  p: byKAST[byKAST.length-1]},
+    ];
+  }
+
+  function roleCard(label, p, color) {
+    if (!p) return '';
+    const av = p._steam_avatar
+      ? `<img src="${p._steam_avatar}" style="width:28px;height:28px;border-radius:50%;object-fit:cover;border:1px solid ${color}">`
+      : `<div style="width:28px;height:28px;border-radius:50%;background:var(--surface2);display:flex;align-items:center;justify-content:center;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:10px;color:var(--muted2)">${initials(p.name)}</div>`;
+    return `<div style="display:flex;align-items:center;gap:8px;padding:7px 10px;background:var(--surface);border-radius:4px;border:1px solid var(--border);margin-bottom:5px">
+      ${av}
+      <div style="min-width:0;flex:1">
+        <div style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:12px;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(p._steam_name||p.name)}</div>
+        <div class="pred-role">${label}</div>
+      </div>
+    </div>`;
+  }
+
+  function avg(team, key) { return team.reduce((s,p)=>s+parseFloat(p[key]??0),0)/team.length; }
+
+  const stats = [
+    {label:'K/D Ratio', k:'kd',      fmt: v=>v.toFixed(2)},
+    {label:'ADR',       k:'adr',     fmt: v=>v.toFixed(1)},
+    {label:'HS %',      k:'hs_pct',  fmt: v=>v.toFixed(1)+'%'},
+    {label:'KAST %',    k:'kast',    fmt: v=>v.toFixed(1)+'%'},
+    {label:'Rating',    k:'rating',  fmt: v=>v.toFixed(2)},
+    {label:'Matches',   k:'matches', fmt: v=>Math.round(v)},
+  ];
+
+  const statRows = stats.map(s => {
+    const a1 = avg(t1, s.k), a2 = avg(t2, s.k);
+    const w1 = a1 >= a2;
+    return `<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--border)">
+      <div style="width:44px;text-align:right;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:13px;color:${w1?'var(--orange)':'var(--muted2)'}">${s.fmt(a1)}</div>
+      <div style="flex:1;text-align:center;font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--muted2)">${s.label}</div>
+      <div style="width:44px;text-align:left;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:13px;color:${!w1?'var(--ct)':'var(--muted2)'}">${s.fmt(a2)}</div>
+    </div>`;
+  }).join('');
+
+  const r1 = roles(t1), r2 = roles(t2);
+
+  return `
+    <div class="card" style="padding:20px;margin-bottom:10px">
+      <div style="text-align:center;margin-bottom:12px">
+        <div style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:18px;color:var(--white)">
+          ${winner ? `<span style="color:${wColor}">Team ${winner}</span> predicted to win` : 'Even matchup'}
+        </div>
+        <div style="font-size:11px;color:var(--muted2);margin-top:3px">Based on K/D, ADR, HS%, KAST and Rating</div>
+      </div>
+      <div style="display:flex;justify-content:space-between;margin-bottom:4px">
+        <span style="font-family:'Rajdhani',sans-serif;font-weight:800;font-size:22px;color:var(--orange)">${pct1}%</span>
+        <span style="font-family:'Rajdhani',sans-serif;font-weight:800;font-size:22px;color:var(--ct)">${pct2}%</span>
+      </div>
+      <div class="pred-bar-wrap">
+        <div class="pred-bar-t1" style="width:${pct1}%">A</div>
+        <div class="pred-bar-t2" style="width:${pct2}%">B</div>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--muted2)">
+        <span>Team A</span><span>Team B</span>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+      <div class="card" style="padding:14px">
+        <div style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:11px;letter-spacing:2px;text-transform:uppercase;color:var(--orange);margin-bottom:10px">Team A Roles</div>
+        ${r1.map(({label,p})=>roleCard(label,p,'var(--orange)')).join('')}
+      </div>
+      <div class="card" style="padding:14px">
+        <div style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:11px;letter-spacing:2px;text-transform:uppercase;color:var(--ct);margin-bottom:10px">Team B Roles</div>
+        ${r2.map(({label,p})=>roleCard(label,p,'var(--ct)')).join('')}
+      </div>
+    </div>
+
+    <div class="card" style="padding:14px">
+      <div style="display:flex;justify-content:space-between;padding:4px 0 8px;border-bottom:1px solid var(--border)">
+        <span style="font-size:10px;font-family:'Rajdhani',sans-serif;font-weight:700;letter-spacing:1px;color:var(--orange)">TEAM A</span>
+        <span style="font-size:10px;font-family:'Rajdhani',sans-serif;font-weight:700;letter-spacing:1px;color:var(--muted2)">STAT COMPARISON</span>
+        <span style="font-size:10px;font-family:'Rajdhani',sans-serif;font-weight:700;letter-spacing:1px;color:var(--ct)">TEAM B</span>
+      </div>
+      ${statRows}
+    </div>`;
+}
 
 // Check for ?match= URL param to deep-link
 const urlParams = new URLSearchParams(location.search);
