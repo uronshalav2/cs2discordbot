@@ -950,20 +950,23 @@ function moveTabIndicator(page) {
 const _pages = ['matches','leaderboard','maps','h2h','specialists','demos','player','match'];
 
 let _back = null;
-function go(page, params={}, back=null) {
+function go(page, params, back) {
+  params = params || {};
+  back   = back   || null;
+
   // Find currently visible page to fade out
-  const current = _pages.find(p => document.getElementById('p-'+p).style.display !== 'none');
+  const current = _pages.find(function(pg){ return document.getElementById('p-'+pg).style.display !== 'none'; });
   const incoming = document.getElementById('p-'+page);
 
-  const doSwitch = () => {
-    _pages.forEach(p => {
-      const el = document.getElementById('p-'+p);
-      el.style.display = (p===page) ? '' : 'none';
+  function doSwitch() {
+    _pages.forEach(function(pg) {
+      const el = document.getElementById('p-'+pg);
+      el.style.display = (pg===page) ? '' : 'none';
       el.classList.remove('page-in','page-out');
     });
     incoming.classList.add('page-in');
-    document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active',t.dataset.p===page));
-    document.querySelectorAll('.mobile-tab').forEach(t=>t.classList.toggle('active',t.dataset.p===page));
+    document.querySelectorAll('.tab').forEach(function(t){ t.classList.toggle('active', t.dataset.p===page); });
+    document.querySelectorAll('.mobile-tab').forEach(function(t){ t.classList.toggle('active', t.dataset.p===page); });
     moveTabIndicator(page);
     _back = back;
     if(page==='matches')     loadMatches();
@@ -974,10 +977,10 @@ function go(page, params={}, back=null) {
     if(page==='demos')       loadDemos();
     if(page==='player')      loadPlayer(params.name);
     if(page==='match')       loadMatch(params.id);
-  };
+  }
 
   if (current && current !== page) {
-    const outEl = document.getElementById('p-'+current);
+    var outEl = document.getElementById('p-'+current);
     outEl.classList.add('page-out');
     setTimeout(doSwitch, 200);
   } else {
@@ -1614,7 +1617,6 @@ function h2hBack() {
     picker.style.maxHeight = '500px';
     picker.style.opacity = '1';
   }
-}
 }
 
 // ── Leaderboard ───────────────────────────────────────────────────────────────
