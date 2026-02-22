@@ -605,7 +605,7 @@ def _build_stats_html() -> str:
 html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;font-size:13px}
 /* NAV */
 nav{background:#09090b;border-bottom:2px solid var(--border);display:flex;align-items:center;padding:0 20px;height:50px;position:sticky;top:0;z-index:200;gap:0}
-.logo{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:18px;letter-spacing:2px;color:var(--orange);text-transform:uppercase;margin-right:28px;white-space:nowrap;display:flex;align-items:center}
+.logo{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:26px;letter-spacing:-2px;color:var(--orange);text-transform:uppercase;margin-right:28px;white-space:nowrap;display:flex;align-items:center;line-height:1}
 .tabs{display:flex;gap:0;height:100%}
 .tab{height:100%;padding:0 16px;display:flex;align-items:center;font-family:'Rajdhani',sans-serif;font-weight:600;font-size:12px;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted2);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-2px;transition:all .18s}
 .tab:hover{color:var(--text);background:rgba(255,255,255,.03)}
@@ -731,17 +731,32 @@ nav{background:#09090b;border-bottom:2px solid var(--border);display:flex;align-
 .adr-highlight{color:var(--orange)}
 
 /* MATCHES LIST */
-.matches-list .match-item{position:relative;overflow:hidden;display:flex;align-items:center;gap:14px;padding:0;border-bottom:3px solid rgba(0,0,0,.8);cursor:pointer;transition:filter .15s;min-height:96px}
-.matches-list .match-item:hover{filter:brightness(1.12)}
+.matches-list .match-item{position:relative;overflow:hidden;display:flex;align-items:center;gap:14px;padding:0;border-bottom:3px solid rgba(0,0,0,.8);cursor:pointer;transition:transform .18s ease,box-shadow .18s ease;min-height:96px;border-left:3px solid transparent}
+.matches-list .match-item:hover{transform:scaleX(1.008) translateX(3px);border-left-color:var(--orange);box-shadow:inset 4px 0 18px rgba(255,85,0,.12),4px 0 0 var(--orange)}
+.matches-list .match-item:hover .m-overlay{background:linear-gradient(90deg,rgba(6,8,14,.88) 0%,rgba(6,8,14,.80) 30%,rgba(6,8,14,.52) 60%,rgba(6,8,14,.15) 100%)}
+.matches-list .match-item:hover .m-score{text-shadow:0 0 18px rgba(255,120,40,.5),0 2px 8px rgba(0,0,0,.9)}
+.matches-list .match-item:hover .m-id{color:var(--orange)}
 .matches-list .match-item:last-child{border-bottom:none}
-.match-item .m-bg{position:absolute;inset:0;background-size:cover;background-position:center;z-index:0}
-.match-item .m-overlay{position:absolute;inset:0;background:linear-gradient(90deg,rgba(6,8,14,.97) 0%,rgba(6,8,14,.92) 30%,rgba(6,8,14,.65) 60%,rgba(6,8,14,.25) 100%);z-index:1}
+.match-item .m-bg{position:absolute;inset:0;background-size:cover;background-position:center;z-index:0;transition:transform .3s ease}
+.matches-list .match-item:hover .m-bg{transform:scale(1.03)}
+.match-item .m-overlay{position:absolute;inset:0;background:linear-gradient(90deg,rgba(6,8,14,.97) 0%,rgba(6,8,14,.92) 30%,rgba(6,8,14,.65) 60%,rgba(6,8,14,.25) 100%);z-index:1;transition:background .18s ease}
 .match-item .m-content{position:relative;z-index:2;display:flex;align-items:center;gap:14px;width:100%;padding:18px 24px}
-.m-id{font-size:11px;color:rgba(255,255,255,.45);width:42px;font-family:'Rajdhani',sans-serif;font-weight:600;flex-shrink:0}
+.m-id{font-size:11px;color:rgba(255,255,255,.45);width:42px;font-family:'Rajdhani',sans-serif;font-weight:600;flex-shrink:0;transition:color .18s}
 .m-teams{flex:1}
 .m-teams-str{font-size:13px;color:rgba(255,255,255,.8);margin-bottom:4px;font-weight:500}
-.m-score{font-family:'Rajdhani',sans-serif;font-weight:800;font-size:26px;color:#fff;text-shadow:0 2px 8px rgba(0,0,0,.9),0 0 20px rgba(0,0,0,.5)}
+.m-score{font-family:'Rajdhani',sans-serif;font-weight:800;font-size:26px;color:#fff;text-shadow:0 2px 8px rgba(0,0,0,.9),0 0 20px rgba(0,0,0,.5);transition:text-shadow .18s ease}
 .m-date{font-size:11px;color:rgba(255,255,255,.5);text-align:right;white-space:nowrap;text-shadow:0 1px 4px rgba(0,0,0,.9)}
+
+/* DEMO CARDS */
+.demo-card{position:relative;overflow:hidden;height:110px;margin-bottom:2px;cursor:pointer;border-left:3px solid transparent;transition:transform .18s ease,box-shadow .18s ease,border-left-color .18s ease}
+.demo-card:hover{transform:scaleX(1.008) translateX(3px);border-left-color:var(--orange);box-shadow:inset 4px 0 18px rgba(255,85,0,.12)}
+.demo-card:hover .demo-bg-img{transform:scale(1.03)}
+.demo-card:hover .demo-overlay{background:linear-gradient(90deg,rgba(4,5,7,.88) 0%,rgba(4,5,7,.78) 35%,rgba(4,5,7,.45) 65%,rgba(4,5,7,.05) 100%)}
+.demo-card:hover .demo-map-label{color:rgba(255,255,255,.65)}
+.demo-bg-img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:0.75;transition:transform .3s ease}
+.demo-overlay{position:absolute;inset:0;background:linear-gradient(90deg,rgba(4,5,7,.95) 0%,rgba(4,5,7,.88) 35%,rgba(4,5,7,.55) 65%,rgba(4,5,7,.1) 100%);transition:background .18s ease}
+.demo-content{position:relative;z-index:2;height:100%;display:flex;align-items:center;padding:0 22px;gap:18px}
+.demo-map-label{font-family:'Rajdhani',sans-serif;font-weight:800;font-size:12px;letter-spacing:3px;text-transform:uppercase;color:rgba(255,255,255,.45);margin-bottom:4px;text-shadow:0 1px 4px rgba(0,0,0,.8);transition:color .18s ease}
 
 /* PROFILE */
 .profile-top{--sx:50%;--sy:50%;background:linear-gradient(135deg,rgba(255,85,0,.11) 0%,rgba(10,12,14,.7) 50%,rgba(255,85,0,.05) 100%);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);border:1px solid rgba(255,85,0,.28);border-radius:10px;padding:22px 24px;margin-bottom:12px;display:flex;align-items:center;gap:20px;box-shadow:0 0 40px rgba(255,85,0,.12),0 8px 32px rgba(0,0,0,.55),inset 0 1px 0 rgba(255,255,255,.08);position:relative;overflow:hidden}
@@ -784,8 +799,7 @@ nav{background:#09090b;border-bottom:2px solid var(--border);display:flex;align-
 .podium-card:hover .podium-shine{opacity:1}
 
 /* DEMO DOWNLOAD BUTTON */
-.demo-dl-btn{padding:10px 20px;background:rgba(255,85,0,.15);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);border:1px solid var(--orange);border-radius:0;color:var(--orange);font-family:'Rajdhani',sans-serif;font-weight:700;font-size:12px;letter-spacing:1.5px;text-transform:uppercase;cursor:pointer;white-space:nowrap;transition:all .2s;position:relative;overflow:hidden}
-.demo-dl-btn::before{content:'';position:absolute;inset:0;background:linear-gradient(135deg,rgba(255,255,255,.08) 0%,transparent 60%);pointer-events:none}
+.demo-dl-btn{padding:10px 20px;background:rgba(255,85,0,.15);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);border:1px solid var(--orange);border-radius:0;color:var(--orange);font-family:'Rajdhani',sans-serif;font-weight:700;font-size:12px;letter-spacing:1.5px;text-transform:uppercase;cursor:pointer;white-space:nowrap;transition:all .2s;position:relative;overflow:hidden}.demo-dl-btn::before{content:'';position:absolute;inset:0;background:linear-gradient(135deg,rgba(255,255,255,.08) 0%,transparent 60%);pointer-events:none}
 .demo-dl-btn:hover{background:rgba(255,85,0,.45);border-color:var(--orange2);color:#fff;box-shadow:0 0 24px rgba(255,85,0,.6),0 0 8px rgba(255,85,0,.4),inset 0 1px 0 rgba(255,255,255,.15);text-shadow:0 0 10px rgba(255,180,80,.8);transform:translateY(-1px)}
 .demo-dl-btn:active{transform:translateY(0);box-shadow:0 0 12px rgba(255,85,0,.4)}
 
@@ -803,7 +817,7 @@ nav{background:#09090b;border-bottom:2px solid var(--border);display:flex;align-
 </head>
 <body>
 <nav>
-  <div class="logo">Reshtan Gaming</div>
+  <div class="logo"><span style="font-size:22px;font-weight:800;letter-spacing:-1px">R</span><span style="font-size:22px;font-weight:300;letter-spacing:-1px;color:var(--orange2)">G</span></div>
   <div class="tabs">
     <div class="tab active" data-p="matches">Matches</div>
     <div class="tab" data-p="leaderboard">Leaderboard</div>
@@ -1702,14 +1716,14 @@ function renderDemos() {
          </div>`
       : '';
 
-    return `<div style="position:relative;border-radius:0;overflow:hidden;margin-bottom:2px;height:110px">
+    return `<div class="demo-card">
       ${mapImg
-        ? `<img src="${mapImg}" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:0.75">`
+        ? `<img class="demo-bg-img" src="${mapImg}">`
         : `<div style="position:absolute;inset:0;background:linear-gradient(135deg,#0a0c0e,#141618)"></div>`}
-      <div style="position:absolute;inset:0;background:linear-gradient(90deg,rgba(4,5,7,.95) 0%,rgba(4,5,7,.88) 35%,rgba(4,5,7,.55) 65%,rgba(4,5,7,.1) 100%)"></div>
-      <div style="position:relative;z-index:2;height:100%;display:flex;align-items:center;padding:0 22px;gap:18px">
+      <div class="demo-overlay"></div>
+      <div class="demo-content">
         <div style="flex:1;min-width:0">
-          <div style="font-family:'Rajdhani',sans-serif;font-weight:800;font-size:12px;letter-spacing:3px;text-transform:uppercase;color:rgba(255,255,255,.45);margin-bottom:4px;text-shadow:0 1px 4px rgba(0,0,0,.8)">${esc(d.mapname||d.name)}</div>
+          <div class="demo-map-label">${esc(d.mapname||d.name)}</div>
           <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
             ${score}
             ${teamsLine}
@@ -1717,14 +1731,14 @@ function renderDemos() {
           <div style="font-size:11px;color:rgba(255,255,255,.35);margin-top:5px;text-shadow:0 1px 3px rgba(0,0,0,.9)">${dateStr}${timeStr?' · '+timeStr:''} · ${esc(d.size_formatted||'')}</div>
         </div>
         <a href="${esc(d.download_url)}" download style="text-decoration:none;flex-shrink:0">
-          <button class="demo-dl-btn">⬇ Download</button>
+          <button class="demo-dl-btn">Download</button>
         </a>
       </div>
     </div>`;
   }).join('') || '<div class="empty">No demos match your filters.</div>';
 
   el.innerHTML = `
-    <div class="card" style="padding:14px 16px;margin-bottom:14px;display:flex;gap:10px;align-items:center">
+    <div style="padding:14px 0;margin-bottom:10px;display:flex;gap:10px;align-items:center">
       <select onchange="_demoFilters.map=this.value;renderDemos()"
         style="padding:9px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:3px;color:var(--white);font-family:'Rajdhani',sans-serif;font-size:13px;cursor:pointer;min-width:160px">${mapOpts}</select>
       <button onclick="_demoFilters={map:''};renderDemos()"
