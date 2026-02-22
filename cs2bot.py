@@ -800,6 +800,11 @@ nav{background:#09090b;border-bottom:2px solid var(--border);display:flex;align-
 .podium-shine{position:absolute;inset:0;pointer-events:none;z-index:0;opacity:0;transition:opacity .4s ease;border-radius:inherit;background:radial-gradient(circle at var(--sx,50%) var(--sy,50%),rgba(255,200,100,.25) 0%,rgba(255,85,0,.08) 40%,transparent 65%)}
 .podium-card:hover .podium-shine{opacity:1}
 
+/* H2H TOP CARD */
+.h2h-top-card{--sx:50%;--sy:50%;background:linear-gradient(135deg,rgba(255,85,0,.12) 0%,rgba(10,12,14,.7) 50%,rgba(255,85,0,.06) 100%);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);border:1px solid rgba(255,85,0,.35);border-radius:10px;padding:20px 22px;position:relative;overflow:hidden;box-shadow:0 0 40px rgba(255,85,0,.15),0 8px 32px rgba(0,0,0,.6),inset 0 1px 0 rgba(255,255,255,.08)}
+.h2h-top-card::after{content:'';position:absolute;inset:0;background:radial-gradient(circle at var(--sx) var(--sy),rgba(255,140,60,.22) 0%,rgba(255,85,0,.08) 35%,transparent 65%);pointer-events:none;opacity:0;transition:opacity .4s ease}
+.h2h-top-card.shine-active::after{opacity:1}
+
 /* H2H CLEAR BUTTON */
 .h2h-clear-btn{padding:3px 10px;background:transparent;border:1px solid var(--border);border-radius:3px;color:var(--muted2);font-size:11px;font-family:'Rajdhani',sans-serif;cursor:pointer;letter-spacing:1px;transition:all .2s;position:relative;overflow:hidden}
 .h2h-clear-btn::before{content:'';position:absolute;inset:0;background:linear-gradient(135deg,rgba(255,255,255,.07) 0%,transparent 60%);pointer-events:none}
@@ -1386,7 +1391,7 @@ function renderH2HPicker() {
   }).join('');
 
   el.innerHTML = `
-    <div class="card" style="padding:20px 22px;margin-bottom:12px">
+    <div class="h2h-top-card" style="margin-bottom:12px">
       <div style="display:grid;grid-template-columns:1fr 48px 1fr;align-items:center;gap:12px;margin-bottom:18px">
         ${slotHtml(0,p1)}
         <div style="font-family:'Rajdhani',sans-serif;font-weight:800;font-size:20px;color:var(--muted);text-align:center">VS</div>
@@ -1856,6 +1861,7 @@ const _shineObs = new MutationObserver(() => {
   attachShine('.award-card');
   attachShine('.profile-top');
   attachShine('.podium-card');
+  attachShine('.h2h-top-card');
 });
 _shineObs.observe(document.getElementById('app'), {childList:true, subtree:true});
 
