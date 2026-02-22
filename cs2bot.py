@@ -800,6 +800,12 @@ nav{background:#09090b;border-bottom:2px solid var(--border);display:flex;align-
 .podium-shine{position:absolute;inset:0;pointer-events:none;z-index:0;opacity:0;transition:opacity .4s ease;border-radius:inherit;background:radial-gradient(circle at var(--sx,50%) var(--sy,50%),rgba(255,200,100,.25) 0%,rgba(255,85,0,.08) 40%,transparent 65%)}
 .podium-card:hover .podium-shine{opacity:1}
 
+/* H2H RESULT EXPAND */
+.h2h-result-body{overflow:hidden;max-height:0;transition:max-height .4s ease;position:relative;z-index:1}
+.h2h-result-body.open{max-height:1200px}
+.h2h-result-divider{border-bottom:1px solid rgba(255,85,0,.15);margin:0 -20px;display:none}
+.h2h-result-body.open ~ .h2h-result-divider{display:block}
+
 /* H2H TOP CARD */
 .h2h-top-card{--sx:50%;--sy:50%;background:linear-gradient(135deg,rgba(255,85,0,.12) 0%,rgba(10,12,14,.7) 50%,rgba(255,85,0,.06) 100%);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);border:1px solid rgba(255,85,0,.35);border-radius:10px;padding:20px 22px;position:relative;overflow:hidden;box-shadow:0 0 40px rgba(255,85,0,.15),0 8px 32px rgba(0,0,0,.6),inset 0 1px 0 rgba(255,255,255,.08)}
 .h2h-top-card::after{content:'';position:absolute;inset:0;background:radial-gradient(circle at var(--sx) var(--sy),rgba(255,140,60,.22) 0%,rgba(255,85,0,.08) 35%,transparent 65%);pointer-events:none;opacity:0;transition:opacity .4s ease}
@@ -1391,18 +1397,20 @@ function renderH2HPicker() {
   }).join('');
 
   el.innerHTML = `
-    <div class="h2h-top-card" style="margin-bottom:12px">
-      <div style="display:grid;grid-template-columns:1fr 48px 1fr;align-items:center;gap:12px;margin-bottom:18px">
-        ${slotHtml(0,p1)}
-        <div style="font-family:'Rajdhani',sans-serif;font-weight:800;font-size:20px;color:var(--muted);text-align:center">VS</div>
-        ${slotHtml(1,p2)}
+    <div class="h2h-top-card" style="margin-bottom:12px;overflow:hidden">
+      <div id="h2h-picker-inner">
+        <div style="display:grid;grid-template-columns:1fr 48px 1fr;align-items:center;gap:12px;margin-bottom:18px">
+          ${slotHtml(0,p1)}
+          <div style="font-family:'Rajdhani',sans-serif;font-weight:800;font-size:20px;color:var(--muted);text-align:center">VS</div>
+          ${slotHtml(1,p2)}
+        </div>
+        <button onclick="runH2H()" ${canCompare?'':'disabled'} class="compare-btn ${canCompare?'active':'inactive'}">
+          ${canCompare?'Compare':'Select 2 players to compare'}
+        </button>
       </div>
-      <button onclick="runH2H()" ${canCompare?'':'disabled'} class="compare-btn ${canCompare?'active':'inactive'}">
-        ${canCompare?'Compare':'Select 2 players to compare'}
-      </button>
+      <div class="h2h-result-body" id="h2h-result-body"></div>
     </div>
-    <div class="card" style="padding:8px 8px;max-height:380px;overflow-y:auto">${cards}</div>
-    <div id="h2h-result" style="margin-top:12px"></div>`;
+    <div class="card" style="padding:8px 8px;max-height:380px;overflow-y:auto">${cards}</div>`;
 }
 
 function h2hSelect(idx) {
@@ -1417,14 +1425,21 @@ function h2hSelect(idx) {
 
 async function runH2H() {
   const [p1, p2] = _h2hSel;
-  const res = document.getElementById('h2h-result');
-  if (!p1 || !p2) return;
-  res.innerHTML = '<div class="loading"><div class="spin"></div><br>Loading…</div>';
+  const body = document.getElementById('h2h-result-body');
+  if (!p1 || !p2 || !body) return;
+
+  // Show loading state inside the expanding body
+  body.innerHTML = '<div class="loading" style="padding:20px"><div class="spin"></div><br>Loading…</div>';
+  body.classList.add('open');
+
+  // Collapse picker
+  const picker = document.getElementById('h2h-picker-inner');
+  if (picker) { picker.style.maxHeight = picker.scrollHeight + 'px'; picker.style.overflow='hidden'; picker.style.transition='max-height .35s ease,opacity .25s ease'; requestAnimationFrame(()=>{ picker.style.maxHeight='0'; picker.style.opacity='0'; }); }
 
   const data = await fetch(`/api/h2h?p1=${encodeURIComponent(p1.name)}&p2=${encodeURIComponent(p2.name)}`).then(r=>r.json()).catch(()=>({}));
 
   if (data.error || !data.p1 || !data.p2) {
-    res.innerHTML = `<div class="empty">${data.error || 'One or both players not found.'}</div>`; return;
+    body.innerHTML = `<div class="empty" style="padding:16px">${data.error || 'One or both players not found.'}</div>`; return;
   }
 
   const d1 = data.p1, d2 = data.p2;
@@ -1462,23 +1477,37 @@ async function runH2H() {
     </tr>`;
   }).join('');
 
-  res.innerHTML = `
-    <div class="h2h-top-card" style="overflow:hidden">
-      <div style="display:grid;grid-template-columns:1fr 60px 1fr;align-items:center;padding:20px 14px;border-bottom:1px solid rgba(255,85,0,.15)">
-        <div style="display:flex;flex-direction:column;align-items:center;gap:8px;cursor:pointer" onclick="go('player',{name:'${esc(d1.name)}'},'h2h')">
-          ${avatar(d1,st1)}
-          <div style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:16px;color:var(--ct);text-align:center">${esc(st1.name||d1.name)}</div>
-        </div>
-        <div style="font-family:'Rajdhani',sans-serif;font-weight:800;font-size:20px;color:var(--muted);text-align:center">VS</div>
-        <div style="display:flex;flex-direction:column;align-items:center;gap:8px;cursor:pointer" onclick="go('player',{name:'${esc(d2.name)}'},'h2h')">
-          ${avatar(d2,st2)}
-          <div style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:16px;color:var(--t);text-align:center">${esc(st2.name||d2.name)}</div>
-        </div>
+  body.innerHTML = `
+    <div style="border-top:1px solid rgba(255,85,0,.15);margin:0 -20px"></div>
+    <div style="display:grid;grid-template-columns:1fr 60px 1fr;align-items:center;padding:20px 14px 14px">
+      <div style="display:flex;flex-direction:column;align-items:center;gap:8px;cursor:pointer" onclick="go('player',{name:'${esc(d1.name)}'},'h2h')">
+        ${avatar(d1,st1)}
+        <div style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:16px;color:var(--ct);text-align:center">${esc(st1.name||d1.name)}</div>
       </div>
-      <table style="width:100%;border-collapse:collapse;position:relative;z-index:1">
-        <tbody>${rows}</tbody>
-      </table>
+      <div style="font-family:'Rajdhani',sans-serif;font-weight:800;font-size:20px;color:var(--muted);text-align:center">VS</div>
+      <div style="display:flex;flex-direction:column;align-items:center;gap:8px;cursor:pointer" onclick="go('player',{name:'${esc(d2.name)}'},'h2h')">
+        ${avatar(d2,st2)}
+        <div style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:16px;color:var(--t);text-align:center">${esc(st2.name||d2.name)}</div>
+      </div>
+    </div>
+    <table style="width:100%;border-collapse:collapse">
+      <tbody>${rows}</tbody>
+    </table>
+    <div style="padding:12px 0 4px;text-align:center">
+      <button onclick="h2hBack()" class="h2h-clear-btn" style="padding:6px 20px;font-size:12px;letter-spacing:1.5px">← Back</button>
     </div>`;
+}
+
+function h2hBack() {
+  // Collapse result, restore picker
+  const body = document.getElementById('h2h-result-body');
+  const picker = document.getElementById('h2h-picker-inner');
+  if (body) { body.classList.remove('open'); setTimeout(()=>{ body.innerHTML=''; },400); }
+  if (picker) {
+    picker.style.maxHeight = '500px';
+    picker.style.opacity = '1';
+  }
+}
 }
 
 // ── Leaderboard ───────────────────────────────────────────────────────────────
