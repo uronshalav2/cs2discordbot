@@ -161,8 +161,8 @@ nav{background:#09090b;border-bottom:2px solid var(--border);display:flex;align-
 .adr-highlight{color:var(--orange)}
 
 /* MATCHES LIST */
-.matches-list .match-item{position:relative;overflow:hidden;display:flex;align-items:center;gap:14px;padding:0;border-bottom:1px solid rgba(255,85,0,.15);cursor:pointer;transition:transform .22s ease,box-shadow .22s ease,border-left-color .22s ease,border-color .22s ease;min-height:96px;border-left:3px solid rgba(255,85,0,.2);border-right:1px solid rgba(255,85,0,.1);will-change:transform;box-shadow:0 0 12px rgba(255,85,0,.04),inset 0 0 30px rgba(255,85,0,.02)}
-.matches-list .match-item:hover{transform:translateX(4px);border-left-color:var(--orange);border-color:rgba(255,85,0,.45);box-shadow:0 0 22px rgba(255,85,0,.18),inset 4px 0 20px rgba(255,85,0,.1)}
+.matches-list .match-item{position:relative;overflow:hidden;display:flex;align-items:center;gap:14px;padding:0;border-bottom:1px solid rgba(255,85,0,.15);cursor:pointer;transition:transform .22s ease,box-shadow .22s ease,border-color .22s ease;min-height:96px;border-left:none;border-right:1px solid rgba(255,85,0,.1);will-change:transform;box-shadow:0 0 12px rgba(255,85,0,.04),inset 0 0 30px rgba(255,85,0,.02)}
+.matches-list .match-item:hover{transform:translateX(4px);border-color:rgba(255,85,0,.45);box-shadow:0 0 22px rgba(255,85,0,.18),inset 4px 0 20px rgba(255,85,0,.1)}
 .matches-list .match-item:last-child{border-bottom:1px solid rgba(255,85,0,.15)}
 .match-item .m-bg{position:absolute;inset:0;background-size:cover;background-position:center;z-index:0;transition:transform .35s ease;will-change:transform}
 .matches-list .match-item:hover .m-bg{transform:scale(1.04)}
@@ -462,6 +462,7 @@ function animateCount(el, target, opts={}) {
 }
 
 // Attach counters to any element with data-count attribute after DOM injection
+const _isMobile = window.matchMedia("(max-width: 768px)").matches || ("ontouchstart" in window);
 function attachCounters(root) {
   (root || document).querySelectorAll('[data-count]').forEach(el => {
     if (el._counted) return;
@@ -469,7 +470,7 @@ function attachCounters(root) {
     const target   = parseFloat(el.dataset.count);
     const decimals = parseInt(el.dataset.dec  || '0');
     const suffix   = el.dataset.suffix || '';
-    animateCount(el, target, {decimals, suffix, duration: 800});
+    if (_isMobile) { el.textContent = (decimals > 0 ? target.toFixed(decimals) : Number(target).toLocaleString()) + suffix; } else { animateCount(el, target, {decimals, suffix, duration: 800}); }
   });
 }
 
