@@ -655,12 +655,18 @@ nav{background:var(--surface);border-bottom:2px solid var(--border);display:flex
 .lb-table tbody tr{cursor:pointer;transition:background .12s}
 .lb-table tbody tr:hover td{background:rgba(255,85,0,.04)}
 .lb-table tbody tr:last-child td{border-bottom:none}
-.rank-gold td{background:linear-gradient(90deg,rgba(245,185,66,.1) 0%,transparent 60%)}
-.rank-silver td{background:linear-gradient(90deg,rgba(160,174,192,.08) 0%,transparent 60%)}
-.rank-bronze td{background:linear-gradient(90deg,rgba(184,115,51,.09) 0%,transparent 60%)}
-.rank-gold td:first-child{color:#f5b942}
-.rank-silver td:first-child{color:#a0aec0}
-.rank-bronze td:first-child{color:#b87333}
+.rank-gold td:first-child{color:var(--orange);background:linear-gradient(90deg,rgba(255,85,0,.14) 0%,rgba(255,85,0,.05) 100%)}
+.rank-gold td:nth-child(2){background:linear-gradient(90deg,rgba(255,85,0,.05) 0%,transparent 100%)}
+.rank-silver td:first-child{color:#a0aec0;background:linear-gradient(90deg,rgba(160,174,192,.12) 0%,rgba(160,174,192,.04) 100%)}
+.rank-silver td:nth-child(2){background:linear-gradient(90deg,rgba(160,174,192,.04) 0%,transparent 100%)}
+.rank-bronze td:first-child{color:#b87333;background:linear-gradient(90deg,rgba(184,115,51,.13) 0%,rgba(184,115,51,.05) 100%)}
+.rank-bronze td:nth-child(2){background:linear-gradient(90deg,rgba(184,115,51,.05) 0%,transparent 100%)}
+.spec-rank-gold td:first-child{color:var(--orange);background:linear-gradient(90deg,rgba(255,85,0,.14) 0%,rgba(255,85,0,.05) 100%)}
+.spec-rank-gold td:nth-child(2){background:linear-gradient(90deg,rgba(255,85,0,.05) 0%,transparent 100%)}
+.spec-rank-silver td:first-child{color:#a0aec0;background:linear-gradient(90deg,rgba(160,174,192,.12) 0%,rgba(160,174,192,.04) 100%)}
+.spec-rank-silver td:nth-child(2){background:linear-gradient(90deg,rgba(160,174,192,.04) 0%,transparent 100%)}
+.spec-rank-bronze td:first-child{color:#b87333;background:linear-gradient(90deg,rgba(184,115,51,.13) 0%,rgba(184,115,51,.05) 100%)}
+.spec-rank-bronze td:nth-child(2){background:linear-gradient(90deg,rgba(184,115,51,.05) 0%,transparent 100%)}
 .pname{font-weight:600;color:var(--white);font-family:'Rajdhani',sans-serif;font-size:15px;letter-spacing:.5px}
 .pname:hover{color:var(--orange)}
 .kd-num{font-family:'Rajdhani',sans-serif;font-weight:600;font-size:15px}
@@ -1617,7 +1623,8 @@ function renderSpecialists(data, tab) {
     const avatarEl = p._steam_avatar
       ? `<img src="${p._steam_avatar}" style="width:30px;height:30px;border-radius:50%;object-fit:cover;vertical-align:middle;margin-right:10px;border:1px solid var(--border2)" alt="">`
       : `<span style="display:inline-block;width:30px;height:30px;border-radius:50%;background:var(--surface2);vertical-align:middle;margin-right:10px;text-align:center;line-height:30px;font-size:11px;font-family:'Rajdhani',sans-serif;font-weight:700;color:var(--muted2)">${initials(p.name)}</span>`;
-    return `<tr onclick="go('player',{name:'${esc(p.name)}'},'specialists')" style="cursor:pointer;border-bottom:1px solid var(--border)">
+    const rankCls = rank===1?'spec-rank-gold':rank===2?'spec-rank-silver':rank===3?'spec-rank-bronze':'';
+    return `<tr class="${rankCls}" onclick="go('player',{name:'${esc(p.name)}'},'specialists')" style="cursor:pointer;border-bottom:1px solid var(--border)">
       <td style="padding:10px 14px;text-align:center;width:48px">${rankStr}</td>
       <td style="padding:10px 14px">${avatarEl}<span style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:15px;color:var(--white);vertical-align:middle">${esc(p.name)}</span></td>
       ${getValue(p)}
