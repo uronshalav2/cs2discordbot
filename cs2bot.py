@@ -606,10 +606,12 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Inter'
 /* NAV */
 nav{background:#09090b;border-bottom:2px solid var(--border);display:flex;align-items:center;padding:0 20px;height:50px;position:sticky;top:0;z-index:200;gap:0}
 .logo{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:26px;letter-spacing:-2px;color:var(--orange);text-transform:uppercase;margin-right:28px;white-space:nowrap;display:flex;align-items:center;line-height:1}
-.tabs{display:flex;gap:0;height:100%}
-.tab{height:100%;padding:0 16px;display:flex;align-items:center;font-family:'Rajdhani',sans-serif;font-weight:600;font-size:12px;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted2);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-2px;transition:all .18s}
+.tabs{display:flex;gap:0;height:100%;position:relative}
+.tab{height:100%;padding:0 16px;display:flex;align-items:center;font-family:'Rajdhani',sans-serif;font-weight:600;font-size:12px;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted2);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-2px;transition:color .18s,background .18s;position:relative}
 .tab:hover{color:var(--text);background:rgba(255,255,255,.03)}
-.tab.active{color:var(--orange);border-bottom-color:var(--orange)}
+.tab.active{color:var(--orange)}
+/* Sliding underline indicator */
+.tab-indicator{position:absolute;bottom:-2px;height:2px;background:var(--orange);transition:left .25s cubic-bezier(.4,0,.2,1),width .25s cubic-bezier(.4,0,.2,1);pointer-events:none;box-shadow:0 0 8px rgba(255,85,0,.6);border-radius:1px}
 .nav-right{margin-left:auto;display:flex;gap:8px;align-items:center}
 /* Hamburger */
 .hamburger{display:none;flex-direction:column;justify-content:center;gap:5px;width:36px;height:36px;cursor:pointer;padding:4px;border-radius:3px;margin-left:auto;flex-shrink:0}
@@ -638,6 +640,18 @@ nav{background:#09090b;border-bottom:2px solid var(--border);display:flex;align-
 #app{max-width:1100px;margin:0 auto;padding:20px 16px}
 .page-title{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:20px;letter-spacing:1px;text-transform:uppercase;color:var(--white);margin-bottom:16px;display:flex;align-items:center;gap:10px}
 .page-title .sub{font-size:11px;color:var(--muted2);font-weight:500;letter-spacing:.5px;text-transform:none;font-family:'Inter',sans-serif}
+
+/* PAGE TRANSITIONS */
+.page-panel{opacity:1;transform:translateY(0);transition:opacity .22s ease,transform .22s ease}
+.page-panel.page-out{opacity:0;transform:translateY(6px);pointer-events:none}
+.page-panel.page-in{animation:pageIn .22s ease forwards}
+@keyframes pageIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+
+/* EMPTY STATE */
+.empty{padding:52px 24px;text-align:center;color:var(--muted2);display:flex;flex-direction:column;align-items:center;gap:12px}
+.empty svg{opacity:.25}
+.empty-title{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:16px;letter-spacing:1px;text-transform:uppercase;color:var(--muted2)}
+.empty-sub{font-size:12px;color:var(--muted2);opacity:.7}
 
 /* CARDS */
 .card{background:#0c0e10;border:1px solid var(--border);border-radius:4px;overflow:hidden}
@@ -858,6 +872,7 @@ nav{background:#09090b;border-bottom:2px solid var(--border);display:flex;align-
     <div class="tab" data-p="h2h">Head-to-Head</div>
     <div class="tab" data-p="specialists">Specialists</div>
     <div class="tab" data-p="demos">Demos</div>
+    <div class="tab-indicator" id="tab-indicator"></div>
   </div>
   <div class="nav-right">
     <a href="https://skins.fsho.st" target="_blank" class="btn-sm" style="text-decoration:none">🎨 Skins</a>
@@ -879,14 +894,14 @@ nav{background:#09090b;border-bottom:2px solid var(--border);display:flex;align-
 </div>
 
 <div id="app">
-  <div id="p-matches"></div>
-  <div id="p-leaderboard" style="display:none"></div>
-  <div id="p-maps" style="display:none"></div>
-  <div id="p-h2h" style="display:none"></div>
-  <div id="p-specialists" style="display:none"></div>
-  <div id="p-demos" style="display:none"></div>
-  <div id="p-player" style="display:none"></div>
-  <div id="p-match" style="display:none"></div>
+  <div id="p-matches" class="page-panel"></div>
+  <div id="p-leaderboard" class="page-panel" style="display:none"></div>
+  <div id="p-maps" class="page-panel" style="display:none"></div>
+  <div id="p-h2h" class="page-panel" style="display:none"></div>
+  <div id="p-specialists" class="page-panel" style="display:none"></div>
+  <div id="p-demos" class="page-panel" style="display:none"></div>
+  <div id="p-player" class="page-panel" style="display:none"></div>
+  <div id="p-match" class="page-panel" style="display:none"></div>
 </div>
 
 <script>
@@ -920,24 +935,111 @@ function closeMenu() {
   document.getElementById('mobile-menu').classList.remove('open');
 }
 
+// ── Tab indicator ─────────────────────────────────────────────────────────────
+function moveTabIndicator(page) {
+  const indicator = document.getElementById('tab-indicator');
+  const activeTab = document.querySelector(`.tab[data-p="${page}"]`);
+  if (!indicator || !activeTab) return;
+  const tabsEl = activeTab.parentElement;
+  const tabsRect = tabsEl.getBoundingClientRect();
+  const tabRect = activeTab.getBoundingClientRect();
+  indicator.style.left = (tabRect.left - tabsRect.left) + 'px';
+  indicator.style.width = tabRect.width + 'px';
+}
+
+const _pages = ['matches','leaderboard','maps','h2h','specialists','demos','player','match'];
+
 let _back = null;
 function go(page, params={}, back=null) {
-  ['matches','leaderboard','maps','h2h','specialists','demos','player','match'].forEach(p => {
-    document.getElementById('p-'+p).style.display = (p===page)?'':'none';
-  });
-  document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active',t.dataset.p===page));
-  document.querySelectorAll('.mobile-tab').forEach(t=>t.classList.toggle('active',t.dataset.p===page));
-  _back = back;
-  if(page==='matches')     loadMatches();
-  if(page==='leaderboard') loadLeaderboard();
-  if(page==='maps')        loadMaps();
-  if(page==='h2h')         loadH2H();
-  if(page==='specialists') loadSpecialists();
-  if(page==='demos')       loadDemos();
-  if(page==='player')      loadPlayer(params.name);
-  if(page==='match')       loadMatch(params.id);
+  // Find currently visible page to fade out
+  const current = _pages.find(p => document.getElementById('p-'+p).style.display !== 'none');
+  const incoming = document.getElementById('p-'+page);
+
+  const doSwitch = () => {
+    _pages.forEach(p => {
+      const el = document.getElementById('p-'+p);
+      el.style.display = (p===page) ? '' : 'none';
+      el.classList.remove('page-in','page-out');
+    });
+    incoming.classList.add('page-in');
+    document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active',t.dataset.p===page));
+    document.querySelectorAll('.mobile-tab').forEach(t=>t.classList.toggle('active',t.dataset.p===page));
+    moveTabIndicator(page);
+    _back = back;
+    if(page==='matches')     loadMatches();
+    if(page==='leaderboard') loadLeaderboard();
+    if(page==='maps')        loadMaps();
+    if(page==='h2h')         loadH2H();
+    if(page==='specialists') loadSpecialists();
+    if(page==='demos')       loadDemos();
+    if(page==='player')      loadPlayer(params.name);
+    if(page==='match')       loadMatch(params.id);
+  };
+
+  if (current && current !== page) {
+    const outEl = document.getElementById('p-'+current);
+    outEl.classList.add('page-out');
+    setTimeout(doSwitch, 200);
+  } else {
+    doSwitch();
+  }
 }
 document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',()=>go(t.dataset.p)));
+
+// ── Animated number counter ───────────────────────────────────────────────────
+// Usage: animateCount(el, targetValue, {duration, decimals, suffix, prefix})
+function animateCount(el, target, opts={}) {
+  const duration = opts.duration || 900;
+  const decimals = opts.decimals ?? 0;
+  const suffix   = opts.suffix   || '';
+  const prefix   = opts.prefix   || '';
+  const start    = performance.now();
+  const from     = 0;
+  const isFloat  = decimals > 0;
+
+  function step(now) {
+    const t = Math.min((now - start) / duration, 1);
+    // Ease out expo
+    const ease = t === 1 ? 1 : 1 - Math.pow(2, -10 * t);
+    const val = from + (target - from) * ease;
+    el.textContent = prefix + (isFloat ? val.toFixed(decimals) : Math.floor(val).toLocaleString()) + suffix;
+    if (t < 1) requestAnimationFrame(step);
+    else el.textContent = prefix + (isFloat ? target.toFixed(decimals) : Number(target).toLocaleString()) + suffix;
+  }
+  requestAnimationFrame(step);
+}
+
+// Attach counters to any element with data-count attribute after DOM injection
+function attachCounters(root) {
+  (root || document).querySelectorAll('[data-count]').forEach(el => {
+    if (el._counted) return;
+    el._counted = true;
+    const target   = parseFloat(el.dataset.count);
+    const decimals = parseInt(el.dataset.dec  || '0');
+    const suffix   = el.dataset.suffix || '';
+    animateCount(el, target, {decimals, suffix, duration: 800});
+  });
+}
+
+// Hook into MutationObserver to auto-attach counters whenever content loads
+const _counterObs = new MutationObserver(() => attachCounters());
+_counterObs.observe(document.getElementById('app'), {childList:true, subtree:true});
+
+// ── Empty state helper ────────────────────────────────────────────────────────
+const EMPTY_ICONS = {
+  matches: `<svg width="64" height="64" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="8" y="14" width="48" height="36" rx="3" stroke="#ff5500" stroke-width="2" fill="none"/><path d="M8 22h48" stroke="#ff5500" stroke-width="2"/><circle cx="32" cy="38" r="7" stroke="#ff5500" stroke-width="2" fill="none"/><path d="M32 35v3l2 2" stroke="#ff5500" stroke-width="1.5" stroke-linecap="round"/></svg>`,
+  leaderboard: `<svg width="64" height="64" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="10" y="30" width="12" height="24" rx="2" stroke="#ff5500" stroke-width="2" fill="none"/><rect x="26" y="20" width="12" height="34" rx="2" stroke="#ff5500" stroke-width="2" fill="none"/><rect x="42" y="38" width="12" height="16" rx="2" stroke="#ff5500" stroke-width="2" fill="none"/><path d="M32 10l1.5 3h3.5l-2.8 2.1 1 3.4L32 16.7l-3.2 1.8 1-3.4L27 13h3.5z" fill="#ff5500" opacity=".6"/></svg>`,
+  maps: `<svg width="64" height="64" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M10 18l14-6 16 8 14-6v30l-14 6-16-8-14 6V18z" stroke="#ff5500" stroke-width="2" fill="none"/><path d="M24 12v32M40 20v32" stroke="#ff5500" stroke-width="1.5" stroke-dasharray="3 3"/><circle cx="32" cy="30" r="4" stroke="#ff5500" stroke-width="2" fill="none"/></svg>`,
+  h2h: `<svg width="64" height="64" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="20" cy="22" r="8" stroke="#ff5500" stroke-width="2" fill="none"/><circle cx="44" cy="22" r="8" stroke="#ff5500" stroke-width="2" fill="none"/><path d="M8 46c0-6.6 5.4-12 12-12h4M44 34h4c6.6 0 12 5.4 12 12" stroke="#ff5500" stroke-width="2" stroke-linecap="round" fill="none"/><path d="M28 32h8M32 28v8" stroke="#ff5500" stroke-width="2" stroke-linecap="round"/></svg>`,
+  specialists: `<svg width="64" height="64" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M32 10l4 12h13l-10 8 4 12-11-8-11 8 4-12-10-8h13z" stroke="#ff5500" stroke-width="2" fill="none"/><circle cx="32" cy="46" r="4" stroke="#ff5500" stroke-width="2" fill="none"/><path d="M32 50v6" stroke="#ff5500" stroke-width="2" stroke-linecap="round"/></svg>`,
+  demos: `<svg width="64" height="64" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="10" y="14" width="44" height="30" rx="3" stroke="#ff5500" stroke-width="2" fill="none"/><path d="M20 50h24M32 44v6" stroke="#ff5500" stroke-width="2" stroke-linecap="round"/><path d="M27 24l12 7-12 7V24z" stroke="#ff5500" stroke-width="2" fill="none" stroke-linejoin="round"/></svg>`,
+  default: `<svg width="64" height="64" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="32" cy="32" r="22" stroke="#ff5500" stroke-width="2" fill="none"/><path d="M32 22v12M32 38v4" stroke="#ff5500" stroke-width="2.5" stroke-linecap="round"/></svg>`,
+};
+
+function emptyState(type, title, sub) {
+  const icon = EMPTY_ICONS[type] || EMPTY_ICONS.default;
+  return `<div class="empty">${icon}<div class="empty-title">${title}</div><div class="empty-sub">${sub||''}</div></div>`;
+}
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const esc = s=>String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -987,7 +1089,7 @@ async function loadMatches() {
   spin('p-matches');
   const data = await fetch('/api/matches?limit=30').then(r=>r.json()).catch(()=>[]);
   if(!Array.isArray(data)||!data.length){
-    document.getElementById('p-matches').innerHTML='<div class="empty">No completed matches yet.</div>';return;
+    document.getElementById('p-matches').innerHTML=emptyState('matches','No Matches Yet','Completed matches will appear here');return;
   }
   const items = data.map(m=>{
     const bgStyle = MAP_IMGS[m.mapname] ? `background-image:url('${MAP_IMGS[m.mapname]}')` : 'background:var(--surface2)';
@@ -1065,19 +1167,19 @@ async function loadMatch(id) {
         <div class="mvp-name">${esc(mvp.name)}</div>
         <div class="mvp-stats">
           <div class="mvp-stat"><div class="mvp-val">${mvp.kills??0} / ${mvp.deaths??0} / ${mvp.assists??0}</div><div class="mvp-lbl">K / D / A</div></div>
-          <div class="mvp-stat"><div class="mvp-val">${mvp.adr!=null?parseFloat(mvp.adr).toFixed(1):'—'}</div><div class="mvp-lbl">ADR</div></div>
-          <div class="mvp-stat"><div class="mvp-val">${mvp.hs_pct!=null?parseFloat(mvp.hs_pct).toFixed(1)+'%':'—'}</div><div class="mvp-lbl">HS%</div></div>
-          <div class="mvp-stat"><div class="mvp-val" style="color:var(--${kdf(mvp.kills&&mvp.deaths?(mvp.kills/mvp.deaths).toFixed(2):'0')})">${mvp.kills&&mvp.deaths?(mvp.kills/mvp.deaths).toFixed(2):'—'}</div><div class="mvp-lbl">K/D</div></div>
-          ${mvp.rating!=null?`<div class="mvp-stat"><div class="mvp-val" style="color:#a78bfa">${parseFloat(mvp.rating).toFixed(2)}</div><div class="mvp-lbl">Rating</div></div>`:''}
-          ${mvp.kast!=null?`<div class="mvp-stat"><div class="mvp-val">${parseFloat(mvp.kast).toFixed(1)}%</div><div class="mvp-lbl">KAST</div></div>`:''}
+          <div class="mvp-stat"><div class="mvp-val"><span data-count="${mvp.adr!=null?parseFloat(mvp.adr):0}" data-dec="1">${mvp.adr!=null?parseFloat(mvp.adr).toFixed(1):'—'}</span></div><div class="mvp-lbl">ADR</div></div>
+          <div class="mvp-stat"><div class="mvp-val"><span data-count="${mvp.hs_pct!=null?parseFloat(mvp.hs_pct):0}" data-dec="1" data-suffix="%">${mvp.hs_pct!=null?parseFloat(mvp.hs_pct).toFixed(1)+'%':'—'}</span></div><div class="mvp-lbl">HS%</div></div>
+          <div class="mvp-stat"><div class="mvp-val" style="color:var(--${kdf(mvp.kills&&mvp.deaths?(mvp.kills/mvp.deaths).toFixed(2):'0')})"><span data-count="${mvp.kills&&mvp.deaths?(mvp.kills/mvp.deaths).toFixed(2):0}" data-dec="2">${mvp.kills&&mvp.deaths?(mvp.kills/mvp.deaths).toFixed(2):'—'}</span></div><div class="mvp-lbl">K/D</div></div>
+          ${mvp.rating!=null?`<div class="mvp-stat"><div class="mvp-val" style="color:#a78bfa"><span data-count="${parseFloat(mvp.rating).toFixed(2)}" data-dec="2">${parseFloat(mvp.rating).toFixed(2)}</span></div><div class="mvp-lbl">Rating</div></div>`:''}
+          ${mvp.kast!=null?`<div class="mvp-stat"><div class="mvp-val"><span data-count="${parseFloat(mvp.kast).toFixed(1)}" data-dec="1" data-suffix="%">${parseFloat(mvp.kast).toFixed(1)}%</span></div><div class="mvp-lbl">KAST</div></div>`:''}
         </div>
       </div>
     </div>` : '';
 
   const awardsHtml = `<div class="awards-grid">
-    ${byKills[0]?`<div class="award-card">${playerAvatar(byKills[0],36)}<div><div class="award-name">${esc(byKills[0].name)}</div><div style="font-size:10px;color:var(--muted2)">Most Kills</div></div><div style="margin-left:auto;text-align:right"><div class="award-val">${byKills[0].kills}</div></div></div>`:''}
-    ${byDmg[0]?`<div class="award-card">${playerAvatar(byDmg[0],36)}<div><div class="award-name">${esc(byDmg[0].name)}</div><div style="font-size:10px;color:var(--muted2)">Most Damage</div></div><div style="margin-left:auto;text-align:right"><div class="award-val">${num(byDmg[0].damage)}</div></div></div>`:''}
-    ${byRating[0]?`<div class="award-card">${playerAvatar(byRating[0],36)}<div><div class="award-name">${esc(byRating[0].name)}</div><div style="font-size:10px;color:var(--muted2)">Best Rating</div></div><div style="margin-left:auto;text-align:right"><div class="award-val" style="color:#a78bfa">${parseFloat(byRating[0].rating).toFixed(2)}</div></div></div>`:''}
+    ${byKills[0]?`<div class="award-card">${playerAvatar(byKills[0],36)}<div><div class="award-name">${esc(byKills[0].name)}</div><div style="font-size:10px;color:var(--muted2)">Most Kills</div></div><div style="margin-left:auto;text-align:right"><div class="award-val" data-count="${byKills[0].kills}" data-dec="0">${byKills[0].kills}</div></div></div>`:''}
+    ${byDmg[0]?`<div class="award-card">${playerAvatar(byDmg[0],36)}<div><div class="award-name">${esc(byDmg[0].name)}</div><div style="font-size:10px;color:var(--muted2)">Most Damage</div></div><div style="margin-left:auto;text-align:right"><div class="award-val" data-count="${byDmg[0].damage??0}" data-dec="0">${num(byDmg[0].damage)}</div></div></div>`:''}
+    ${byRating[0]?`<div class="award-card">${playerAvatar(byRating[0],36)}<div><div class="award-name">${esc(byRating[0].name)}</div><div style="font-size:10px;color:var(--muted2)">Best Rating</div></div><div style="margin-left:auto;text-align:right"><div class="award-val" style="color:#a78bfa" data-count="${parseFloat(byRating[0].rating).toFixed(2)}" data-dec="2">${parseFloat(byRating[0].rating).toFixed(2)}</div></div></div>`:''}
   </div>`;
 
   const mapsHtml = maps.map(m=>{
@@ -1231,19 +1333,24 @@ async function loadPlayer(name) {
     : '';
 
   const statsGrid = [
-    {label:'Kills',    val: num(c.kills)},
-    {label:'Deaths',   val: num(c.deaths)},
-    {label:'Assists',  val: num(c.assists)},
-    {label:'K/D',      val: `<span class="${kdCls}">${kd.toFixed(2)}</span>`},
-    {label:'ADR',      val: c.adr ?? '—'},
-    {label:'HS%',      val: c.hs_pct!=null ? c.hs_pct+'%' : '—'},
-    {label:'Matches',  val: num(c.matches)},
-    {label:'Damage',   val: num(c.total_damage)},
-    {label:'Aces (5K)',val: num(c.aces)},
-    {label:'Clutches', val: num(c.clutch_1v1)},
-    {label:'Entry Wins',val:num(c.entry_wins)},
-    {label:'Headshots',val: num(c.headshots)},
-  ].map(s=>`<div class="stat-box"><div class="stat-val">${s.val}</div><div class="stat-lbl">${s.label}</div></div>`).join('');
+    {label:'Kills',     raw: c.kills,         dec:0},
+    {label:'Deaths',    raw: c.deaths,        dec:0},
+    {label:'Assists',   raw: c.assists,       dec:0},
+    {label:'K/D',       raw: kd,              dec:2, cls:kdCls},
+    {label:'ADR',       raw: c.adr,           dec:1},
+    {label:'HS%',       raw: c.hs_pct,        dec:1, suffix:'%'},
+    {label:'Matches',   raw: c.matches,       dec:0},
+    {label:'Damage',    raw: c.total_damage,  dec:0},
+    {label:'Aces (5K)', raw: c.aces,          dec:0},
+    {label:'Clutches',  raw: c.clutch_1v1,    dec:0},
+    {label:'Entry Wins',raw: c.entry_wins,    dec:0},
+    {label:'Headshots', raw: c.headshots,     dec:0},
+  ].map(s => {
+    const v = s.raw ?? 0;
+    const cls = s.cls ? ` class="${s.cls}"` : '';
+    const valEl = `<span${cls} data-count="${v}" data-dec="${s.dec}" data-suffix="${s.suffix||''}">${s.dec>0?parseFloat(v).toFixed(s.dec):Number(v).toLocaleString()}${s.suffix||''}</span>`;
+    return `<div class="stat-box"><div class="stat-val">${valEl}</div><div class="stat-lbl">${s.label}</div></div>`;
+  }).join('');
 
   const recentRows = recent.map(m => {
     const won = m.winner && (m.winner.toLowerCase().includes(m.team?.toLowerCase() ?? ''));
@@ -1292,7 +1399,7 @@ async function loadMaps() {
   el.innerHTML = '<div class="loading"><div class="spin"></div><br>Loading…</div>';
   const data = await fetch('/api/mapstats').then(r=>r.json()).catch(()=>[]);
   if (!Array.isArray(data) || !data.length) {
-    el.innerHTML = '<div class="empty">No map data yet.</div>'; return;
+    el.innerHTML = emptyState('maps','No Map Data','Play some matches to see map statistics'); return;
   }
   const cards = data.map(m => {
     const total = parseInt(m.total_matches||0);
@@ -1508,6 +1615,7 @@ function h2hBack() {
     picker.style.opacity = '1';
   }
 }
+}
 
 // ── Leaderboard ───────────────────────────────────────────────────────────────
 let _lbSort = 'kills';
@@ -1516,7 +1624,7 @@ async function loadLeaderboard() {
   el.innerHTML = '<div class="loading"><div class="spin"></div><br>Loading…</div>';
   const data = await fetch('/api/leaderboard').then(r=>r.json()).catch(()=>[]);
   if (!Array.isArray(data) || !data.length) {
-    el.innerHTML = '<div class="empty">No player data available yet.</div>';
+    el.innerHTML = emptyState('leaderboard','No Player Data','Stats will appear after matches are completed');
     return;
   }
   // Fetch Steam avatars in parallel (top 20 only to keep it fast)
@@ -1610,9 +1718,9 @@ function renderLeaderboard(data, sortKey) {
       <div style="margin-top:6px;position:relative;z-index:1">${avatarEl}</div>
       <div style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:15px;color:#fff;margin-bottom:12px;position:relative;z-index:1">${esc(p._steam_name||p.name)}</div>
       <div style="display:flex;justify-content:center;gap:16px;flex-wrap:wrap;position:relative;z-index:1">
-        <div><div style="font-family:'Rajdhani',sans-serif;font-weight:800;font-size:20px;color:#fff">${p.kills??0}</div><div style="font-size:10px;color:rgba(255,255,255,.5);letter-spacing:1px;text-transform:uppercase">Kills</div></div>
-        <div><div style="font-family:'Rajdhani',sans-serif;font-weight:800;font-size:20px;color:#fff">${parseFloat(p.kd??0).toFixed(2)}</div><div style="font-size:10px;color:rgba(255,255,255,.5);letter-spacing:1px;text-transform:uppercase">K/D</div></div>
-        <div><div style="font-family:'Rajdhani',sans-serif;font-weight:800;font-size:20px;color:#fff">${p.matches??0}</div><div style="font-size:10px;color:rgba(255,255,255,.5);letter-spacing:1px;text-transform:uppercase">Matches</div></div>
+        <div><div style="font-family:'Rajdhani',sans-serif;font-weight:800;font-size:20px;color:#fff" data-count="${p.kills??0}" data-dec="0">${p.kills??0}</div><div style="font-size:10px;color:rgba(255,255,255,.5);letter-spacing:1px;text-transform:uppercase">Kills</div></div>
+        <div><div style="font-family:'Rajdhani',sans-serif;font-weight:800;font-size:20px;color:#fff" data-count="${parseFloat(p.kd??0).toFixed(2)}" data-dec="2">${parseFloat(p.kd??0).toFixed(2)}</div><div style="font-size:10px;color:rgba(255,255,255,.5);letter-spacing:1px;text-transform:uppercase">K/D</div></div>
+        <div><div style="font-family:'Rajdhani',sans-serif;font-weight:800;font-size:20px;color:#fff" data-count="${p.matches??0}" data-dec="0">${p.matches??0}</div><div style="font-size:10px;color:rgba(255,255,255,.5);letter-spacing:1px;text-transform:uppercase">Matches</div></div>
       </div>
     </div>`;
   };
@@ -1644,7 +1752,7 @@ async function loadSpecialists() {
   el.innerHTML = '<div class="loading"><div class="spin"></div><br>Loading…</div>';
   const data = await fetch('/api/specialists').then(r=>r.json()).catch(()=>[]);
   if (!Array.isArray(data) || !data.length) {
-    el.innerHTML = '<div class="empty">No specialist data yet.</div>'; return;
+    el.innerHTML = emptyState('specialists','No Specialist Data','Clutch kings, entry fraggers and more will appear here'); return;
   }
   // Fetch Steam avatars for all players
   await Promise.all(data.map(async p => {
@@ -1733,7 +1841,7 @@ async function loadDemos() {
   el.innerHTML = '<div class="loading"><div class="spin"></div><br>Loading demos…</div>';
   const data = await fetch('/api/demos').then(r=>r.json()).catch(()=>[]);
   if (!Array.isArray(data) || !data.length) {
-    el.innerHTML = '<div class="empty">No demos found.</div>'; return;
+    el.innerHTML = emptyState('demos','No Demos Found','Demo files will appear here once uploaded'); return;
   }
   _demoData = data;
   renderDemos();
@@ -1791,7 +1899,7 @@ function renderDemos() {
         </a>
       </div>
     </div>`;
-  }).join('') || '<div class="empty">No demos match your filters.</div>';
+  }).join('') || emptyState('demos','No Demos Match Your Filter','Try clearing the map filter');
 
   el.innerHTML = `
     <div style="padding:14px 0;margin-bottom:10px;display:flex;gap:10px;align-items:center">
