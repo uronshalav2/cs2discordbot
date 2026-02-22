@@ -655,6 +655,9 @@ nav{background:var(--surface);border-bottom:2px solid var(--border);display:flex
 .lb-table tbody tr{cursor:pointer;transition:background .12s}
 .lb-table tbody tr:hover td{background:rgba(255,85,0,.04)}
 .lb-table tbody tr:last-child td{border-bottom:none}
+.rank-gold td{background:linear-gradient(90deg,rgba(245,185,66,.1) 0%,transparent 60%)}
+.rank-silver td{background:linear-gradient(90deg,rgba(160,174,192,.08) 0%,transparent 60%)}
+.rank-bronze td{background:linear-gradient(90deg,rgba(184,115,51,.09) 0%,transparent 60%)}
 .rank-gold td:first-child{color:#f5b942}
 .rank-silver td:first-child{color:#a0aec0}
 .rank-bronze td:first-child{color:#b87333}
@@ -927,7 +930,7 @@ async function loadMatches() {
   }).join('');
   document.getElementById('p-matches').innerHTML = `
     <div class="page-title">Match History <span class="sub">${data.length} matches</span></div>
-    <div class="card matches-list">${items}</div>`;
+    <div style="border-radius:4px;overflow:hidden" class="matches-list">${items}</div>`;
 }
 
 // ── Match Detail ──────────────────────────────────────────────────────────────
