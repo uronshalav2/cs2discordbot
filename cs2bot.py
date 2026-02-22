@@ -1463,8 +1463,8 @@ async function runH2H() {
   }).join('');
 
   res.innerHTML = `
-    <div class="card" style="overflow:hidden">
-      <div style="display:grid;grid-template-columns:1fr 60px 1fr;align-items:center;padding:20px 14px;background:var(--surface2);border-bottom:1px solid var(--border)">
+    <div class="h2h-top-card" style="overflow:hidden">
+      <div style="display:grid;grid-template-columns:1fr 60px 1fr;align-items:center;padding:20px 14px;border-bottom:1px solid rgba(255,85,0,.15)">
         <div style="display:flex;flex-direction:column;align-items:center;gap:8px;cursor:pointer" onclick="go('player',{name:'${esc(d1.name)}'},'h2h')">
           ${avatar(d1,st1)}
           <div style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:16px;color:var(--ct);text-align:center">${esc(st1.name||d1.name)}</div>
@@ -1475,7 +1475,7 @@ async function runH2H() {
           <div style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:16px;color:var(--t);text-align:center">${esc(st2.name||d2.name)}</div>
         </div>
       </div>
-      <table style="width:100%;border-collapse:collapse">
+      <table style="width:100%;border-collapse:collapse;position:relative;z-index:1">
         <tbody>${rows}</tbody>
       </table>
     </div>`;
