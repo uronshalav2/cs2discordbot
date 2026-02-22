@@ -280,6 +280,37 @@ def _fetch_fshost_match_json(matchid: str) -> dict | None:
         return None
 
 
+def _parse_demo_filename(name: str) -> dict:
+    """
+    Parse a demo filename like:
+      2026-02-20_15-58-15_-1_de_dust2_team_Miksen_vs_TERRORISTS.dem
+    Returns dict with: filename_ts, mapname, team1_name, team2_name
+    """
+    import re as _re
+    result = {}
+    stem = name.replace('.dem', '')
+    # Extract date + time: YYYY-MM-DD_HH-MM-SS
+    ts_m = _re.match(r'^(\d{4}-\d{2}-\d{2})_(\d{2}-\d{2}-\d{2})', stem)
+    if ts_m:
+        try:
+            dt_str = f"{ts_m.group(1)} {ts_m.group(2).replace('-', ':')}"
+            result['filename_ts'] = datetime.strptime(dt_str, "%Y-%m-%d %H:%M:%S").isoformat()
+        except ValueError:
+            pass
+        # Everything after date_time_<something>_
+        rest = _re.sub(r'^\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}_[^_]+_', '', stem)
+        # Find map: look for de_ or cs_ or gg_ pattern
+        map_m = _re.match(r'((?:de|cs|gg|ar|dm)_\w+?)_(.+)', rest)
+        if map_m:
+            result['mapname'] = map_m.group(1)
+            teams_part = map_m.group(2)
+            # Split on _vs_ (case-insensitive)
+            vs_split = _re.split(r'_vs_', teams_part, flags=_re.IGNORECASE)
+            if len(vs_split) == 2:
+                result['team1_name'] = vs_split[0].replace('_', ' ').strip()
+                result['team2_name'] = vs_split[1].replace('_', ' ').strip()
+    return result
+
 async def handle_api_demos(request):
     """GET /api/demos — returns all demos from fshost with parsed timestamps and match metadata"""
     demos = fetch_all_demos_raw()
@@ -289,26 +320,28 @@ async def handle_api_demos(request):
         name = d.get("name", "")
         if not name.endswith(".dem"):
             continue
-        m = DEMO_TS_RE.match(name)
-        ts = None
-        if m:
-            try:
-                ts = datetime.strptime(m.group(1), "%Y-%m-%d_%H-%M-%S").isoformat()
-            except ValueError:
-                pass
-        # Try to find match metadata for this demo
-        meta = {}
+        # Start with filename-parsed data as base (works for all demos)
+        parsed = _parse_demo_filename(name)
+        ts = parsed.get('filename_ts')
+        meta = {
+            'matchid':     '',
+            'mapname':     parsed.get('mapname', ''),
+            'team1_name':  parsed.get('team1_name', ''),
+            'team2_name':  parsed.get('team2_name', ''),
+            'team1_score': '',
+            'team2_score': '',
+        }
+        # Try to enrich with JSON match metadata (scores, exact names)
         for mid, entry in matchid_map.items():
-            if entry.get('name') == name or entry.get('name','').replace('.json','') == name.replace('.dem',''):
+            entry_name = entry.get('name', '')
+            if entry_name == name or entry_name.replace('.json', '') == name.replace('.dem', ''):
                 raw_meta = entry.get('metadata') or {}
-                meta = {
-                    'matchid':    str(raw_meta.get('match_id', mid)),
-                    'mapname':    raw_meta.get('map', ''),
-                    'team1_name': (raw_meta.get('team1') or {}).get('name', ''),
-                    'team2_name': (raw_meta.get('team2') or {}).get('name', ''),
-                    'team1_score':(raw_meta.get('team1') or {}).get('score', ''),
-                    'team2_score':(raw_meta.get('team2') or {}).get('score', ''),
-                }
+                meta['matchid']     = str(raw_meta.get('match_id', mid))
+                meta['mapname']     = raw_meta.get('map', '') or meta['mapname']
+                meta['team1_name']  = (raw_meta.get('team1') or {}).get('name', '') or meta['team1_name']
+                meta['team2_name']  = (raw_meta.get('team2') or {}).get('name', '') or meta['team2_name']
+                meta['team1_score'] = (raw_meta.get('team1') or {}).get('score', '')
+                meta['team2_score'] = (raw_meta.get('team2') or {}).get('score', '')
                 break
         result.append({
             "name":           name,
@@ -688,15 +721,16 @@ nav{background:var(--surface);border-bottom:2px solid var(--border);display:flex
 .adr-highlight{color:var(--orange)}
 
 /* MATCHES LIST */
-.matches-list .match-item{display:flex;align-items:center;gap:14px;padding:12px 16px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .13s}
-.matches-list .match-item:hover{background:rgba(255,85,0,.03)}
+.matches-list .match-item{position:relative;overflow:hidden;display:flex;align-items:center;gap:14px;padding:14px 20px;border-bottom:1px solid var(--border);cursor:pointer;transition:filter .15s;min-height:72px}
+.matches-list .match-item:hover{filter:brightness(1.08)}
 .matches-list .match-item:last-child{border-bottom:none}
+.match-item .m-bg{position:absolute;inset:0;background-size:cover;background-position:center;z-index:0}
+.match-item .m-overlay{position:absolute;inset:0;background:linear-gradient(90deg,rgba(10,13,20,.97) 0%,rgba(10,13,20,.82) 45%,rgba(10,13,20,.55) 100%);z-index:1}
+.match-item .m-content{position:relative;z-index:2;display:flex;align-items:center;gap:14px;width:100%}
 .m-id{font-size:11px;color:var(--muted);width:42px;font-family:'Rajdhani',sans-serif;font-weight:600}
-.m-map{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:16px;color:var(--white);width:110px}
 .m-teams{flex:1}
 .m-teams-str{font-size:12px;color:var(--muted2);margin-bottom:2px}
 .m-score{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:20px;color:var(--white)}
-.m-winner{padding:2px 8px;border:1px solid rgba(34,197,94,.3);border-radius:2px;font-size:10px;font-family:'Rajdhani',sans-serif;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--win);background:rgba(34,197,94,.07)}
 .m-date{font-size:11px;color:var(--muted);text-align:right;white-space:nowrap}
 
 /* PROFILE */
@@ -876,26 +910,19 @@ async function loadMatches() {
     document.getElementById('p-matches').innerHTML='<div class="empty">No completed matches yet.</div>';return;
   }
   const items = data.map(m=>{
-    // Demo comes directly in match data from fshost
-    const demoHtml = m.demo_url
-      ? `<a href="${m.demo_url}" target="_blank" onclick="event.stopPropagation()"
-           style="display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border:1px solid rgba(255,85,0,.5);border-radius:2px;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--orange);background:var(--orange-glow);text-decoration:none;white-space:nowrap">
-           📥 Demo${m.demo_size?' ('+m.demo_size+')':''}</a>`
-      : '';
-    // Clean winner: strip "team_" prefix, show clean name
-    const winnerClean = (m.winner||'').replace(/^team_/i,'').toUpperCase();
+    const bgStyle = MAP_IMGS[m.mapname] ? `background-image:url('${MAP_IMGS[m.mapname]}')` : 'background:var(--surface2)';
     return `
     <div class="match-item" onclick="go('match',{id:'${m.matchid}'},'matches')">
-      <div class="m-id">#${m.matchid}</div>
-      ${mapThumb(m.mapname, 44, 72)}
-      <div class="m-teams">
-        <div class="m-teams-str">${esc(m.team1_name||'Team 1')} <span style="color:var(--muted2)">vs</span> ${esc(m.team2_name||'Team 2')}</div>
-        <div class="m-score">${m.map_team1_score??m.team1_score??0} : ${m.map_team2_score??m.team2_score??0}</div>
+      <div class="m-bg" style="${bgStyle}"></div>
+      <div class="m-overlay"></div>
+      <div class="m-content">
+        <div class="m-id">#${m.matchid}</div>
+        <div class="m-teams">
+          <div class="m-teams-str">${esc(m.team1_name||'Team 1')} <span style="color:var(--muted2)">vs</span> ${esc(m.team2_name||'Team 2')}</div>
+          <div class="m-score">${m.map_team1_score??m.team1_score??0} : ${m.map_team2_score??m.team2_score??0}</div>
+        </div>
+        <div class="m-date">${fmtDate(m.end_time)}</div>
       </div>
-      <div class="m-map">${esc(m.mapname||'—')}</div>
-      ${winnerClean?`<div class="m-winner">W: ${esc(winnerClean)}</div>`:''}
-      ${demoHtml}
-      <div class="m-date">${fmtDate(m.end_time)}</div>
     </div>`;
   }).join('');
   document.getElementById('p-matches').innerHTML = `
@@ -1010,30 +1037,39 @@ async function loadMatch(id) {
 
   document.getElementById('p-match').innerHTML = `
     <div class="back-btn" onclick="go(_back||'matches')">← Back</div>
-    <div class="match-header-card" style="margin-bottom:12px;padding:0;overflow:hidden">
-      ${maps[0]?.mapname ? `<div style="position:relative;height:110px;overflow:hidden">
-        ${MAP_IMGS[maps[0].mapname] ? `<img src="${MAP_IMGS[maps[0].mapname]}" style="width:100%;height:100%;object-fit:cover;opacity:0.6">` : `<div style="width:100%;height:100%;background:linear-gradient(135deg,#0d1117,#1a2332)"></div>`}
-        <div style="position:absolute;inset:0;background:linear-gradient(to top,rgba(10,13,20,.95) 0%,rgba(10,13,20,.3) 100%)"></div>
-        <div style="position:absolute;bottom:12px;left:22px;font-family:'Rajdhani',sans-serif;font-weight:800;font-size:18px;color:#fff;text-transform:uppercase;letter-spacing:2px;text-shadow:0 1px 4px rgba(0,0,0,.8)">${esc(maps[0].mapname)}</div>
-      </div>` : ''}
-      <div style="padding:18px 22px">
-      <div class="match-score-row">
-        <div class="team-block">
-          <div class="team-nm" style="color:var(--ct)">${esc(t1name)}</div>
-          <div class="team-sc" style="color:var(--ct)">${s1}</div>
+    <div style="position:relative;border-radius:6px;overflow:hidden;margin-bottom:12px;min-height:200px">
+      ${maps[0]?.mapname && MAP_IMGS[maps[0].mapname]
+        ? `<img src="${MAP_IMGS[maps[0].mapname]}" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:0.85">`
+        : `<div style="position:absolute;inset:0;background:linear-gradient(135deg,#0d1117,#1a2332)"></div>`}
+      <div style="position:absolute;inset:0;background:linear-gradient(to bottom,rgba(0,0,0,.15) 0%,rgba(0,0,0,.55) 100%)"></div>
+      <div style="position:relative;z-index:2;padding:22px 26px">
+        <div style="font-family:'Rajdhani',sans-serif;font-weight:800;font-size:12px;letter-spacing:3px;text-transform:uppercase;color:rgba(255,255,255,.6);margin-bottom:16px">${maps[0]?.mapname?esc(maps[0].mapname):''}</div>
+        <div style="
+          background:rgba(10,13,20,.45);
+          backdrop-filter:blur(18px);
+          -webkit-backdrop-filter:blur(18px);
+          border:1px solid rgba(255,255,255,.1);
+          border-radius:8px;
+          padding:18px 22px;
+        ">
+          <div class="match-score-row">
+            <div class="team-block">
+              <div class="team-nm" style="color:var(--ct)">${esc(t1name)}</div>
+              <div class="team-sc" style="color:var(--ct)">${s1}</div>
+            </div>
+            <div class="score-mid"><div class="score-colon">:</div></div>
+            <div class="team-block" style="text-align:right">
+              <div class="team-nm" style="color:var(--t);text-align:right">${esc(t2name)}</div>
+              <div class="team-sc" style="color:var(--t)">${s2}</div>
+            </div>
+          </div>
+          <div class="match-meta-row" style="margin-top:14px">
+            <div class="meta-chip">Match <strong>#${meta.matchid||id}</strong></div>
+            ${fmtDate(meta.end_time)?`<div class="meta-chip">${fmtDate(meta.end_time)}</div>`:''}
+            ${won?`<div class="meta-chip"><span class="winner-tag">Winner: ${esc(won)}</span></div>`:''}
+            ${demoBtnHtml}
+          </div>
         </div>
-        <div class="score-mid"><div class="score-colon">:</div></div>
-        <div class="team-block" style="text-align:right">
-          <div class="team-nm" style="color:var(--t);text-align:right">${esc(t2name)}</div>
-          <div class="team-sc" style="color:var(--t)">${s2}</div>
-        </div>
-      </div>
-      <div class="match-meta-row">
-        <div class="meta-chip">Match <strong>#${meta.matchid||id}</strong></div>
-        ${fmtDate(meta.end_time)?`<div class="meta-chip">${fmtDate(meta.end_time)}</div>`:''}
-        ${won?`<div class="meta-chip"><span class="winner-tag">Winner: ${esc(won)}</span></div>`:''}
-        ${demoBtnHtml}
-      </div>
       </div>
     </div>
     ${mvpHtml}
@@ -1429,6 +1465,15 @@ async function loadSpecialists() {
   if (!Array.isArray(data) || !data.length) {
     el.innerHTML = '<div class="empty">No specialist data yet.</div>'; return;
   }
+  // Fetch Steam avatars for all players
+  await Promise.all(data.map(async p => {
+    if (p.steamid64 && p.steamid64 !== '0') {
+      try {
+        const s = await fetch('/api/steam/'+p.steamid64).then(r=>r.json()).catch(()=>({}));
+        if (s.avatar) p._steam_avatar = s.avatar;
+      } catch(_) {}
+    }
+  }));
   _specData = data;
   renderSpecialists(data, _specTab);
 }
@@ -1436,42 +1481,48 @@ function renderSpecialists(data, tab) {
   _specTab = tab;
   const el = document.getElementById('p-specialists');
   const tabs = [
-    {id:'clutch',  label:'🤝 Clutch Kings'},
-    {id:'entry',   label:'⚡ Entry Fraggers'},
-    {id:'flash',   label:'💡 Flash Kings'},
-    {id:'utility', label:'💣 Utility'},
+    {id:'clutch',  label:'Clutch Kings'},
+    {id:'entry',   label:'Entry Fraggers'},
+    {id:'flash',   label:'Flash Kings'},
+    {id:'utility', label:'Utility'},
   ];
   const tabsHtml = tabs.map(t => `
     <div onclick="renderSpecialists(window._specData,'${t.id}')"
-      style="padding:8px 16px;border-radius:3px;cursor:pointer;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:13px;letter-spacing:1px;text-transform:uppercase;transition:all .15s;${tab===t.id?'background:var(--orange);color:#000;':'background:var(--surface2);color:var(--muted2);border:1px solid var(--border);'}">${t.label}</div>
+      style="padding:8px 20px;border-radius:3px;cursor:pointer;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:13px;letter-spacing:1.5px;text-transform:uppercase;transition:all .15s;${tab===t.id?'background:var(--orange);color:#000;':'background:var(--surface2);color:var(--muted2);border:1px solid var(--border);'}">${t.label}</div>
   `).join('');
 
-  let sorted, cols, getValue, getExtra;
+  let sorted, cols, getValue;
   if (tab === 'clutch') {
     sorted = [...data].sort((a,b) => (b.clutch_total||0)-(a.clutch_total||0));
     cols = [{label:'1v1 Wins'},{label:'1v2 Wins'},{label:'Total Clutches'}];
-    getValue = p => `<td style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:18px;color:var(--ct)">${p.clutch_1v1??0}</td><td style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:18px;color:var(--t)">${p.clutch_1v2??0}</td><td style="font-family:'Rajdhani',sans-serif;font-weight:800;font-size:20px;color:var(--orange)">${p.clutch_total??0}</td>`;
+    getValue = p => `<td style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:18px;color:var(--ct);text-align:center">${p.clutch_1v1??0}</td><td style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:18px;color:var(--t);text-align:center">${p.clutch_1v2??0}</td><td style="font-family:'Rajdhani',sans-serif;font-weight:800;font-size:20px;color:var(--orange);text-align:center">${p.clutch_total??0}</td>`;
   } else if (tab === 'entry') {
     sorted = [...data].sort((a,b) => (b.entry_wins||0)-(a.entry_wins||0));
     cols = [{label:'Entry Wins'},{label:'Attempts'},{label:'Success Rate'}];
-    getValue = p => `<td style="font-family:'Rajdhani',sans-serif;font-weight:800;font-size:20px;color:var(--orange)">${p.entry_wins??0}</td><td style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:18px;color:var(--muted2)">${p.entry_attempts??0}</td><td style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:18px;color:var(--win)">${p.entry_rate!=null?p.entry_rate+'%':'—'}</td>`;
+    getValue = p => `<td style="font-family:'Rajdhani',sans-serif;font-weight:800;font-size:20px;color:var(--orange);text-align:center">${p.entry_wins??0}</td><td style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:18px;color:var(--muted2);text-align:center">${p.entry_attempts??0}</td><td style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:18px;color:var(--win);text-align:center">${p.entry_rate!=null?p.entry_rate+'%':'—'}</td>`;
   } else if (tab === 'flash') {
     sorted = [...data].sort((a,b) => (b.flash_successes||0)-(a.flash_successes||0));
     cols = [{label:'Total Flashes'},{label:'Per Map'},{label:'Matches'}];
-    getValue = p => `<td style="font-family:'Rajdhani',sans-serif;font-weight:800;font-size:20px;color:var(--orange)">${p.flash_successes??0}</td><td style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:18px;color:var(--win)">${p.flashes_per_map??'—'}</td><td style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:18px;color:var(--muted2)">${p.matches??0}</td>`;
+    getValue = p => `<td style="font-family:'Rajdhani',sans-serif;font-weight:800;font-size:20px;color:var(--orange);text-align:center">${p.flash_successes??0}</td><td style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:18px;color:var(--win);text-align:center">${p.flashes_per_map??'—'}</td><td style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:18px;color:var(--muted2);text-align:center">${p.matches??0}</td>`;
   } else {
     sorted = [...data].sort((a,b) => (b.utility_damage||0)-(a.utility_damage||0));
     cols = [{label:'Total Util DMG'},{label:'Per Map'},{label:'Matches'}];
-    getValue = p => `<td style="font-family:'Rajdhani',sans-serif;font-weight:800;font-size:20px;color:var(--orange)">${p.utility_damage!=null?Number(p.utility_damage).toLocaleString():'—'}</td><td style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:18px;color:var(--win)">${p.util_dmg_per_map??'—'}</td><td style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:18px;color:var(--muted2)">${p.matches??0}</td>`;
+    getValue = p => `<td style="font-family:'Rajdhani',sans-serif;font-weight:800;font-size:20px;color:var(--orange);text-align:center">${p.utility_damage!=null?Number(p.utility_damage).toLocaleString():'—'}</td><td style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:18px;color:var(--win);text-align:center">${p.util_dmg_per_map??'—'}</td><td style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:18px;color:var(--muted2);text-align:center">${p.matches??0}</td>`;
   }
 
+  const rankColors = ['var(--orange)','#a0aec0','#b87333'];
   const headerCols = cols.map(c=>`<th style="padding:8px 16px;text-align:center;font-family:'Rajdhani',sans-serif;font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--muted2)">${c.label}</th>`).join('');
   const rows = sorted.map((p,i) => {
     const rank = i+1;
-    const medal = rank===1?'🥇':rank===2?'🥈':rank===3?'🥉':rank;
-    return `<tr onclick="go('player',{name:'${esc(p.name)}'},'specialists')" style="cursor:pointer">
-      <td style="padding:10px 14px;text-align:center;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:15px;color:var(--muted2)">${medal}</td>
-      <td style="padding:10px 14px;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:15px;color:var(--white)">${esc(p.name)}</td>
+    const rankStr = rank <= 3
+      ? `<span style="font-size:18px;color:${rankColors[rank-1]};font-family:'Rajdhani',sans-serif;font-weight:800">${rank}</span>`
+      : `<span style="font-size:14px;color:var(--muted2);font-family:'Rajdhani',sans-serif;font-weight:700">${rank}</span>`;
+    const avatarEl = p._steam_avatar
+      ? `<img src="${p._steam_avatar}" style="width:30px;height:30px;border-radius:50%;object-fit:cover;vertical-align:middle;margin-right:10px;border:1px solid var(--border2)" alt="">`
+      : `<span style="display:inline-block;width:30px;height:30px;border-radius:50%;background:var(--surface2);vertical-align:middle;margin-right:10px;text-align:center;line-height:30px;font-size:11px;font-family:'Rajdhani',sans-serif;font-weight:700;color:var(--muted2)">${initials(p.name)}</span>`;
+    return `<tr onclick="go('player',{name:'${esc(p.name)}'},'specialists')" style="cursor:pointer;border-bottom:1px solid var(--border)">
+      <td style="padding:10px 14px;text-align:center;width:48px">${rankStr}</td>
+      <td style="padding:10px 14px">${avatarEl}<span style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:15px;color:var(--white);vertical-align:middle">${esc(p.name)}</span></td>
       ${getValue(p)}
     </tr>`;
   }).join('');
@@ -1483,7 +1534,7 @@ function renderSpecialists(data, tab) {
     <div class="card lb-wrap">
       <table class="lb-table" style="width:100%;border-collapse:collapse">
         <thead><tr style="background:rgba(0,0,0,.35)">
-          <th style="padding:8px 14px;width:50px"></th>
+          <th style="padding:8px 14px;width:48px"></th>
           <th style="padding:8px 14px;text-align:left;font-family:'Rajdhani',sans-serif;font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--muted2)">Player</th>
           ${headerCols}
         </tr></thead>
@@ -1494,7 +1545,7 @@ function renderSpecialists(data, tab) {
 
 // ── Demo Browser ──────────────────────────────────────────────────────────────
 let _demoData = null;
-let _demoFilters = {map:'', team:'', search:''};
+let _demoFilters = {map:''};
 async function loadDemos() {
   const el = document.getElementById('p-demos');
   if (_demoData) { renderDemos(); return; }
@@ -1509,65 +1560,64 @@ async function loadDemos() {
 function renderDemos() {
   const el = document.getElementById('p-demos');
   const data = _demoData || [];
-  // Build filter options
-  const maps  = [...new Set(data.map(d=>d.mapname).filter(Boolean))].sort();
-  const teams = [...new Set(data.flatMap(d=>[d.team1_name,d.team2_name]).filter(Boolean))].sort();
+  const maps = [...new Set(data.map(d=>d.mapname).filter(Boolean))].sort();
+  const mapOpts = ['<option value="">All Maps</option>', ...maps.map(m=>`<option value="${esc(m)}" ${_demoFilters.map===m?'selected':''}>${esc(m)}</option>`)].join('');
 
-  const mapOpts  = ['<option value="">All Maps</option>',  ...maps.map(m=>`<option value="${esc(m)}" ${_demoFilters.map===m?'selected':''}>${esc(m)}</option>`)].join('');
-  const teamOpts = ['<option value="">All Teams</option>', ...teams.map(t=>`<option value="${esc(t)}" ${_demoFilters.team===t?'selected':''}>${esc(t)}</option>`)].join('');
-
-  // Apply filters
-  const f = _demoFilters;
-  const filtered = data.filter(d => {
-    if (f.map  && d.mapname !== f.map) return false;
-    if (f.team && d.team1_name !== f.team && d.team2_name !== f.team) return false;
-    if (f.search) {
-      const q = f.search.toLowerCase();
-      const hay = [d.name,d.mapname,d.team1_name,d.team2_name].join(' ').toLowerCase();
-      if (!hay.includes(q)) return false;
-    }
-    return true;
-  });
+  const filtered = data.filter(d => !_demoFilters.map || d.mapname === _demoFilters.map);
 
   const rows = filtered.map(d => {
-    const date = d.filename_ts ? new Date(d.filename_ts).toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'}) : (d.modified_at||'—');
+    // Format date + time from filename_ts
+    let dateStr = '—', timeStr = '';
+    if (d.filename_ts) {
+      const dt = new Date(d.filename_ts);
+      dateStr = dt.toLocaleDateString('en-GB', {day:'2-digit', month:'short', year:'numeric'});
+      timeStr = dt.toLocaleTimeString('en-GB', {hour:'2-digit', minute:'2-digit'});
+    } else if (d.modified_at) {
+      dateStr = d.modified_at;
+    }
+
     const mapImg = d.mapname && MAP_IMGS[d.mapname]
-      ? `<img src="${MAP_IMGS[d.mapname]}" style="width:52px;height:34px;object-fit:cover;border-radius:3px;flex-shrink:0" onerror="this.style.display='none'">`
-      : `<div style="width:52px;height:34px;background:var(--surface2);border-radius:3px;display:flex;align-items:center;justify-content:center;flex-shrink:0"><span style="font-size:8px;color:var(--muted2);font-family:'Rajdhani',sans-serif;font-weight:700;text-transform:uppercase">${esc(d.mapname||'?')}</span></div>`;
-    const score = (d.team1_score!==''&&d.team1_score!=null)
-      ? `<span style="color:var(--ct);font-weight:800">${d.team1_score}</span><span style="color:var(--muted2);margin:0 4px">:</span><span style="color:var(--t);font-weight:800">${d.team2_score}</span>`
+      ? `<img src="${MAP_IMGS[d.mapname]}" style="width:96px;height:64px;object-fit:cover;border-radius:4px;flex-shrink:0" onerror="this.parentElement.innerHTML='<div style=\'width:96px;height:64px;background:var(--surface2);border-radius:4px;display:flex;align-items:center;justify-content:center\'><span style=\'font-size:9px;color:var(--muted2);font-family:Rajdhani,sans-serif;font-weight:700;text-transform:uppercase\'>${esc(d.mapname)}</span></div>'">`
+      : `<div style="width:96px;height:64px;background:var(--surface2);border-radius:4px;display:flex;align-items:center;justify-content:center;flex-shrink:0"><span style="font-size:9px;color:var(--muted2);font-family:'Rajdhani',sans-serif;font-weight:700;text-transform:uppercase">${esc(d.mapname||'?')}</span></div>`;
+
+    const mapLabel = d.mapname
+      ? `<span style="font-family:'Rajdhani',sans-serif;font-weight:800;font-size:15px;color:var(--white);text-transform:uppercase;letter-spacing:1px">${esc(d.mapname)}</span>`
+      : `<span style="font-family:'Rajdhani',sans-serif;font-weight:600;font-size:13px;color:var(--muted2)">${esc(d.name)}</span>`;
+
+    const score = (d.team1_score !== '' && d.team1_score != null)
+      ? ` <span style="color:var(--ct);font-family:'Rajdhani',sans-serif;font-weight:800">${d.team1_score}</span><span style="color:var(--muted2);margin:0 3px">:</span><span style="color:var(--t);font-family:'Rajdhani',sans-serif;font-weight:800">${d.team2_score}</span>`
       : '';
-    const teams = (d.team1_name||d.team2_name)
-      ? `<div style="font-size:12px;color:var(--muted2);margin-top:2px">${esc(d.team1_name||'?')} <span style="color:var(--border2)">vs</span> ${esc(d.team2_name||'?')}</div>`
+
+    const teamsLine = (d.team1_name || d.team2_name)
+      ? `<div style="font-size:12px;color:var(--muted2);margin-top:3px">
+           <span style="color:var(--ct)">${esc(d.team1_name||'?')}</span>
+           <span style="margin:0 5px;color:var(--border2)">vs</span>
+           <span style="color:var(--t)">${esc(d.team2_name||'?')}</span>
+         </div>`
       : '';
-    return `<div class="card" style="display:flex;align-items:center;gap:14px;padding:12px 16px;margin-bottom:8px">
+
+    return `<div class="card" style="display:flex;align-items:center;gap:16px;padding:14px 18px;margin-bottom:8px">
       ${mapImg}
       <div style="flex:1;min-width:0">
         <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-          <div style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:14px;color:var(--white);text-transform:uppercase;letter-spacing:1px">${esc(d.mapname||d.name)}</div>
-          ${score ? `<div style="font-family:'Rajdhani',sans-serif;font-size:14px">${score}</div>` : ''}
+          ${mapLabel}${score}
         </div>
-        ${teams}
-        <div style="font-size:11px;color:var(--muted2);margin-top:3px">${date} · ${esc(d.size_formatted||'')}</div>
+        ${teamsLine}
+        <div style="font-size:11px;color:var(--muted2);margin-top:4px">${dateStr}${timeStr?' · '+timeStr:''} · ${esc(d.size_formatted||'')}</div>
       </div>
-      <a href="${esc(d.download_url)}" download style="text-decoration:none">
-        <button style="padding:8px 14px;background:var(--orange-glow);border:1px solid var(--orange);border-radius:3px;color:var(--orange);font-family:'Rajdhani',sans-serif;font-weight:700;font-size:12px;letter-spacing:1px;text-transform:uppercase;cursor:pointer;white-space:nowrap">⬇ Download</button>
+      <a href="${esc(d.download_url)}" download style="text-decoration:none;flex-shrink:0">
+        <button style="padding:10px 18px;background:var(--orange-glow);border:1px solid var(--orange);border-radius:3px;color:var(--orange);font-family:'Rajdhani',sans-serif;font-weight:700;font-size:12px;letter-spacing:1.5px;text-transform:uppercase;cursor:pointer;white-space:nowrap;transition:all .15s">⬇ Download</button>
       </a>
     </div>`;
   }).join('') || '<div class="empty">No demos match your filters.</div>';
 
   el.innerHTML = `
     <div class="page-title">Demo Browser <span class="sub">${filtered.length} of ${data.length} demos</span></div>
-    <div class="card" style="padding:14px 16px;margin-bottom:14px;display:flex;gap:10px;flex-wrap:wrap;align-items:center">
-      <input id="demo-search" type="text" placeholder="Search…" value="${esc(f.search)}"
-        oninput="_demoFilters.search=this.value;renderDemos()"
-        style="flex:1;min-width:140px;padding:8px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:3px;color:var(--white);font-family:'Rajdhani',sans-serif;font-size:13px;outline:none">
+    <div class="card" style="padding:14px 16px;margin-bottom:14px;display:flex;gap:10px;align-items:center">
       <select onchange="_demoFilters.map=this.value;renderDemos()"
-        style="padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:3px;color:var(--white);font-family:'Rajdhani',sans-serif;font-size:13px;cursor:pointer">${mapOpts}</select>
-      <select onchange="_demoFilters.team=this.value;renderDemos()"
-        style="padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:3px;color:var(--white);font-family:'Rajdhani',sans-serif;font-size:13px;cursor:pointer">${teamOpts}</select>
-      <button onclick="_demoFilters={map:'',team:'',search:''};renderDemos()"
-        style="padding:8px 12px;background:transparent;border:1px solid var(--border);border-radius:3px;color:var(--muted2);font-family:'Rajdhani',sans-serif;font-size:12px;cursor:pointer;letter-spacing:1px">✕ Clear</button>
+        style="padding:9px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:3px;color:var(--white);font-family:'Rajdhani',sans-serif;font-size:13px;cursor:pointer;min-width:160px">${mapOpts}</select>
+      <button onclick="_demoFilters={map:''};renderDemos()"
+        style="padding:9px 14px;background:transparent;border:1px solid var(--border);border-radius:3px;color:var(--muted2);font-family:'Rajdhani',sans-serif;font-size:12px;cursor:pointer;letter-spacing:1px">✕ Clear</button>
     </div>
     ${rows}`;
 }
