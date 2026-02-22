@@ -1508,7 +1508,6 @@ function h2hBack() {
     picker.style.opacity = '1';
   }
 }
-}
 
 // ── Leaderboard ───────────────────────────────────────────────────────────────
 let _lbSort = 'kills';
