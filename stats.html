@@ -299,12 +299,12 @@ nav{background:#09090b;border-bottom:2px solid var(--border);display:flex;align-
 </nav>
 <div class="mobile-menu" id="mobile-menu" onclick="closeMenu()">
   <div class="mobile-drawer" onclick="event.stopPropagation()">
-    <div class="mobile-tab active" data-p="matches" onclick="go('matches');closeMenu()">Matches</div>
-    <div class="mobile-tab" data-p="leaderboard" onclick="go('leaderboard');closeMenu()">Leaderboard</div>
-    <div class="mobile-tab" data-p="maps" onclick="go('maps');closeMenu()">Maps</div>
-    <div class="mobile-tab" data-p="h2h" onclick="go('h2h');closeMenu()">Head-to-Head</div>
-    <div class="mobile-tab" data-p="specialists" onclick="go('specialists');closeMenu()">Specialists</div>
-    <div class="mobile-tab" data-p="demos" onclick="go('demos');closeMenu()">Demos</div>
+    <div class="mobile-tab active" data-p="matches" onclick="_navStack=[];go('matches');closeMenu()">Matches</div>
+    <div class="mobile-tab" data-p="leaderboard" onclick="_navStack=[];go('leaderboard');closeMenu()">Leaderboard</div>
+    <div class="mobile-tab" data-p="maps" onclick="_navStack=[];go('maps');closeMenu()">Maps</div>
+    <div class="mobile-tab" data-p="h2h" onclick="_navStack=[];go('h2h');closeMenu()">Head-to-Head</div>
+    <div class="mobile-tab" data-p="specialists" onclick="_navStack=[];go('specialists');closeMenu()">Specialists</div>
+    <div class="mobile-tab" data-p="demos" onclick="_navStack=[];go('demos');closeMenu()">Demos</div>
     <a href="https://skins.fsho.st" target="_blank" class="mobile-skins" onclick="closeMenu()">🎨 Skins</a>
   </div>
 </div>
@@ -365,13 +365,21 @@ function moveTabIndicator(page) {
 
 const _pages = ['matches','leaderboard','maps','h2h','specialists','demos','player','match'];
 
-let _back = null;
+// Navigation stack — each entry is {page, params}
+let _navStack = [];
+let _curPage = null;
+let _curParams = {};
+
 function go(page, params, back) {
   params = params || {};
-  back   = back   || null;
 
-  // Find currently visible page to fade out
-  const current = _pages.find(function(pg){ return document.getElementById('p-'+pg).style.display !== 'none'; });
+  // If called with explicit back target (old API), push current onto stack
+  // Otherwise push current page onto stack naturally
+  if (_curPage && _curPage !== page) {
+    _navStack.push({page: _curPage, params: _curParams});
+  }
+
+  const current = _curPage;
   const incoming = document.getElementById('p-'+page);
 
   function doSwitch() {
@@ -384,7 +392,8 @@ function go(page, params, back) {
     document.querySelectorAll('.tab').forEach(function(t){ t.classList.toggle('active', t.dataset.p===page); });
     document.querySelectorAll('.mobile-tab').forEach(function(t){ t.classList.toggle('active', t.dataset.p===page); });
     moveTabIndicator(page);
-    _back = back;
+    _curPage = page;
+    _curParams = params;
     if(page==='matches')     loadMatches();
     if(page==='leaderboard') loadLeaderboard();
     if(page==='maps')        loadMaps();
@@ -403,7 +412,21 @@ function go(page, params, back) {
     doSwitch();
   }
 }
-document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',()=>go(t.dataset.p)));
+
+function goBack(defaultPage) {
+  if (_navStack.length > 0) {
+    const prev = _navStack.pop();
+    // Temporarily remove last entry to avoid re-pushing when going back
+    const savedCur = _curPage;
+    const savedParams = _curParams;
+    _curPage = null; // prevent pushing onto stack in go()
+    go(prev.page, prev.params);
+  } else {
+    _curPage = null;
+    go(defaultPage || 'matches');
+  }
+}
+document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',()=>{ _navStack=[]; go(t.dataset.p); }));
 
 // ── Animated number counter ───────────────────────────────────────────────────
 // Usage: animateCount(el, targetValue, {duration, decimals, suffix, prefix})
@@ -637,7 +660,7 @@ async function loadMatch(id) {
     : '';
 
   document.getElementById('p-match').innerHTML = `
-    <div class="back-btn" onclick="go(_back||'matches')">← Back</div>
+    <div class="back-btn" onclick="goBack('matches')">← Back</div>
     <div style="position:relative;border-radius:6px;overflow:hidden;margin-bottom:12px;min-height:200px">
       ${maps[0]?.mapname && MAP_IMGS[maps[0].mapname]
         ? `<img src="${MAP_IMGS[maps[0].mapname]}" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:0.85">`
@@ -788,7 +811,7 @@ async function loadPlayer(name) {
   }).join('');
 
   document.getElementById('p-player').innerHTML = `
-    <div class="back-btn" onclick="go(_back||'leaderboard')">← Back</div>
+    <div class="back-btn" onclick="goBack('leaderboard')">← Back</div>
     <div class="profile-top">
       ${avatarHtml}
       <div style="flex:1">
