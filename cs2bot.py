@@ -592,36 +592,35 @@ def _build_stats_html() -> str:
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>CS2 Stats</title>
+<title>Reshtan Gaming</title>
 <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
 :root{
-  --bg:#0d0f13;--surface:#141720;--surface2:#1a1f2e;--border:#212535;--border2:#2d3347;
+  --bg:#080a0c;--surface:#0f1012;--surface2:#141618;--border:#1c1e21;--border2:#252729;
   --orange:#ff5500;--orange2:#ff7733;--orange-glow:rgba(255,85,0,.15);
   --ct:#5bc4f5;--t:#f0a842;--win:#22c55e;--loss:#ef4444;
-  --text:#bcc4d0;--white:#eef1f6;--muted:#4b5568;--muted2:#6b7a94;
+  --text:#a8b0b8;--white:#dde1e7;--muted:#3a3e44;--muted2:#575e68;
 }
 *{box-sizing:border-box;margin:0;padding:0}
 html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;font-size:13px}
-
 /* NAV */
-nav{background:var(--surface);border-bottom:2px solid var(--border);display:flex;align-items:center;padding:0 20px;height:50px;position:sticky;top:0;z-index:200;gap:0}
-.logo{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:18px;letter-spacing:2px;color:var(--orange);text-transform:uppercase;margin-right:28px;white-space:nowrap}
+nav{background:#09090b;border-bottom:2px solid var(--border);display:flex;align-items:center;padding:0 20px;height:50px;position:sticky;top:0;z-index:200;gap:0}
+.logo{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:18px;letter-spacing:2px;color:var(--orange);text-transform:uppercase;margin-right:28px;white-space:nowrap;display:flex;align-items:center}
 .tabs{display:flex;gap:0;height:100%}
 .tab{height:100%;padding:0 16px;display:flex;align-items:center;font-family:'Rajdhani',sans-serif;font-weight:600;font-size:12px;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted2);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-2px;transition:all .18s}
 .tab:hover{color:var(--text);background:rgba(255,255,255,.03)}
 .tab.active{color:var(--orange);border-bottom-color:var(--orange)}
 .nav-right{margin-left:auto;display:flex;gap:8px;align-items:center}
 /* Hamburger */
-.hamburger{display:none;flex-direction:column;justify-content:center;gap:5px;width:36px;height:36px;cursor:pointer;padding:4px;border:1px solid var(--border2);border-radius:3px;margin-left:auto;flex-shrink:0}
-.hamburger span{display:block;height:2px;background:var(--text);border-radius:2px;transition:all .25s}
+.hamburger{display:none;flex-direction:column;justify-content:center;gap:5px;width:36px;height:36px;cursor:pointer;padding:4px;border-radius:3px;margin-left:auto;flex-shrink:0}
+.hamburger span{display:block;height:2px;background:var(--orange);border-radius:2px;transition:all .25s}
 .hamburger.open span:nth-child(1){transform:translateY(7px) rotate(45deg)}
 .hamburger.open span:nth-child(2){opacity:0}
 .hamburger.open span:nth-child(3){transform:translateY(-7px) rotate(-45deg)}
 /* Mobile drawer */
 .mobile-menu{display:none;position:fixed;top:50px;left:0;right:0;bottom:0;background:rgba(0,0,0,.6);z-index:199;backdrop-filter:blur(4px)}
 .mobile-menu.open{display:block}
-.mobile-drawer{background:var(--surface);border-bottom:2px solid var(--border);padding:8px 0}
+.mobile-drawer{background:#09090b;border-bottom:2px solid var(--border);padding:8px 0}
 .mobile-tab{padding:14px 24px;font-family:'Rajdhani',sans-serif;font-weight:600;font-size:14px;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted2);cursor:pointer;border-left:3px solid transparent;transition:all .15s}
 .mobile-tab:hover{color:var(--text);background:rgba(255,255,255,.03)}
 .mobile-tab.active{color:var(--orange);border-left-color:var(--orange);background:var(--orange-glow)}
@@ -641,12 +640,12 @@ nav{background:var(--surface);border-bottom:2px solid var(--border);display:flex
 .page-title .sub{font-size:11px;color:var(--muted2);font-weight:500;letter-spacing:.5px;text-transform:none;font-family:'Inter',sans-serif}
 
 /* CARDS */
-.card{background:var(--surface);border:1px solid var(--border);border-radius:4px;overflow:hidden}
+.card{background:#0c0e10;border:1px solid var(--border);border-radius:4px;overflow:hidden}
 
 /* LEADERBOARD */
 .lb-wrap{overflow-x:auto}
 .lb-table{width:100%;border-collapse:collapse;min-width:680px}
-.lb-table thead tr{background:rgba(0,0,0,.4)}
+.lb-table thead tr{background:rgba(0,0,0,.6)}
 .lb-table th{padding:8px 12px;text-align:right;font-family:'Rajdhani',sans-serif;font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--muted2);border-bottom:1px solid var(--border);white-space:nowrap}
 .lb-table th:first-child,.lb-table th:nth-child(2){text-align:left}
 .lb-table td{padding:9px 12px;text-align:right;border-bottom:1px solid var(--border);font-size:13px;white-space:nowrap}
@@ -677,8 +676,9 @@ nav{background:var(--surface);border-bottom:2px solid var(--border);display:flex
 .hs-val{font-size:11px;color:var(--orange);width:34px;text-align:right}
 
 /* MVP CARD */
-.mvp-card{background:linear-gradient(135deg,#141c2e 0%,#1a1030 50%,#0d1a1a 100%);border:1px solid var(--border);border-radius:4px;padding:20px 24px;display:flex;align-items:center;gap:24px;margin-bottom:12px;position:relative;overflow:hidden}
-.mvp-card::before{content:'MVP';position:absolute;right:20px;top:16px;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:13px;letter-spacing:3px;color:var(--orange);border:1px solid var(--orange);padding:2px 10px;border-radius:2px}
+.mvp-card{background:rgba(10,12,14,.55);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border:1px solid rgba(255,85,0,.2);border-radius:8px;padding:20px 24px;display:flex;align-items:center;gap:24px;margin-bottom:12px;position:relative;overflow:hidden;box-shadow:0 8px 32px rgba(0,0,0,.5),inset 0 1px 0 rgba(255,255,255,.05)}
+.mvp-card::after{content:'';position:absolute;inset:0;background:linear-gradient(135deg,rgba(255,85,0,.06) 0%,rgba(255,85,0,.02) 50%,transparent 100%);pointer-events:none}
+.mvp-card::before{content:'MVP';position:absolute;right:20px;top:16px;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:13px;letter-spacing:3px;color:var(--orange);border:1px solid var(--orange);padding:2px 10px;border-radius:2px;background:rgba(255,85,0,.1)}
 .mvp-avatar{width:64px;height:64px;border-radius:50%;background:linear-gradient(135deg,var(--orange),var(--orange2));display:flex;align-items:center;justify-content:center;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:24px;color:#000;flex-shrink:0;border:2px solid rgba(255,85,0,.4)}
 .mvp-info{flex:1}
 .mvp-name{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:22px;color:var(--white);letter-spacing:.5px;margin-bottom:4px}
@@ -689,7 +689,7 @@ nav{background:var(--surface);border-bottom:2px solid var(--border);display:flex
 
 /* AWARD CARDS */
 .awards-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px}
-.award-card{background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:12px 14px;display:flex;align-items:center;gap:12px}
+.award-card{background:rgba(10,12,14,.55);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border:1px solid rgba(255,255,255,.07);border-radius:6px;padding:12px 14px;display:flex;align-items:center;gap:12px;box-shadow:0 4px 16px rgba(0,0,0,.4),inset 0 1px 0 rgba(255,255,255,.04)}
 .award-avatar{width:36px;height:36px;border-radius:50%;background:var(--surface);border:1px solid var(--border2);display:flex;align-items:center;justify-content:center;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:14px;color:var(--text);flex-shrink:0}
 .award-name{font-family:'Rajdhani',sans-serif;font-weight:600;font-size:14px;color:var(--white)}
 .award-val{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:22px;color:var(--white);margin-left:auto;line-height:1}
@@ -716,7 +716,7 @@ nav{background:var(--surface);border-bottom:2px solid var(--border);display:flex
 
 /* SCOREBOARD TABLE */
 .sb-table{width:100%;border-collapse:collapse;min-width:620px}
-.sb-table th{padding:7px 10px;text-align:right;font-family:'Rajdhani',sans-serif;font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--muted2);background:rgba(0,0,0,.35);border-bottom:1px solid var(--border);white-space:nowrap}
+.sb-table th{padding:7px 10px;text-align:right;font-family:'Rajdhani',sans-serif;font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--muted2);background:rgba(0,0,0,.55);border-bottom:1px solid var(--border);white-space:nowrap}
 .sb-table th:first-child{text-align:left}
 .sb-table td{padding:9px 10px;text-align:right;border-bottom:1px solid var(--border);font-size:13px}
 .sb-table td:first-child{text-align:left;color:var(--white);font-family:'Rajdhani',sans-serif;font-weight:600;font-size:14px;cursor:pointer;letter-spacing:.3px}
@@ -743,13 +743,13 @@ nav{background:var(--surface);border-bottom:2px solid var(--border);display:flex
 .m-date{font-size:11px;color:rgba(255,255,255,.5);text-align:right;white-space:nowrap;text-shadow:0 1px 4px rgba(0,0,0,.9)}
 
 /* PROFILE */
-.profile-top{background:linear-gradient(135deg,var(--surface) 0%,#141c28 100%);border:1px solid var(--border);border-radius:4px;padding:22px 24px;margin-bottom:12px;display:flex;align-items:center;gap:20px}
+.profile-top{background:rgba(10,12,14,.6);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border:1px solid rgba(255,255,255,.07);border-radius:8px;padding:22px 24px;margin-bottom:12px;display:flex;align-items:center;gap:20px;box-shadow:0 8px 32px rgba(0,0,0,.5),inset 0 1px 0 rgba(255,255,255,.05)}
 .p-avatar{width:68px;height:68px;border-radius:4px;background:linear-gradient(135deg,var(--orange),#c43a00);display:flex;align-items:center;justify-content:center;font-family:'Rajdhani',sans-serif;font-weight:800;font-size:26px;color:#000;flex-shrink:0}
 .p-name{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:28px;color:var(--white);letter-spacing:.5px;line-height:1;margin-bottom:4px}
 .p-sub{font-size:11px;color:var(--muted2)}
 .stats-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:1px;background:var(--border);border-top:1px solid var(--border)}
 @media(max-width:600px){.stats-grid{grid-template-columns:repeat(3,1fr)}}
-.stat-box{background:var(--surface);padding:14px 16px}
+.stat-box{background:#0c0e10;padding:14px 16px}
 .stat-val{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:22px;line-height:1;color:var(--white);margin-bottom:3px}
 .stat-lbl{font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--muted2)}
 
@@ -779,7 +779,7 @@ nav{background:var(--surface);border-bottom:2px solid var(--border);display:flex
 </head>
 <body>
 <nav>
-  <div class="logo">5v5 Stats</div>
+  <div class="logo"><svg style="width:22px;height:22px;margin-right:8px;vertical-align:middle;flex-shrink:0" viewBox="0 0 50 50" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="25" cy="25" r="24" stroke="#ff5500" stroke-width="2"/><path d="M10 25c0-8.3 6.7-15 15-15s15 6.7 15 15-6.7 15-15 15S10 33.3 10 25z" fill="#ff5500" opacity=".15"/><path d="M16 20h8l-3 5h6l-7 10 2-7h-5l-1-8z" fill="#ff5500"/><path d="M28 18h6l-2 4h4l-8 12 1-6h-4l3-10z" fill="#ff7733" opacity=".7"/></svg>Reshtan Gaming</div>
   <div class="tabs">
     <div class="tab active" data-p="matches">Matches</div>
     <div class="tab" data-p="leaderboard">Leaderboard</div>
@@ -935,8 +935,7 @@ async function loadMatches() {
     </div>`;
   }).join('');
   document.getElementById('p-matches').innerHTML = `
-    <div class="page-title">Match History <span class="sub">${data.length} matches</span></div>
-    <div style="border-radius:4px;overflow:hidden" class="matches-list">${items}</div>`;
+    <div class="matches-list" style="border-radius:4px;overflow:hidden">${items}</div>`;
 }
 
 // ── Match Detail ──────────────────────────────────────────────────────────────
@@ -1105,7 +1104,7 @@ function sbRows(arr, steamCache={}) {
       ? `<img src="${steamCache[p.steamid64]}" style="width:22px;height:22px;border-radius:50%;object-fit:cover;vertical-align:middle;margin-right:7px;border:1px solid var(--border2)" onerror="this.style.display='none'">`
       : `<span style="display:inline-block;width:22px;height:22px;border-radius:50%;background:var(--surface2);line-height:22px;text-align:center;font-size:9px;font-family:'Rajdhani',sans-serif;font-weight:700;color:var(--muted2);vertical-align:middle;margin-right:7px">${initials(p.name)}</span>`;
     return `<tr>
-      <td onclick="go('player',{name:'${esc(p.name)}'},'match')" style="display:flex;align-items:center">${avatar}${esc(p.name)}</td>
+      <td onclick="go('player',{name:'${esc(p.name)}'},'match')" style="cursor:pointer"><div style="display:flex;align-items:center">${avatar}${esc(p.name)}</div></td>
       <td class="kda-cell">${p.kills??0}</td>
       <td class="kda-cell">${p.deaths??0}</td>
       <td class="kda-cell">${p.assists??0}</td>
@@ -1156,7 +1155,7 @@ async function loadPlayer(name) {
     : '';
 
   const countryFlag = steam.country
-    ? String.fromCodePoint(...[...steam.country.toUpperCase()].map(c=>c.charCodeAt(0)+127397)) + ' '
+    ? `<img src="https://flagcdn.com/24x18/${steam.country.toLowerCase()}.png" style="border-radius:2px;vertical-align:middle;margin-right:6px;height:16px" onerror="this.style.display='none'" title="${steam.country}"> `
     : '';
 
   const statsGrid = [
@@ -1194,7 +1193,7 @@ async function loadPlayer(name) {
     <div class="back-btn" onclick="go(_back||'leaderboard')">← Back</div>
     <div class="profile-top">
       ${avatarHtml}
-      <div>
+      <div style="flex:1">
         <div class="p-name">${countryFlag}${esc(steam.name || name)}</div>
         <div class="p-sub">${steam.real_name ? esc(steam.real_name)+' • ' : ''}${c.matches??0} matches played</div>
         <div style="margin-top:6px">${profileLink}</div>
@@ -1250,7 +1249,7 @@ async function loadMaps() {
       </div>
     </div>`;
   }).join('');
-  el.innerHTML = `<div class="page-title">Map Stats <span class="sub">${data.length} maps</span></div>${cards}`;
+  el.innerHTML = `${cards}`;
 }
 
 // ── Head-to-Head ──────────────────────────────────────────────────────────────
@@ -1326,7 +1325,6 @@ function renderH2HPicker() {
   }).join('');
 
   el.innerHTML = `
-    <div class="page-title">Head-to-Head</div>
     <div class="card" style="padding:20px 22px;margin-bottom:12px">
       <div style="display:grid;grid-template-columns:1fr 48px 1fr;align-items:center;gap:12px;margin-bottom:18px">
         ${slotHtml(0,p1)}
@@ -1543,7 +1541,6 @@ function renderLeaderboard(data, sortKey) {
   const sortLabel = cols.find(c=>c.key===sortKey)?.label ?? sortKey;
 
   el.innerHTML = `
-    <div class="page-title">Leaderboard <span class="sub">${data.length} players • sorted by ${sortLabel}</span></div>
     <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">
       ${top3.map((p,i)=>podiumCard(p,i)).join('')}
     </div>
@@ -1633,7 +1630,6 @@ function renderSpecialists(data, tab) {
 
   window._specData = data;
   el.innerHTML = `
-    <div class="page-title">Specialist Boards</div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px">${tabsHtml}</div>
     <div class="card lb-wrap">
       <table class="lb-table" style="width:100%;border-collapse:collapse">
@@ -1680,43 +1676,42 @@ function renderDemos() {
       dateStr = d.modified_at;
     }
 
-    const mapImg = d.mapname && MAP_IMGS[d.mapname]
-      ? `<img src="${MAP_IMGS[d.mapname]}" style="width:96px;height:64px;object-fit:cover;border-radius:4px;flex-shrink:0" onerror="this.parentElement.innerHTML='<div style=\'width:96px;height:64px;background:var(--surface2);border-radius:4px;display:flex;align-items:center;justify-content:center\'><span style=\'font-size:9px;color:var(--muted2);font-family:Rajdhani,sans-serif;font-weight:700;text-transform:uppercase\'>${esc(d.mapname)}</span></div>'">`
-      : `<div style="width:96px;height:64px;background:var(--surface2);border-radius:4px;display:flex;align-items:center;justify-content:center;flex-shrink:0"><span style="font-size:9px;color:var(--muted2);font-family:'Rajdhani',sans-serif;font-weight:700;text-transform:uppercase">${esc(d.mapname||'?')}</span></div>`;
-
-    const mapLabel = d.mapname
-      ? `<span style="font-family:'Rajdhani',sans-serif;font-weight:800;font-size:15px;color:var(--white);text-transform:uppercase;letter-spacing:1px">${esc(d.mapname)}</span>`
-      : `<span style="font-family:'Rajdhani',sans-serif;font-weight:600;font-size:13px;color:var(--muted2)">${esc(d.name)}</span>`;
+    const mapImg = d.mapname && MAP_IMGS[d.mapname] ? MAP_IMGS[d.mapname] : null;
 
     const score = (d.team1_score !== '' && d.team1_score != null)
-      ? ` <span style="color:var(--ct);font-family:'Rajdhani',sans-serif;font-weight:800">${d.team1_score}</span><span style="color:var(--muted2);margin:0 3px">:</span><span style="color:var(--t);font-family:'Rajdhani',sans-serif;font-weight:800">${d.team2_score}</span>`
+      ? `<span style="color:var(--ct);font-family:'Rajdhani',sans-serif;font-weight:800;font-size:26px">${d.team1_score}</span><span style="color:rgba(255,255,255,.4);margin:0 8px;font-family:'Rajdhani',sans-serif;font-size:22px">:</span><span style="color:var(--t);font-family:'Rajdhani',sans-serif;font-weight:800;font-size:26px">${d.team2_score}</span>`
       : '';
 
     const teamsLine = (d.team1_name || d.team2_name)
-      ? `<div style="font-size:12px;color:var(--muted2);margin-top:3px">
+      ? `<div style="font-size:13px;color:rgba(255,255,255,.7);margin-top:4px">
            <span style="color:var(--ct)">${esc(d.team1_name||'?')}</span>
-           <span style="margin:0 5px;color:var(--border2)">vs</span>
+           <span style="margin:0 6px;color:rgba(255,255,255,.35)">vs</span>
            <span style="color:var(--t)">${esc(d.team2_name||'?')}</span>
          </div>`
       : '';
 
-    return `<div class="card" style="display:flex;align-items:center;gap:16px;padding:14px 18px;margin-bottom:8px">
-      ${mapImg}
-      <div style="flex:1;min-width:0">
-        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-          ${mapLabel}${score}
+    return `<div style="position:relative;border-radius:6px;overflow:hidden;margin-bottom:10px;height:110px">
+      ${mapImg
+        ? `<img src="${mapImg}" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:0.75">`
+        : `<div style="position:absolute;inset:0;background:linear-gradient(135deg,#0a0c0e,#141618)"></div>`}
+      <div style="position:absolute;inset:0;background:linear-gradient(90deg,rgba(4,5,7,.95) 0%,rgba(4,5,7,.88) 35%,rgba(4,5,7,.55) 65%,rgba(4,5,7,.1) 100%)"></div>
+      <div style="position:relative;z-index:2;height:100%;display:flex;align-items:center;padding:0 22px;gap:18px">
+        <div style="flex:1;min-width:0">
+          <div style="font-family:'Rajdhani',sans-serif;font-weight:800;font-size:12px;letter-spacing:3px;text-transform:uppercase;color:rgba(255,255,255,.45);margin-bottom:4px;text-shadow:0 1px 4px rgba(0,0,0,.8)">${esc(d.mapname||d.name)}</div>
+          <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+            ${score}
+            ${teamsLine}
+          </div>
+          <div style="font-size:11px;color:rgba(255,255,255,.35);margin-top:5px;text-shadow:0 1px 3px rgba(0,0,0,.9)">${dateStr}${timeStr?' · '+timeStr:''} · ${esc(d.size_formatted||'')}</div>
         </div>
-        ${teamsLine}
-        <div style="font-size:11px;color:var(--muted2);margin-top:4px">${dateStr}${timeStr?' · '+timeStr:''} · ${esc(d.size_formatted||'')}</div>
+        <a href="${esc(d.download_url)}" download style="text-decoration:none;flex-shrink:0">
+          <button style="padding:10px 18px;background:rgba(255,85,0,.15);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);border:1px solid var(--orange);border-radius:3px;color:var(--orange);font-family:'Rajdhani',sans-serif;font-weight:700;font-size:12px;letter-spacing:1.5px;text-transform:uppercase;cursor:pointer;white-space:nowrap;transition:all .15s">⬇ Download</button>
+        </a>
       </div>
-      <a href="${esc(d.download_url)}" download style="text-decoration:none;flex-shrink:0">
-        <button style="padding:10px 18px;background:var(--orange-glow);border:1px solid var(--orange);border-radius:3px;color:var(--orange);font-family:'Rajdhani',sans-serif;font-weight:700;font-size:12px;letter-spacing:1.5px;text-transform:uppercase;cursor:pointer;white-space:nowrap;transition:all .15s">⬇ Download</button>
-      </a>
     </div>`;
   }).join('') || '<div class="empty">No demos match your filters.</div>';
 
   el.innerHTML = `
-    <div class="page-title">Demo Browser <span class="sub">${filtered.length} of ${data.length} demos</span></div>
     <div class="card" style="padding:14px 16px;margin-bottom:14px;display:flex;gap:10px;align-items:center">
       <select onchange="_demoFilters.map=this.value;renderDemos()"
         style="padding:9px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:3px;color:var(--white);font-family:'Rajdhani',sans-serif;font-size:13px;cursor:pointer;min-width:160px">${mapOpts}</select>
@@ -2949,18 +2944,14 @@ async def debugdemos_cmd(inter: discord.Interaction, refresh: bool = False):
                 size = demo.get('size_formatted', '?')
                 lines.append(f"**Match #{matchid}**")
                 lines.append(f"  └─ {name} ({size})")
-            
             if len(matchid_map) > 15:
                 lines.append(f"\n...and {len(matchid_map) - 15} more")
-            
             # Show cache info
             if _MATCHID_CACHE_TIME:
                 age = (datetime.now() - _MATCHID_CACHE_TIME).total_seconds()
                 lines.append(f"\n📊 Cache age: {age:.0f}s (refreshes every {_CACHE_TTL_SECONDS}s)")
-    
     except Exception as e:
         lines.append(f"\n❌ Error: {e}")
-    
     message = "\n".join(lines)
     if len(message) > 2000:
         chunks = [message[i:i+2000] for i in range(0, len(message), 2000)]
@@ -2968,9 +2959,6 @@ async def debugdemos_cmd(inter: discord.Interaction, refresh: bool = False):
             await inter.followup.send(chunk, ephemeral=True)
     else:
         await inter.followup.send(message, ephemeral=True)
-
-
 if not TOKEN:
     raise SystemExit("TOKEN missing.")
-
 bot.run(TOKEN)
