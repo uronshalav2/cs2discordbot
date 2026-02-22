@@ -161,9 +161,9 @@ nav{background:#09090b;border-bottom:2px solid var(--border);display:flex;align-
 .adr-highlight{color:var(--orange)}
 
 /* MATCHES LIST */
-.matches-list .match-item{position:relative;overflow:hidden;display:flex;align-items:center;gap:14px;padding:0;border-bottom:3px solid rgba(0,0,0,.8);cursor:pointer;transition:transform .22s ease,box-shadow .22s ease,border-left-color .22s ease;min-height:96px;border-left:3px solid transparent;will-change:transform}
-.matches-list .match-item:hover{transform:translateX(4px);border-left-color:var(--orange);box-shadow:inset 4px 0 20px rgba(255,85,0,.1)}
-.matches-list .match-item:last-child{border-bottom:none}
+.matches-list .match-item{position:relative;overflow:hidden;display:flex;align-items:center;gap:14px;padding:0;border-bottom:1px solid rgba(255,85,0,.15);cursor:pointer;transition:transform .22s ease,box-shadow .22s ease,border-left-color .22s ease,border-color .22s ease;min-height:96px;border-left:3px solid rgba(255,85,0,.2);border-right:1px solid rgba(255,85,0,.1);will-change:transform;box-shadow:0 0 12px rgba(255,85,0,.04),inset 0 0 30px rgba(255,85,0,.02)}
+.matches-list .match-item:hover{transform:translateX(4px);border-left-color:var(--orange);border-color:rgba(255,85,0,.45);box-shadow:0 0 22px rgba(255,85,0,.18),inset 4px 0 20px rgba(255,85,0,.1)}
+.matches-list .match-item:last-child{border-bottom:1px solid rgba(255,85,0,.15)}
 .match-item .m-bg{position:absolute;inset:0;background-size:cover;background-position:center;z-index:0;transition:transform .35s ease;will-change:transform}
 .matches-list .match-item:hover .m-bg{transform:scale(1.04)}
 .match-item .m-overlay{position:absolute;inset:0;background:linear-gradient(90deg,rgba(6,8,14,.97) 0%,rgba(6,8,14,.92) 30%,rgba(6,8,14,.65) 60%,rgba(6,8,14,.25) 100%);z-index:1}
@@ -172,11 +172,11 @@ nav{background:#09090b;border-bottom:2px solid var(--border);display:flex;align-
 .matches-list .match-item:hover .m-score{text-shadow:0 0 18px rgba(255,120,40,.45),0 2px 8px rgba(0,0,0,.9)}
 .matches-list .match-item:hover .m-id{color:var(--orange)}
 .match-item .m-content{position:relative;z-index:2;display:flex;align-items:center;gap:14px;width:100%;padding:18px 24px}
-.m-id{font-size:11px;color:rgba(255,255,255,.45);width:42px;font-family:'Rajdhani',sans-serif;font-weight:600;flex-shrink:0;transition:color .22s ease}
+.m-id{font-size:11px;color:rgba(255,255,255,.22);width:42px;font-family:'Rajdhani',sans-serif;font-weight:600;flex-shrink:0;transition:color .22s ease}
 .m-teams{flex:1}
 .m-teams-str{font-size:13px;color:rgba(255,255,255,.8);margin-bottom:4px;font-weight:500}
 .m-score{font-family:'Rajdhani',sans-serif;font-weight:800;font-size:26px;color:#fff;text-shadow:0 2px 8px rgba(0,0,0,.9),0 0 20px rgba(0,0,0,.5);transition:text-shadow .22s ease}
-.m-date{font-size:11px;color:rgba(255,255,255,.5);text-align:right;white-space:nowrap;text-shadow:0 1px 4px rgba(0,0,0,.9)}
+.m-date{font-size:11px;color:var(--orange);text-align:right;white-space:nowrap;text-shadow:0 0 10px rgba(255,85,0,.7),0 1px 4px rgba(0,0,0,.9);opacity:.85}
 
 /* DEMO CARDS */
 .demo-card{position:relative;overflow:hidden;height:110px;margin-bottom:2px;cursor:pointer;border-left:3px solid transparent;transition:transform .22s ease,box-shadow .22s ease,border-left-color .22s ease;will-change:transform}
@@ -276,10 +276,8 @@ nav{background:#09090b;border-bottom:2px solid var(--border);display:flex;align-
   filter:brightness(0) invert(1) sepia(1) saturate(5) hue-rotate(345deg) brightness(1);
   -webkit-mask-image:linear-gradient(90deg,rgba(0,0,0,.5) 0%,rgba(0,0,0,.5) 25%,rgba(0,0,0,1) 50%,rgba(0,0,0,.5) 75%,rgba(0,0,0,.5) 100%);
   mask-image:linear-gradient(90deg,rgba(0,0,0,.5) 0%,rgba(0,0,0,.5) 25%,rgba(0,0,0,1) 50%,rgba(0,0,0,.5) 75%,rgba(0,0,0,.5) 100%);
-  -webkit-mask-size:300% 100%;
-  mask-size:300% 100%;
-  -webkit-mask-position:200% center;
-  mask-position:200% center;
+  -webkit-mask-size:300% 100%;mask-size:300% 100%;
+  -webkit-mask-position:200% center;mask-position:200% center;
   animation:cs2-sweep 1.2s ease-in-out infinite;
 }
 @keyframes cs2-sweep{
