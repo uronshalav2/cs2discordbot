@@ -623,15 +623,16 @@ nav{background:var(--surface);border-bottom:2px solid var(--border);display:flex
 <script>
 // ── Router ────────────────────────────────────────────────────────────────────
 // Shared CS2 map image URLs (Steam CDN)
+const MAP_IMG_BASE = 'https://raw.githubusercontent.com/ghostcap-gaming/cs2-map-images/refs/heads/main/cs2';
 const MAP_IMGS = {
-  'de_mirage':   'https://cdn.akamai.steamstatic.com/apps/730/maps/screenshots/de_mirage.jpg',
-  'de_dust2':    'https://cdn.akamai.steamstatic.com/apps/730/maps/screenshots/de_dust2.jpg',
-  'de_inferno':  'https://cdn.akamai.steamstatic.com/apps/730/maps/screenshots/de_inferno.jpg',
-  'de_nuke':     'https://cdn.akamai.steamstatic.com/apps/730/maps/screenshots/de_nuke.jpg',
-  'de_ancient':  'https://cdn.akamai.steamstatic.com/apps/730/maps/screenshots/de_ancient.jpg',
-  'de_anubis':   'https://cdn.akamai.steamstatic.com/apps/730/maps/screenshots/de_anubis.jpg',
-  'de_vertigo':  'https://cdn.akamai.steamstatic.com/apps/730/maps/screenshots/de_vertigo.jpg',
-  'de_overpass': 'https://cdn.akamai.steamstatic.com/apps/730/maps/screenshots/de_overpass.jpg',
+  'de_mirage':   `${MAP_IMG_BASE}/de_mirage.png`,
+  'de_dust2':    `${MAP_IMG_BASE}/de_dust2.png`,
+  'de_inferno':  `${MAP_IMG_BASE}/de_inferno.png`,
+  'de_nuke':     `${MAP_IMG_BASE}/de_nuke.png`,
+  'de_ancient':  `${MAP_IMG_BASE}/de_ancient.png`,
+  'de_anubis':   `${MAP_IMG_BASE}/de_anubis.png`,
+  'de_vertigo':  `${MAP_IMG_BASE}/de_vertigo.png`,
+  'de_overpass': `${MAP_IMG_BASE}/de_overpass.png`,
 };
 function mapThumb(mapname, h=48, w=80) {
   const url = MAP_IMGS[mapname];
