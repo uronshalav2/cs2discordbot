@@ -593,7 +593,7 @@ def _build_stats_html() -> str:
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Reshtan Gaming</title>
-<link rel="icon" type="image/png" href="https://images.seeklogo.com/logo-png/53/1/counter-strike-2-logo-png_seeklogo-534313.png">
+<link rel="icon" type="image/svg+xml" href="https://upload.wikimedia.org/wikipedia/commons/2/26/Counter-Strike_vertical_logo_%282023%29.svg">
 <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
 :root{
@@ -750,8 +750,10 @@ nav{background:#09090b;border-bottom:2px solid var(--border);display:flex;align-
 .p-sub{font-size:11px;color:var(--muted2)}
 .stats-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:1px;background:var(--border);border-top:1px solid var(--border)}
 @media(max-width:600px){.stats-grid{grid-template-columns:repeat(3,1fr)}}
-.stat-box{background:linear-gradient(180deg,rgba(255,85,0,.05) 0%,#0a0c0e 100%);padding:14px 16px;transition:background .15s}
-.stat-box:hover{background:linear-gradient(180deg,rgba(255,85,0,.1) 0%,#0c0e10 100%)}
+.stat-box{background:#0a0c0e;padding:14px 16px;transition:background .15s}
+.stat-box:hover{background:#0e1012}
+.stat-box:nth-child(-n+6){background:linear-gradient(180deg,rgba(255,85,0,.07) 0%,#0a0c0e 100%)}
+.stat-box:nth-child(-n+6):hover{background:linear-gradient(180deg,rgba(255,85,0,.13) 0%,#0c0e10 100%)}
 .stat-val{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:22px;line-height:1;color:var(--white);margin-bottom:3px}
 .stat-lbl{font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--muted2)}
 
@@ -781,7 +783,7 @@ nav{background:#09090b;border-bottom:2px solid var(--border);display:flex;align-
 </head>
 <body>
 <nav>
-  <div class="logo"><img src="https://images.seeklogo.com/logo-png/53/1/counter-strike-2-logo-png_seeklogo-534313.png" style="width:26px;height:26px;margin-right:9px;vertical-align:middle;flex-shrink:0;object-fit:contain;filter:brightness(0) saturate(100%) invert(40%) sepia(90%) saturate(700%) hue-rotate(355deg) brightness(110%)" alt="CS2">Reshtan Gaming</div>
+  <div class="logo"><img src="https://upload.wikimedia.org/wikipedia/commons/2/26/Counter-Strike_vertical_logo_%282023%29.svg" style="width:28px;height:28px;margin-right:9px;vertical-align:middle;flex-shrink:0;object-fit:contain;filter:brightness(0) saturate(100%) invert(40%) sepia(90%) saturate(700%) hue-rotate(355deg) brightness(110%)" alt="CS2">Reshtan Gaming</div>
   <div class="tabs">
     <div class="tab active" data-p="matches">Matches</div>
     <div class="tab" data-p="leaderboard">Leaderboard</div>
