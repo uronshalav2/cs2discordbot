@@ -1128,34 +1128,19 @@ async function loadMaps() {
   }
   const cards = data.map(m => {
     const total = parseInt(m.total_matches||0);
-    const t1w   = parseInt(m.t1_wins||0);
-    const t2w   = parseInt(m.t2_wins||0);
-    const pct1  = total ? Math.round(t1w/total*100) : 0;
-    const pct2  = total ? Math.round(t2w/total*100) : 0;
     const mapImg = MAP_IMGS[m.mapname];
     return `
     <div class="card" style="overflow:hidden;margin-bottom:12px">
       <div style="position:relative;height:130px">
         ${mapImg ? `<img src="${mapImg}" style="width:100%;height:100%;object-fit:cover;opacity:.55">` : `<div style="width:100%;height:100%;background:linear-gradient(135deg,#0d1117,#1a2332)"></div>`}
         <div style="position:absolute;inset:0;background:linear-gradient(to top,rgba(10,13,20,1) 0%,rgba(10,13,20,.2) 100%)"></div>
-        <div style="position:absolute;bottom:12px;left:18px;display:flex;align-items:baseline;gap:12px">
+        <div style="position:absolute;bottom:12px;left:18px">
           <div style="font-family:'Rajdhani',sans-serif;font-weight:800;font-size:22px;color:#fff;text-transform:uppercase;letter-spacing:2px">${esc(m.mapname)}</div>
-          <div style="font-size:11px;color:var(--muted2)">${total} match${total!==1?'es':''}</div>
         </div>
       </div>
-      <div style="padding:16px 18px;display:grid;grid-template-columns:repeat(4,1fr);gap:12px">
-        <div><div style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:22px;color:var(--white)">${m.avg_rounds??'—'}</div><div style="font-size:10px;color:var(--muted2);letter-spacing:1px;text-transform:uppercase">Avg Rounds</div></div>
-        <div><div style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:22px;color:var(--white)">${m.max_rounds??'—'}</div><div style="font-size:10px;color:var(--muted2);letter-spacing:1px;text-transform:uppercase">Most Rounds</div></div>
-        <div><div style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:22px;color:var(--ct)">${t1w}</div><div style="font-size:10px;color:var(--muted2);letter-spacing:1px;text-transform:uppercase">Team 1 Wins</div></div>
-        <div><div style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:22px;color:var(--t)">${t2w}</div><div style="font-size:10px;color:var(--muted2);letter-spacing:1px;text-transform:uppercase">Team 2 Wins</div></div>
-      </div>
-      <div style="padding:0 18px 16px">
-        <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--muted2);margin-bottom:4px"><span style="color:var(--ct)">${pct1}%</span><span style="color:var(--t)">${pct2}%</span></div>
-        <div style="height:6px;border-radius:3px;overflow:hidden;display:flex">
-          <div style="width:${pct1}%;background:var(--ct);transition:width .6s"></div>
-          <div style="flex:1;background:var(--t);transition:width .6s"></div>
-        </div>
-        <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--muted2);margin-top:3px"><span>Team 1</span><span>Team 2</span></div>
+      <div style="padding:16px 18px;display:flex;align-items:center;gap:10px">
+        <div style="font-family:'Rajdhani',sans-serif;font-weight:800;font-size:36px;color:var(--accent)">${total}</div>
+        <div style="font-size:13px;color:var(--muted2);text-transform:uppercase;letter-spacing:1px">Game${total!==1?'s':''} Played</div>
       </div>
     </div>`;
   }).join('');
