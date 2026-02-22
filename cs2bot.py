@@ -362,8 +362,8 @@ async def handle_api_leaderboard(request):
         c = conn.cursor(dictionary=True)
         c.execute(f"""
             SELECT
-                name,
                 steamid64,
+                SUBSTRING_INDEX(GROUP_CONCAT(name ORDER BY matchid DESC), ',', 1) AS name,
                 COUNT(DISTINCT matchid)                                      AS matches,
                 SUM(kills)                                                   AS kills,
                 SUM(deaths)                                                  AS deaths,
@@ -380,8 +380,9 @@ async def handle_api_leaderboard(request):
                 ROUND(SUM(damage)/NULLIF(
                     COUNT(DISTINCT CONCAT(matchid,'_',mapnumber)),0)/30,1)   AS adr
             FROM {MATCHZY_TABLES['players']}
-            WHERE steamid64 != '0' AND name != '' AND name IS NOT NULL
-            GROUP BY steamid64, name
+            WHERE steamid64 != '0' AND steamid64 IS NOT NULL
+              AND name != '' AND name IS NOT NULL
+            GROUP BY steamid64
             ORDER BY kills DESC
         """)
         rows = c.fetchall()
@@ -397,7 +398,8 @@ async def handle_api_specialists(request):
         c = conn.cursor(dictionary=True)
         c.execute(f"""
             SELECT
-                name, steamid64,
+                steamid64,
+                SUBSTRING_INDEX(GROUP_CONCAT(name ORDER BY matchid DESC), ',', 1) AS name,
                 COUNT(DISTINCT matchid)                                         AS matches,
                 SUM(v1_wins)                                                    AS clutch_1v1,
                 SUM(v2_wins)                                                    AS clutch_1v2,
@@ -410,8 +412,9 @@ async def handle_api_specialists(request):
                 SUM(utility_damage)                                             AS utility_damage,
                 ROUND(SUM(utility_damage)/NULLIF(COUNT(DISTINCT CONCAT(matchid,'_',mapnumber)),0),1) AS util_dmg_per_map
             FROM {MATCHZY_TABLES['players']}
-            WHERE steamid64 != '0' AND name != '' AND name IS NOT NULL
-            GROUP BY steamid64, name
+            WHERE steamid64 != '0' AND steamid64 IS NOT NULL
+              AND name != '' AND name IS NOT NULL
+            GROUP BY steamid64
             HAVING matches >= 1
             ORDER BY clutch_total DESC
         """)
