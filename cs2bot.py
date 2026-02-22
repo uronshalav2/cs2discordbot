@@ -1408,38 +1408,115 @@ async function loadPlayer(name) {
 async function loadMaps() {
   const el = document.getElementById('p-maps');
   el.innerHTML = '<div class="loading"><div class="spin"></div><br>Loading…</div>';
-  const data = await fetch('/api/mapstats').then(r=>r.json()).catch(()=>[]);
+  const [data, demos] = await Promise.all([
+    fetch('/api/mapstats').then(r=>r.json()).catch(()=>[]),
+    fetch('/api/demos').then(r=>r.json()).catch(()=>[]),
+  ]);
   if (!Array.isArray(data) || !data.length) {
     el.innerHTML = emptyState('maps','No Map Data','Play some matches to see map statistics'); return;
   }
+
+  // Build a map of mapname → sorted list of demo matches
+  const demosByMap = {};
+  (Array.isArray(demos)?demos:[]).forEach(d => {
+    const mn = d.mapname;
+    if (!mn) return;
+    if (!demosByMap[mn]) demosByMap[mn] = [];
+    demosByMap[mn].push(d);
+  });
+
   const cards = data.map(m => {
-    const total = parseInt(m.total_matches||0);
-    const mapImg = MAP_IMGS[m.mapname];
+    const total   = parseInt(m.total_matches||0);
+    const t1wins  = parseInt(m.t1_wins||0);
+    const t2wins  = parseInt(m.t2_wins||0);
+    const draws   = total - t1wins - t2wins;
+    const avgRnd  = parseFloat(m.avg_rounds||0).toFixed(1);
+    const maxRnd  = parseInt(m.max_rounds||0);
+    const mapImg  = MAP_IMGS[m.mapname];
+
+    // Recent matches from demos for this map (up to 3)
+    const recentDemos = (demosByMap[m.mapname] || []).slice(0, 3);
+    const recentHtml = recentDemos.length ? `
+      <div style="margin-top:10px;display:flex;flex-direction:column;gap:4px">
+        ${recentDemos.map(d => {
+          const t1 = d.team1_name || '?';
+          const t2 = d.team2_name || '?';
+          const s1 = d.team1_score !== '' ? d.team1_score : '?';
+          const s2 = d.team2_score !== '' ? d.team2_score : '?';
+          const winner = s1 > s2 ? t1 : s2 > s1 ? t2 : null;
+          const date = d.filename_ts ? new Date(d.filename_ts).toLocaleDateString('en-GB',{day:'2-digit',month:'short'}) : '';
+          return `<div style="display:flex;align-items:center;gap:8px;font-size:11px;color:rgba(255,255,255,.55)">
+            <span style="font-family:'Rajdhani',sans-serif;font-weight:700;color:rgba(255,255,255,.8)">${esc(t1)}</span>
+            <span style="font-family:'Rajdhani',sans-serif;font-weight:900;font-size:13px;color:${s1>s2?'var(--win)':s1<s2?'var(--loss)':'#fff'}">${s1}</span>
+            <span style="color:rgba(255,255,255,.3)">:</span>
+            <span style="font-family:'Rajdhani',sans-serif;font-weight:900;font-size:13px;color:${s2>s1?'var(--win)':s2<s1?'var(--loss)':'#fff'}">${s2}</span>
+            <span style="font-family:'Rajdhani',sans-serif;font-weight:700;color:rgba(255,255,255,.8)">${esc(t2)}</span>
+            ${date?`<span style="margin-left:auto;font-size:10px;color:rgba(255,255,255,.3)">${date}</span>`:''}
+          </div>`;
+        }).join('')}
+      </div>` : '';
+
+    // Win rate bar
+    const winPct = total > 0 ? Math.round((t1wins / total) * 100) : 0;
+    const statsBar = `
+      <div style="display:flex;align-items:center;gap:8px;margin-top:8px">
+        <div style="flex:1;height:3px;background:rgba(255,255,255,.1);border-radius:2px;overflow:hidden">
+          <div style="height:100%;width:${winPct}%;background:linear-gradient(90deg,var(--ct),var(--orange));border-radius:2px;transition:width .6s ease"></div>
+        </div>
+        <span style="font-size:10px;color:rgba(255,255,255,.4);white-space:nowrap">${t1wins}W · ${t2wins}L${draws?` · ${draws}D`:''}</span>
+      </div>`;
+
     return `
-    <div style="position:relative;border-radius:6px;overflow:hidden;margin-bottom:12px;height:160px;cursor:default">
-      ${mapImg
-        ? `<img src="${mapImg}" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:0.82">`
-        : `<div style="position:absolute;inset:0;background:linear-gradient(135deg,#0d1117,#1a2332)"></div>`}
-      <div style="position:absolute;inset:0;background:linear-gradient(to bottom,rgba(0,0,0,.08) 0%,rgba(0,0,0,.45) 100%)"></div>
-      <div style="position:relative;z-index:2;height:100%;display:flex;flex-direction:column;justify-content:flex-end;padding:16px 20px">
-        <div style="font-family:'Rajdhani',sans-serif;font-weight:800;font-size:13px;letter-spacing:3px;text-transform:uppercase;color:rgba(255,255,255,.55);margin-bottom:8px;text-shadow:0 1px 4px rgba(0,0,0,.8)">${esc(m.mapname)}</div>
-        <div style="
-          display:inline-flex;align-items:center;gap:10px;
-          background:rgba(10,13,20,.45);
-          backdrop-filter:blur(14px);
-          -webkit-backdrop-filter:blur(14px);
-          border:1px solid rgba(255,255,255,.1);
-          border-radius:6px;
-          padding:10px 18px;
-          align-self:flex-start;
-        ">
-          <div style="font-family:'Rajdhani',sans-serif;font-weight:900;font-size:38px;color:#fff;line-height:1">${total}</div>
-          <div style="font-size:11px;color:rgba(255,255,255,.6);text-transform:uppercase;letter-spacing:1.5px;line-height:1.4">Games<br>Played</div>
+    <div style="position:relative;border-radius:6px;overflow:hidden;margin-bottom:12px;cursor:default;border:1px solid rgba(255,255,255,.06)">
+      <div style="position:relative;height:160px">
+        ${mapImg
+          ? `<img src="${mapImg}" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:0.82">`
+          : `<div style="position:absolute;inset:0;background:linear-gradient(135deg,#0d1117,#1a2332)"></div>`}
+        <div style="position:absolute;inset:0;background:linear-gradient(to bottom,rgba(0,0,0,.08) 0%,rgba(0,0,0,.55) 100%)"></div>
+        <div style="position:relative;z-index:2;height:100%;display:flex;flex-direction:column;justify-content:flex-end;padding:16px 20px">
+          <div style="font-family:'Rajdhani',sans-serif;font-weight:800;font-size:13px;letter-spacing:3px;text-transform:uppercase;color:rgba(255,255,255,.55);margin-bottom:8px;text-shadow:0 1px 4px rgba(0,0,0,.8)">${esc(m.mapname)}</div>
+          <div style="display:flex;align-items:center;gap:12px">
+            <div style="display:inline-flex;align-items:center;gap:10px;background:rgba(10,13,20,.5);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border:1px solid rgba(255,255,255,.1);border-radius:6px;padding:8px 16px">
+              <div style="font-family:'Rajdhani',sans-serif;font-weight:900;font-size:34px;color:#fff;line-height:1">${total}</div>
+              <div style="font-size:11px;color:rgba(255,255,255,.6);text-transform:uppercase;letter-spacing:1.5px;line-height:1.4">Games<br>Played</div>
+            </div>
+            <div style="display:inline-flex;align-items:center;gap:10px;background:rgba(10,13,20,.5);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border:1px solid rgba(255,255,255,.1);border-radius:6px;padding:8px 16px">
+              <div style="font-family:'Rajdhani',sans-serif;font-weight:900;font-size:34px;color:#fff;line-height:1">${avgRnd}</div>
+              <div style="font-size:11px;color:rgba(255,255,255,.6);text-transform:uppercase;letter-spacing:1.5px;line-height:1.4">Avg<br>Rounds</div>
+            </div>
+            <div style="display:inline-flex;align-items:center;gap:10px;background:rgba(10,13,20,.5);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border:1px solid rgba(255,255,255,.1);border-radius:6px;padding:8px 16px">
+              <div style="font-family:'Rajdhani',sans-serif;font-weight:900;font-size:34px;color:#fff;line-height:1">${maxRnd}</div>
+              <div style="font-size:11px;color:rgba(255,255,255,.6);text-transform:uppercase;letter-spacing:1.5px;line-height:1.4">Most<br>Rounds</div>
+            </div>
+          </div>
         </div>
       </div>
+      ${recentDemos.length ? `
+      <div style="background:rgba(8,10,12,.85);backdrop-filter:blur(8px);padding:12px 20px;border-top:1px solid rgba(255,255,255,.06)">
+        <div style="font-size:10px;color:var(--orange);font-family:'Rajdhani',sans-serif;font-weight:700;letter-spacing:2px;text-transform:uppercase;margin-bottom:8px">Recent Matches</div>
+        ${recentDemos.map(d => {
+          const t1 = d.team1_name || '?';
+          const t2 = d.team2_name || '?';
+          const s1 = d.team1_score !== '' ? d.team1_score : '?';
+          const s2 = d.team2_score !== '' ? d.team2_score : '?';
+          const date = d.filename_ts ? new Date(d.filename_ts).toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'}) : '';
+          return `<div style="display:flex;align-items:center;gap:6px;padding:5px 0;border-bottom:1px solid rgba(255,255,255,.04);font-size:12px">
+            <span style="font-family:'Rajdhani',sans-serif;font-weight:700;color:#fff;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(t1)}</span>
+            <span style="font-family:'Rajdhani',sans-serif;font-weight:900;font-size:15px;min-width:20px;text-align:right;color:${s1>s2?'var(--win)':s1<s2?'var(--loss)':'#fff'}">${s1}</span>
+            <span style="color:rgba(255,255,255,.25);font-size:11px;padding:0 2px">—</span>
+            <span style="font-family:'Rajdhani',sans-serif;font-weight:900;font-size:15px;min-width:20px;text-align:left;color:${s2>s1?'var(--win)':s2<s1?'var(--loss)':'#fff'}">${s2}</span>
+            <span style="font-family:'Rajdhani',sans-serif;font-weight:700;color:#fff;flex:1;text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(t2)}</span>
+            ${date?`<span style="font-size:10px;color:rgba(255,255,255,.3);margin-left:10px;white-space:nowrap">${date}</span>`:''}
+          </div>`;
+        }).join('')}
+        ${statsBar}
+      </div>` : `
+      <div style="background:rgba(8,10,12,.85);padding:10px 20px;border-top:1px solid rgba(255,255,255,.06)">
+        ${statsBar}
+      </div>`}
     </div>`;
   }).join('');
-  el.innerHTML = `${cards}`;
+  el.innerHTML = cards;
 }
 
 // ── Head-to-Head ──────────────────────────────────────────────────────────────
