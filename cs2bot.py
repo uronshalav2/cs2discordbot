@@ -769,6 +769,12 @@ nav{background:#09090b;border-bottom:2px solid var(--border);display:flex;align-
 .side-ct{display:inline-block;padding:1px 6px;border-radius:2px;font-size:10px;font-family:'Rajdhani',sans-serif;font-weight:700;letter-spacing:1px;background:rgba(91,196,245,.1);color:var(--ct);border:1px solid rgba(91,196,245,.25)}
 .side-t{display:inline-block;padding:1px 6px;border-radius:2px;font-size:10px;font-family:'Rajdhani',sans-serif;font-weight:700;letter-spacing:1px;background:rgba(240,168,66,.1);color:var(--t);border:1px solid rgba(240,168,66,.25)}
 
+/* DEMO DOWNLOAD BUTTON */
+.demo-dl-btn{padding:10px 20px;background:rgba(255,85,0,.15);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);border:1px solid var(--orange);border-radius:0;color:var(--orange);font-family:'Rajdhani',sans-serif;font-weight:700;font-size:12px;letter-spacing:1.5px;text-transform:uppercase;cursor:pointer;white-space:nowrap;transition:all .2s;position:relative;overflow:hidden}
+.demo-dl-btn::before{content:'';position:absolute;inset:0;background:linear-gradient(135deg,rgba(255,255,255,.08) 0%,transparent 60%);pointer-events:none}
+.demo-dl-btn:hover{background:rgba(255,85,0,.45);border-color:var(--orange2);color:#fff;box-shadow:0 0 24px rgba(255,85,0,.6),0 0 8px rgba(255,85,0,.4),inset 0 1px 0 rgba(255,255,255,.15);text-shadow:0 0 10px rgba(255,180,80,.8);transform:translateY(-1px)}
+.demo-dl-btn:active{transform:translateY(0);box-shadow:0 0 12px rgba(255,85,0,.4)}
+
 /* BACK */
 .back-btn{display:inline-flex;align-items:center;gap:5px;padding:5px 12px;border:1px solid var(--border2);border-radius:3px;font-size:11px;color:var(--muted2);cursor:pointer;margin-bottom:14px;font-family:'Rajdhani',sans-serif;font-weight:600;letter-spacing:1px;text-transform:uppercase;transition:all .18s}
 .back-btn:hover{color:var(--orange);border-color:var(--orange)}
@@ -1694,7 +1700,7 @@ function renderDemos() {
          </div>`
       : '';
 
-    return `<div style="position:relative;border-radius:6px;overflow:hidden;margin-bottom:10px;height:110px">
+    return `<div style="position:relative;border-radius:0;overflow:hidden;margin-bottom:2px;height:110px">
       ${mapImg
         ? `<img src="${mapImg}" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:0.75">`
         : `<div style="position:absolute;inset:0;background:linear-gradient(135deg,#0a0c0e,#141618)"></div>`}
@@ -1709,7 +1715,7 @@ function renderDemos() {
           <div style="font-size:11px;color:rgba(255,255,255,.35);margin-top:5px;text-shadow:0 1px 3px rgba(0,0,0,.9)">${dateStr}${timeStr?' · '+timeStr:''} · ${esc(d.size_formatted||'')}</div>
         </div>
         <a href="${esc(d.download_url)}" download style="text-decoration:none;flex-shrink:0">
-          <button style="padding:10px 18px;background:rgba(255,85,0,.15);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);border:1px solid var(--orange);border-radius:3px;color:var(--orange);font-family:'Rajdhani',sans-serif;font-weight:700;font-size:12px;letter-spacing:1.5px;text-transform:uppercase;cursor:pointer;white-space:nowrap;transition:all .15s">⬇ Download</button>
+          <button class="demo-dl-btn">⬇ Download</button>
         </a>
       </div>
     </div>`;
