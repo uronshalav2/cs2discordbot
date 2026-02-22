@@ -272,10 +272,14 @@ nav{background:#09090b;border-bottom:2px solid var(--border);display:flex;align-
 
 /* UTIL */
 .loading{padding:48px;text-align:center;color:var(--muted2)}
-.spin{display:inline-block;width:140px;height:auto;margin-bottom:14px;animation:cs2-shine 2s ease-in-out infinite;filter:brightness(0) saturate(100%) invert(40%) sepia(90%) saturate(800%) hue-rotate(360deg) brightness(1.1)}
-@keyframes cs2-shine{
-  0%,100%{opacity:.5;filter:brightness(0) saturate(100%) invert(40%) sepia(90%) saturate(800%) hue-rotate(360deg) brightness(1)}
-  50%{opacity:1;filter:brightness(0) saturate(100%) invert(45%) sepia(100%) saturate(1200%) hue-rotate(360deg) brightness(1.6) drop-shadow(0 0 16px rgba(255,85,0,1))}
+.spin-wrap{display:inline-block;position:relative;width:160px;height:60px;overflow:hidden}
+.spin-wrap img{width:100%;height:100%;object-fit:contain;display:block;filter:brightness(0) saturate(100%) invert(40%) sepia(90%) saturate(700%) hue-rotate(360deg) brightness(0.9)}
+.spin-wrap::after{content:'';position:absolute;inset:0;background:linear-gradient(90deg,transparent 0%,rgba(255,140,60,.0) 30%,rgba(255,180,80,1) 50%,rgba(255,140,60,.0) 70%,transparent 100%);mix-blend-mode:screen;animation:cs2-sweep 2.2s ease-in-out infinite}
+@keyframes cs2-sweep{
+  0%{transform:translateX(-160px);opacity:0}
+  10%{opacity:1}
+  90%{opacity:1}
+  100%{transform:translateX(160px);opacity:0}
 }
 .empty{padding:40px;text-align:center;color:var(--muted2)}
 .ovx{overflow-x:auto}
@@ -500,7 +504,7 @@ const fmtDate = s=>{
   return d.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});
 };
 const initials = n=>(n||'?').split(/[ _]/).slice(0,2).map(w=>w[0]||'').join('').toUpperCase().slice(0,2)||'?';
-function spin(id){document.getElementById(id).innerHTML='<div class="loading"><img class="spin" src="https://upload.wikimedia.org/wikipedia/commons/2/26/Counter-Strike_vertical_logo_%282023%29.svg" alt="CS2"><br>Loading…</div>'}
+function spin(id){document.getElementById(id).innerHTML='<div class="loading"><div class="spin-wrap"><img src="https://upload.wikimedia.org/wikipedia/commons/2/26/Counter-Strike_vertical_logo_%282023%29.svg" alt="CS2"></div></div>'}
 
 // ── Demo helpers ─────────────────────────────────────────────────────────────
 let _demosCache = null;
@@ -841,7 +845,7 @@ async function loadPlayer(name) {
 // ── Map Stats ─────────────────────────────────────────────────────────────────
 async function loadMaps() {
   const el = document.getElementById('p-maps');
-  el.innerHTML = '<div class="loading"><img class="spin" src="https://upload.wikimedia.org/wikipedia/commons/2/26/Counter-Strike_vertical_logo_%282023%29.svg" alt="CS2"><br>Loading…</div>';
+  el.innerHTML = '<div class="loading"><div class="spin-wrap"><img src="https://upload.wikimedia.org/wikipedia/commons/2/26/Counter-Strike_vertical_logo_%282023%29.svg" alt="CS2"></div></div>';
   const [dbStats, demos] = await Promise.all([
     fetch('/api/mapstats').then(r=>r.json()).catch(()=>[]),
     fetch('/api/demos').then(r=>r.json()).catch(()=>[]),
@@ -915,7 +919,7 @@ let _h2hSel = [null, null]; // [player1, player2]
 
 async function loadH2H() {
   const el = document.getElementById('p-h2h');
-  el.innerHTML = '<div class="loading"><img class="spin" src="https://upload.wikimedia.org/wikipedia/commons/2/26/Counter-Strike_vertical_logo_%282023%29.svg" alt="CS2"><br>Loading players…</div>';
+  el.innerHTML = '<div class="loading"><div class="spin-wrap"><img src="https://upload.wikimedia.org/wikipedia/commons/2/26/Counter-Strike_vertical_logo_%282023%29.svg" alt="CS2"></div></div>';
   if (!_h2hPlayers) {
     const data = await fetch('/api/leaderboard').then(r=>r.json()).catch(()=>[]);
     // Fetch Steam avatars for all
@@ -1014,7 +1018,7 @@ async function runH2H() {
   if (!p1 || !p2 || !body) return;
 
   // Show loading state inside the expanding body
-  body.innerHTML = '<div class="loading" style="padding:20px"><img class="spin" src="https://upload.wikimedia.org/wikipedia/commons/2/26/Counter-Strike_vertical_logo_%282023%29.svg" alt="CS2"><br>Loading…</div>';
+  body.innerHTML = '<div class="loading"><div class="spin-wrap"><img src="https://upload.wikimedia.org/wikipedia/commons/2/26/Counter-Strike_vertical_logo_%282023%29.svg" alt="CS2"></div></div>';
   body.classList.add('open');
 
   // Collapse picker
@@ -1098,7 +1102,7 @@ function h2hBack() {
 let _lbSort = 'kills';
 async function loadLeaderboard() {
   const el = document.getElementById('p-leaderboard');
-  el.innerHTML = '<div class="loading"><img class="spin" src="https://upload.wikimedia.org/wikipedia/commons/2/26/Counter-Strike_vertical_logo_%282023%29.svg" alt="CS2"><br>Loading…</div>';
+  el.innerHTML = '<div class="loading"><div class="spin-wrap"><img src="https://upload.wikimedia.org/wikipedia/commons/2/26/Counter-Strike_vertical_logo_%282023%29.svg" alt="CS2"></div></div>';
   const data = await fetch('/api/leaderboard').then(r=>r.json()).catch(()=>[]);
   if (!Array.isArray(data) || !data.length) {
     el.innerHTML = emptyState('leaderboard','No Player Data','Stats will appear after matches are completed');
@@ -1300,7 +1304,7 @@ let _specData = null;
 async function loadSpecialists() {
   const el = document.getElementById('p-specialists');
   if (_specData) { renderSpecialists(_specData, _specTab); return; }
-  el.innerHTML = '<div class="loading"><img class="spin" src="https://upload.wikimedia.org/wikipedia/commons/2/26/Counter-Strike_vertical_logo_%282023%29.svg" alt="CS2"><br>Loading…</div>';
+  el.innerHTML = '<div class="loading"><div class="spin-wrap"><img src="https://upload.wikimedia.org/wikipedia/commons/2/26/Counter-Strike_vertical_logo_%282023%29.svg" alt="CS2"></div></div>';
   const data = await fetch('/api/specialists').then(r=>r.json()).catch(()=>[]);
   if (!Array.isArray(data) || !data.length) {
     el.innerHTML = emptyState('specialists','No Specialist Data','Clutch kings, entry fraggers and more will appear here'); return;
@@ -1389,7 +1393,7 @@ let _demoFilters = {map:''};
 async function loadDemos() {
   const el = document.getElementById('p-demos');
   if (_demoData) { renderDemos(); return; }
-  el.innerHTML = '<div class="loading"><img class="spin" src="https://upload.wikimedia.org/wikipedia/commons/2/26/Counter-Strike_vertical_logo_%282023%29.svg" alt="CS2"><br>Loading demos…</div>';
+  el.innerHTML = '<div class="loading"><div class="spin-wrap"><img src="https://upload.wikimedia.org/wikipedia/commons/2/26/Counter-Strike_vertical_logo_%282023%29.svg" alt="CS2"></div></div>';
   const data = await fetch('/api/demos').then(r=>r.json()).catch(()=>[]);
   if (!Array.isArray(data) || !data.length) {
     el.innerHTML = emptyState('demos','No Demos Found','Demo files will appear here once uploaded'); return;
