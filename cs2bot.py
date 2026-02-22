@@ -593,7 +593,6 @@ def _build_stats_html() -> str:
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Reshtan Gaming</title>
-<link rel="icon" type="image/svg+xml" href="https://upload.wikimedia.org/wikipedia/commons/2/26/Counter-Strike_vertical_logo_%282023%29.svg">
 <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
 :root{
@@ -677,9 +676,9 @@ nav{background:#09090b;border-bottom:2px solid var(--border);display:flex;align-
 .hs-val{font-size:11px;color:var(--orange);width:34px;text-align:right}
 
 /* MVP CARD */
-.mvp-card{background:linear-gradient(135deg,rgba(255,85,0,.12) 0%,rgba(10,12,14,.7) 50%,rgba(255,85,0,.06) 100%);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);border:1px solid rgba(255,85,0,.35);border-radius:10px;padding:20px 24px;display:flex;align-items:center;gap:24px;margin-bottom:12px;position:relative;overflow:hidden;box-shadow:0 0 40px rgba(255,85,0,.15),0 8px 32px rgba(0,0,0,.6),inset 0 1px 0 rgba(255,255,255,.08)}
-.mvp-card::after{content:'';position:absolute;inset:0;background:linear-gradient(135deg,rgba(255,85,0,.1) 0%,rgba(255,120,0,.04) 40%,transparent 70%);pointer-events:none}
-.mvp-card::before{content:'MVP';position:absolute;right:20px;top:16px;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:13px;letter-spacing:3px;color:var(--orange);border:1px solid var(--orange);padding:2px 10px;border-radius:2px;background:rgba(255,85,0,.18);box-shadow:0 0 12px rgba(255,85,0,.3),inset 0 1px 0 rgba(255,255,255,.1)}
+.mvp-card{--sx:50%;--sy:50%;background:linear-gradient(135deg,rgba(255,85,0,.12) 0%,rgba(10,12,14,.7) 50%,rgba(255,85,0,.06) 100%);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);border:1px solid rgba(255,85,0,.35);border-radius:10px;padding:20px 24px;display:flex;align-items:center;gap:24px;margin-bottom:12px;position:relative;overflow:hidden;box-shadow:0 0 40px rgba(255,85,0,.15),0 8px 32px rgba(0,0,0,.6),inset 0 1px 0 rgba(255,255,255,.08)}
+.mvp-card::after{content:'';position:absolute;inset:0;background:radial-gradient(circle at var(--sx) var(--sy),rgba(255,140,60,.18) 0%,rgba(255,85,0,.06) 35%,transparent 65%);pointer-events:none;transition:background .05s}
+.mvp-card::before{content:'MVP';position:absolute;right:20px;top:16px;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:13px;letter-spacing:3px;color:var(--orange);border:1px solid var(--orange);padding:2px 10px;border-radius:2px;background:rgba(255,85,0,.18);box-shadow:0 0 12px rgba(255,85,0,.3),inset 0 1px 0 rgba(255,255,255,.1);z-index:1}
 .mvp-avatar{width:64px;height:64px;border-radius:50%;background:linear-gradient(135deg,var(--orange),var(--orange2));display:flex;align-items:center;justify-content:center;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:24px;color:#000;flex-shrink:0;border:2px solid rgba(255,85,0,.4)}
 .mvp-info{flex:1}
 .mvp-name{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:22px;color:var(--white);letter-spacing:.5px;margin-bottom:4px}
@@ -690,7 +689,8 @@ nav{background:#09090b;border-bottom:2px solid var(--border);display:flex;align-
 
 /* AWARD CARDS */
 .awards-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px}
-.award-card{background:linear-gradient(135deg,rgba(255,85,0,.09) 0%,rgba(10,12,14,.65) 60%,rgba(255,85,0,.04) 100%);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);border:1px solid rgba(255,85,0,.22);border-radius:8px;padding:12px 14px;display:flex;align-items:center;gap:12px;box-shadow:0 0 20px rgba(255,85,0,.08),0 4px 16px rgba(0,0,0,.45),inset 0 1px 0 rgba(255,255,255,.06)}
+.award-card{--sx:50%;--sy:50%;background:linear-gradient(135deg,rgba(255,85,0,.09) 0%,rgba(10,12,14,.65) 60%,rgba(255,85,0,.04) 100%);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);border:1px solid rgba(255,85,0,.22);border-radius:8px;padding:12px 14px;display:flex;align-items:center;gap:12px;box-shadow:0 0 20px rgba(255,85,0,.08),0 4px 16px rgba(0,0,0,.45),inset 0 1px 0 rgba(255,255,255,.06);position:relative;overflow:hidden}
+.award-card::after{content:'';position:absolute;inset:0;background:radial-gradient(circle at var(--sx) var(--sy),rgba(255,140,60,.16) 0%,rgba(255,85,0,.05) 40%,transparent 65%);pointer-events:none;transition:background .05s}
 .award-avatar{width:36px;height:36px;border-radius:50%;background:var(--surface);border:1px solid var(--border2);display:flex;align-items:center;justify-content:center;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:14px;color:var(--text);flex-shrink:0}
 .award-name{font-family:'Rajdhani',sans-serif;font-weight:600;font-size:14px;color:var(--white)}
 .award-val{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:22px;color:var(--white);margin-left:auto;line-height:1}
@@ -744,7 +744,8 @@ nav{background:#09090b;border-bottom:2px solid var(--border);display:flex;align-
 .m-date{font-size:11px;color:rgba(255,255,255,.5);text-align:right;white-space:nowrap;text-shadow:0 1px 4px rgba(0,0,0,.9)}
 
 /* PROFILE */
-.profile-top{background:linear-gradient(135deg,rgba(255,85,0,.11) 0%,rgba(10,12,14,.7) 50%,rgba(255,85,0,.05) 100%);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);border:1px solid rgba(255,85,0,.28);border-radius:10px;padding:22px 24px;margin-bottom:12px;display:flex;align-items:center;gap:20px;box-shadow:0 0 40px rgba(255,85,0,.12),0 8px 32px rgba(0,0,0,.55),inset 0 1px 0 rgba(255,255,255,.08)}
+.profile-top{--sx:50%;--sy:50%;background:linear-gradient(135deg,rgba(255,85,0,.11) 0%,rgba(10,12,14,.7) 50%,rgba(255,85,0,.05) 100%);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);border:1px solid rgba(255,85,0,.28);border-radius:10px;padding:22px 24px;margin-bottom:12px;display:flex;align-items:center;gap:20px;box-shadow:0 0 40px rgba(255,85,0,.12),0 8px 32px rgba(0,0,0,.55),inset 0 1px 0 rgba(255,255,255,.08);position:relative;overflow:hidden}
+.profile-top::after{content:'';position:absolute;inset:0;background:radial-gradient(circle at var(--sx) var(--sy),rgba(255,140,60,.15) 0%,rgba(255,85,0,.05) 40%,transparent 65%);pointer-events:none;transition:background .05s}
 .p-avatar{width:68px;height:68px;border-radius:4px;background:linear-gradient(135deg,var(--orange),#c43a00);display:flex;align-items:center;justify-content:center;font-family:'Rajdhani',sans-serif;font-weight:800;font-size:26px;color:#000;flex-shrink:0}
 .p-name{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:28px;color:var(--white);letter-spacing:.5px;line-height:1;margin-bottom:4px}
 .p-sub{font-size:11px;color:var(--muted2)}
@@ -769,6 +770,10 @@ nav{background:#09090b;border-bottom:2px solid var(--border);display:flex;align-
 .side-ct{display:inline-block;padding:1px 6px;border-radius:2px;font-size:10px;font-family:'Rajdhani',sans-serif;font-weight:700;letter-spacing:1px;background:rgba(91,196,245,.1);color:var(--ct);border:1px solid rgba(91,196,245,.25)}
 .side-t{display:inline-block;padding:1px 6px;border-radius:2px;font-size:10px;font-family:'Rajdhani',sans-serif;font-weight:700;letter-spacing:1px;background:rgba(240,168,66,.1);color:var(--t);border:1px solid rgba(240,168,66,.25)}
 
+/* POINTER SHINE */
+.shine-card{transition:box-shadow .2s,border-color .2s}
+.shine-card:hover{border-color:rgba(255,85,0,.55)!important;box-shadow:0 0 40px rgba(255,85,0,.18),0 8px 32px rgba(0,0,0,.6),inset 0 1px 0 rgba(255,255,255,.08)!important}
+
 /* DEMO DOWNLOAD BUTTON */
 .demo-dl-btn{padding:10px 20px;background:rgba(255,85,0,.15);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);border:1px solid var(--orange);border-radius:0;color:var(--orange);font-family:'Rajdhani',sans-serif;font-weight:700;font-size:12px;letter-spacing:1.5px;text-transform:uppercase;cursor:pointer;white-space:nowrap;transition:all .2s;position:relative;overflow:hidden}
 .demo-dl-btn::before{content:'';position:absolute;inset:0;background:linear-gradient(135deg,rgba(255,255,255,.08) 0%,transparent 60%);pointer-events:none}
@@ -789,7 +794,7 @@ nav{background:#09090b;border-bottom:2px solid var(--border);display:flex;align-
 </head>
 <body>
 <nav>
-  <div class="logo"><img src="https://upload.wikimedia.org/wikipedia/commons/2/26/Counter-Strike_vertical_logo_%282023%29.svg" style="width:28px;height:28px;margin-right:9px;vertical-align:middle;flex-shrink:0;object-fit:contain;filter:brightness(0) saturate(100%) invert(40%) sepia(90%) saturate(700%) hue-rotate(355deg) brightness(110%)" alt="CS2">Reshtan Gaming</div>
+  <div class="logo">Reshtan Gaming</div>
   <div class="tabs">
     <div class="tab active" data-p="matches">Matches</div>
     <div class="tab" data-p="leaderboard">Leaderboard</div>
@@ -1730,6 +1735,34 @@ function renderDemos() {
     </div>
     ${rows}`;
 }
+
+// ── Pointer shine effect on glassy cards ─────────────────────────────────────
+function applyShine(el, e) {
+  const r = el.getBoundingClientRect();
+  const x = ((e.clientX - r.left) / r.width  * 100).toFixed(1);
+  const y = ((e.clientY - r.top)  / r.height * 100).toFixed(1);
+  el.style.setProperty('--sx', x + '%');
+  el.style.setProperty('--sy', y + '%');
+}
+function clearShine(el) {
+  el.style.setProperty('--sx', '50%');
+  el.style.setProperty('--sy', '50%');
+}
+function attachShine(selector) {
+  document.querySelectorAll(selector).forEach(el => {
+    el.classList.add('shine-live');
+    el.addEventListener('mousemove', e => applyShine(el, e));
+    el.addEventListener('mouseleave', e => clearShine(el));
+  });
+}
+// Re-attach whenever new content is injected
+const _origInner = Object.getOwnPropertyDescriptor(Element.prototype, 'innerHTML');
+const _shineObs = new MutationObserver(() => {
+  attachShine('.mvp-card');
+  attachShine('.award-card');
+  attachShine('.profile-top');
+});
+_shineObs.observe(document.getElementById('app'), {childList:true, subtree:true});
 
 // Check for ?match= URL param to deep-link
 const urlParams = new URLSearchParams(location.search);
