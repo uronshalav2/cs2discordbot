@@ -385,6 +385,71 @@ async def handle_api_steam(request):
     except Exception as e:
         return _json_response({"error": str(e)})
 
+async def handle_api_mapstats(request):
+    """GET /api/mapstats — win rates and avg scores per map"""
+    try:
+        conn = get_db()
+        c = conn.cursor(dictionary=True)
+        c.execute(f"""
+            SELECT
+                mp.mapname,
+                COUNT(*)                                            AS total_matches,
+                ROUND(AVG(mp.team1_score + mp.team2_score), 1)    AS avg_rounds,
+                ROUND(AVG(mp.team1_score), 1)                     AS avg_t1_score,
+                ROUND(AVG(mp.team2_score), 1)                     AS avg_t2_score,
+                MAX(mp.team1_score + mp.team2_score)              AS max_rounds,
+                SUM(CASE WHEN mp.team1_score > mp.team2_score THEN 1 ELSE 0 END) AS t1_wins,
+                SUM(CASE WHEN mp.team2_score > mp.team1_score THEN 1 ELSE 0 END) AS t2_wins
+            FROM {MATCHZY_TABLES['maps']} mp
+            WHERE mp.mapname IS NOT NULL AND mp.mapname != ''
+            GROUP BY mp.mapname
+            ORDER BY total_matches DESC
+        """)
+        rows = c.fetchall()
+        c.close(); conn.close()
+        return _json_response(rows)
+    except Exception as e:
+        return _json_response({"error": str(e)})
+
+async def handle_api_h2h(request):
+    """GET /api/h2h?p1=name&p2=name — head to head career stats for two players"""
+    p1 = request.rel_url.query.get('p1', '')
+    p2 = request.rel_url.query.get('p2', '')
+    if not p1 or not p2:
+        return _json_response({"error": "Need p1 and p2 query params"})
+    try:
+        conn = get_db()
+        c = conn.cursor(dictionary=True)
+        def fetch_player(name):
+            c.execute(f"""
+                SELECT name, steamid64,
+                    COUNT(DISTINCT matchid)                                     AS matches,
+                    SUM(kills)                                                  AS kills,
+                    SUM(deaths)                                                 AS deaths,
+                    SUM(assists)                                                AS assists,
+                    SUM(head_shot_kills)                                        AS headshots,
+                    SUM(damage)                                                 AS damage,
+                    SUM(enemies5k)                                              AS aces,
+                    SUM(enemies4k)                                              AS quads,
+                    SUM(v1_wins)                                                AS clutch_wins,
+                    SUM(entry_wins)                                             AS entry_wins,
+                    ROUND(SUM(kills)/NULLIF(SUM(deaths),0),2)                  AS kd,
+                    ROUND(SUM(head_shot_kills)/NULLIF(SUM(kills),0)*100,1)     AS hs_pct,
+                    ROUND(SUM(damage)/NULLIF(
+                        COUNT(DISTINCT CONCAT(matchid,'_',mapnumber)),0)/30,1) AS adr
+                FROM {MATCHZY_TABLES['players']}
+                WHERE name = %s AND steamid64 != '0'
+                GROUP BY steamid64, name
+                LIMIT 1
+            """, (name,))
+            return c.fetchone()
+        r1 = fetch_player(p1)
+        r2 = fetch_player(p2)
+        c.close(); conn.close()
+        return _json_response({"p1": r1, "p2": r2})
+    except Exception as e:
+        return _json_response({"error": str(e)})
+
 async def handle_api_status(request):
     """GET /api/status — live CS2 server status via a2s"""
     try:
@@ -465,7 +530,26 @@ nav{background:var(--surface);border-bottom:2px solid var(--border);display:flex
 .tab{height:100%;padding:0 16px;display:flex;align-items:center;font-family:'Rajdhani',sans-serif;font-weight:600;font-size:12px;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted2);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-2px;transition:all .18s}
 .tab:hover{color:var(--text);background:rgba(255,255,255,.03)}
 .tab.active{color:var(--orange);border-bottom-color:var(--orange)}
-.nav-right{margin-left:auto;display:flex;gap:8px}
+.nav-right{margin-left:auto;display:flex;gap:8px;align-items:center}
+/* Hamburger */
+.hamburger{display:none;flex-direction:column;justify-content:center;gap:5px;width:36px;height:36px;cursor:pointer;padding:4px;border:1px solid var(--border2);border-radius:3px;margin-left:auto;flex-shrink:0}
+.hamburger span{display:block;height:2px;background:var(--text);border-radius:2px;transition:all .25s}
+.hamburger.open span:nth-child(1){transform:translateY(7px) rotate(45deg)}
+.hamburger.open span:nth-child(2){opacity:0}
+.hamburger.open span:nth-child(3){transform:translateY(-7px) rotate(-45deg)}
+/* Mobile drawer */
+.mobile-menu{display:none;position:fixed;top:50px;left:0;right:0;bottom:0;background:rgba(0,0,0,.6);z-index:199;backdrop-filter:blur(4px)}
+.mobile-menu.open{display:block}
+.mobile-drawer{background:var(--surface);border-bottom:2px solid var(--border);padding:8px 0}
+.mobile-tab{padding:14px 24px;font-family:'Rajdhani',sans-serif;font-weight:600;font-size:14px;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted2);cursor:pointer;border-left:3px solid transparent;transition:all .15s}
+.mobile-tab:hover{color:var(--text);background:rgba(255,255,255,.03)}
+.mobile-tab.active{color:var(--orange);border-left-color:var(--orange);background:var(--orange-glow)}
+.mobile-skins{display:block;padding:14px 24px;font-family:'Rajdhani',sans-serif;font-weight:600;font-size:14px;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted2);text-decoration:none;border-top:1px solid var(--border);margin-top:4px}
+@media(max-width:768px){
+  .tabs{display:none}
+  .nav-right{display:none}
+  .hamburger{display:flex}
+}
 .btn-sm{padding:5px 12px;border:1px solid var(--border2);border-radius:3px;font-size:11px;font-family:'Rajdhani',sans-serif;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:var(--muted2);cursor:pointer;transition:all .18s;white-space:nowrap}
 .btn-sm:hover{border-color:var(--orange);color:var(--orange)}
 .btn-sm.active-btn{border-color:var(--orange);color:var(--orange);background:var(--orange-glow)}
@@ -608,14 +692,34 @@ nav{background:var(--surface);border-bottom:2px solid var(--border);display:flex
   <div class="tabs">
     <div class="tab active" data-p="matches">Matches</div>
     <div class="tab" data-p="leaderboard">Leaderboard</div>
-    <div class="tab" data-p="server">Server</div>
+    <div class="tab" data-p="maps">Maps</div>
+    <div class="tab" data-p="h2h">Head-to-Head</div>
+    <div class="tab" data-p="status">Status</div>
+  </div>
+  <div class="nav-right">
+    <a href="https://skins.fsho.st" target="_blank" class="btn-sm" style="text-decoration:none">🎨 Skins</a>
+  </div>
+  <div class="hamburger" id="hamburger" onclick="toggleMenu()">
+    <span></span><span></span><span></span>
   </div>
 </nav>
+<div class="mobile-menu" id="mobile-menu" onclick="closeMenu()">
+  <div class="mobile-drawer" onclick="event.stopPropagation()">
+    <div class="mobile-tab active" data-p="matches" onclick="go('matches');closeMenu()">Matches</div>
+    <div class="mobile-tab" data-p="leaderboard" onclick="go('leaderboard');closeMenu()">Leaderboard</div>
+    <div class="mobile-tab" data-p="maps" onclick="go('maps');closeMenu()">Maps</div>
+    <div class="mobile-tab" data-p="h2h" onclick="go('h2h');closeMenu()">Head-to-Head</div>
+    <div class="mobile-tab" data-p="status" onclick="go('status');closeMenu()">Status</div>
+    <a href="https://skins.fsho.st" target="_blank" class="mobile-skins" onclick="closeMenu()">🎨 Skins</a>
+  </div>
+</div>
 
 <div id="app">
   <div id="p-matches"></div>
   <div id="p-leaderboard" style="display:none"></div>
-  <div id="p-server" style="display:none"></div>
+  <div id="p-maps" style="display:none"></div>
+  <div id="p-h2h" style="display:none"></div>
+  <div id="p-status" style="display:none"></div>
   <div id="p-player" style="display:none"></div>
   <div id="p-match" style="display:none"></div>
 </div>
@@ -642,16 +746,28 @@ function mapThumb(mapname, h=48, w=80) {
   </div>`;
 }
 
+function toggleMenu() {
+  document.getElementById('hamburger').classList.toggle('open');
+  document.getElementById('mobile-menu').classList.toggle('open');
+}
+function closeMenu() {
+  document.getElementById('hamburger').classList.remove('open');
+  document.getElementById('mobile-menu').classList.remove('open');
+}
+
 let _back = null;
 function go(page, params={}, back=null) {
-  ['matches','leaderboard','server','player','match'].forEach(p => {
+  ['matches','leaderboard','maps','h2h','status','player','match'].forEach(p => {
     document.getElementById('p-'+p).style.display = (p===page)?'':'none';
   });
   document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active',t.dataset.p===page));
+  document.querySelectorAll('.mobile-tab').forEach(t=>t.classList.toggle('active',t.dataset.p===page));
   _back = back;
   if(page==='matches')     loadMatches();
   if(page==='leaderboard') loadLeaderboard();
-  if(page==='server')      loadServer();
+  if(page==='maps')        loadMaps();
+  if(page==='h2h')         loadH2H();
+  if(page==='status')      loadServer();
   if(page==='player')      loadPlayer(params.name);
   if(page==='match')       loadMatch(params.id);
 }
@@ -768,9 +884,24 @@ async function loadMatch(id) {
   const byDmg    = [...players].sort((a,b)=>parseInt(b.damage||0)-parseInt(a.damage||0));
   const byRating = [...players].filter(p=>p.rating!=null).sort((a,b)=>parseFloat(b.rating)-parseFloat(a.rating));
 
+  // Fetch Steam avatars for all unique players in this match
+  const steamCache = {};
+  await Promise.all([...new Map(players.map(p=>[p.steamid64,p])).values()].map(async p => {
+    if (p.steamid64 && p.steamid64 !== '0') {
+      const s = await fetch('/api/steam/'+p.steamid64).then(r=>r.json()).catch(()=>({}));
+      if (s.avatar) steamCache[p.steamid64] = s.avatar;
+    }
+  }));
+
+  function playerAvatar(p, size=40) {
+    const img = steamCache[p?.steamid64];
+    if (img) return `<img src="${img}" style="width:${size}px;height:${size}px;border-radius:50%;object-fit:cover;border:2px solid var(--border2);flex-shrink:0" onerror="this.style.display='none'">`;
+    return `<div style="width:${size}px;height:${size}px;border-radius:50%;background:linear-gradient(135deg,var(--orange),var(--orange2));display:flex;align-items:center;justify-content:center;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:${Math.floor(size*0.35)}px;color:#000;flex-shrink:0">${initials(p?.name)}</div>`;
+  }
+
   const mvpHtml = mvp ? `
     <div class="mvp-card">
-      <div class="mvp-avatar">${initials(mvp.name)}</div>
+      ${playerAvatar(mvp, 64)}
       <div class="mvp-info">
         <div class="mvp-name">${esc(mvp.name)}</div>
         <div class="mvp-stats">
@@ -785,9 +916,9 @@ async function loadMatch(id) {
     </div>` : '';
 
   const awardsHtml = `<div class="awards-grid">
-    ${byKills[0]?`<div class="award-card"><div class="award-avatar">${initials(byKills[0].name)}</div><div><div class="award-name">${esc(byKills[0].name)}</div><div style="font-size:10px;color:var(--muted2)">Most Kills</div></div><div style="margin-left:auto;text-align:right"><div class="award-val">${byKills[0].kills}</div></div></div>`:''}
-    ${byDmg[0]?`<div class="award-card"><div class="award-avatar">${initials(byDmg[0].name)}</div><div><div class="award-name">${esc(byDmg[0].name)}</div><div style="font-size:10px;color:var(--muted2)">Most Damage</div></div><div style="margin-left:auto;text-align:right"><div class="award-val">${num(byDmg[0].damage)}</div></div></div>`:''}
-    ${byRating[0]?`<div class="award-card"><div class="award-avatar">${initials(byRating[0].name)}</div><div><div class="award-name">${esc(byRating[0].name)}</div><div style="font-size:10px;color:var(--muted2)">Best Rating</div></div><div style="margin-left:auto;text-align:right"><div class="award-val" style="color:#a78bfa">${parseFloat(byRating[0].rating).toFixed(2)}</div></div></div>`:''}
+    ${byKills[0]?`<div class="award-card">${playerAvatar(byKills[0],36)}<div><div class="award-name">${esc(byKills[0].name)}</div><div style="font-size:10px;color:var(--muted2)">Most Kills</div></div><div style="margin-left:auto;text-align:right"><div class="award-val">${byKills[0].kills}</div></div></div>`:''}
+    ${byDmg[0]?`<div class="award-card">${playerAvatar(byDmg[0],36)}<div><div class="award-name">${esc(byDmg[0].name)}</div><div style="font-size:10px;color:var(--muted2)">Most Damage</div></div><div style="margin-left:auto;text-align:right"><div class="award-val">${num(byDmg[0].damage)}</div></div></div>`:''}
+    ${byRating[0]?`<div class="award-card">${playerAvatar(byRating[0],36)}<div><div class="award-name">${esc(byRating[0].name)}</div><div style="font-size:10px;color:var(--muted2)">Best Rating</div></div><div style="margin-left:auto;text-align:right"><div class="award-val" style="color:#a78bfa">${parseFloat(byRating[0].rating).toFixed(2)}</div></div></div>`:''}
   </div>`;
 
   const mapsHtml = maps.map(m=>{
@@ -795,11 +926,6 @@ async function loadMatch(id) {
     const {t1, t2, n1, n2} = splitTeams(mapPlayers);
     return `
       <div style="margin-bottom:14px">
-        <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
-          <div style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:15px;letter-spacing:1px;text-transform:uppercase;color:var(--white)">${esc(m.mapname||'Map')}</div>
-          <div style="font-size:14px;color:var(--white);font-family:'Rajdhani',sans-serif;font-weight:700">${m.team1_score??0} : ${m.team2_score??0}</div>
-          ${m.total_rounds?`<div style="font-size:11px;color:var(--muted2)">${m.total_rounds} rounds</div>`:''}
-        </div>
         <div class="card ovx">
           <table class="sb-table">
             <thead><tr>
@@ -809,9 +935,9 @@ async function loadMatch(id) {
             </tr></thead>
             <tbody>
               <tr class="team-divider ct-div"><td colspan="15">${esc(n1)}</td></tr>
-              ${sbRows(t1)}
+              ${sbRows(t1, steamCache)}
               <tr class="team-divider t-div"><td colspan="15">${esc(n2)}</td></tr>
-              ${sbRows(t2)}
+              ${sbRows(t2, steamCache)}
             </tbody>
           </table>
         </div>
@@ -860,11 +986,10 @@ async function loadMatch(id) {
     </div>
     ${mvpHtml}
     ${awardsHtml}
-    <div class="page-title" style="font-size:16px;margin-bottom:10px">Scoreboard</div>
     ${mapsHtml}`;
 }
 
-function sbRows(arr) {
+function sbRows(arr, steamCache={}) {
   if (!arr.length) return `<tr><td colspan="15" style="text-align:center;color:var(--muted);padding:12px">—</td></tr>`;
   return [...arr].sort((a,b)=>{
     const sa = a.rating!=null?parseFloat(a.rating)*100:parseInt(a.kills||0);
@@ -879,8 +1004,11 @@ function sbRows(arr) {
     const fourK  = p.enemies4k??0;
     const threeK = p.enemies3k??0;
     const rSty   = p.rating!=null?(parseFloat(p.rating)>=1.15?'style="color:#a78bfa;font-weight:700"':parseFloat(p.rating)<0.85?'style="color:var(--loss)"':''):'';
+    const avatar = steamCache[p.steamid64]
+      ? `<img src="${steamCache[p.steamid64]}" style="width:22px;height:22px;border-radius:50%;object-fit:cover;vertical-align:middle;margin-right:7px;border:1px solid var(--border2)" onerror="this.style.display='none'">`
+      : `<span style="display:inline-block;width:22px;height:22px;border-radius:50%;background:var(--surface2);line-height:22px;text-align:center;font-size:9px;font-family:'Rajdhani',sans-serif;font-weight:700;color:var(--muted2);vertical-align:middle;margin-right:7px">${initials(p.name)}</span>`;
     return `<tr>
-      <td onclick="go('player',{name:'${esc(p.name)}'},'match')">${esc(p.name)}</td>
+      <td onclick="go('player',{name:'${esc(p.name)}'},'match')" style="display:flex;align-items:center">${avatar}${esc(p.name)}</td>
       <td class="kda-cell">${p.kills??0}</td>
       <td class="kda-cell">${p.deaths??0}</td>
       <td class="kda-cell">${p.assists??0}</td>
@@ -990,12 +1118,149 @@ async function loadPlayer(name) {
     </div>` : ''}`;
 }
 
-// ── Server Status ─────────────────────────────────────────────────────────────
-let _serverRefreshTimer = null;
+// ── Map Stats ─────────────────────────────────────────────────────────────────
+async function loadMaps() {
+  const el = document.getElementById('p-maps');
+  el.innerHTML = '<div class="loading"><div class="spin"></div><br>Loading…</div>';
+  const data = await fetch('/api/mapstats').then(r=>r.json()).catch(()=>[]);
+  if (!Array.isArray(data) || !data.length) {
+    el.innerHTML = '<div class="empty">No map data yet.</div>'; return;
+  }
+  const cards = data.map(m => {
+    const total = parseInt(m.total_matches||0);
+    const t1w   = parseInt(m.t1_wins||0);
+    const t2w   = parseInt(m.t2_wins||0);
+    const pct1  = total ? Math.round(t1w/total*100) : 0;
+    const pct2  = total ? Math.round(t2w/total*100) : 0;
+    const mapImg = MAP_IMGS[m.mapname];
+    return `
+    <div class="card" style="overflow:hidden;margin-bottom:12px">
+      <div style="position:relative;height:130px">
+        ${mapImg ? `<img src="${mapImg}" style="width:100%;height:100%;object-fit:cover;opacity:.55">` : `<div style="width:100%;height:100%;background:linear-gradient(135deg,#0d1117,#1a2332)"></div>`}
+        <div style="position:absolute;inset:0;background:linear-gradient(to top,rgba(10,13,20,1) 0%,rgba(10,13,20,.2) 100%)"></div>
+        <div style="position:absolute;bottom:12px;left:18px;display:flex;align-items:baseline;gap:12px">
+          <div style="font-family:'Rajdhani',sans-serif;font-weight:800;font-size:22px;color:#fff;text-transform:uppercase;letter-spacing:2px">${esc(m.mapname)}</div>
+          <div style="font-size:11px;color:var(--muted2)">${total} match${total!==1?'es':''}</div>
+        </div>
+      </div>
+      <div style="padding:16px 18px;display:grid;grid-template-columns:repeat(4,1fr);gap:12px">
+        <div><div style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:22px;color:var(--white)">${m.avg_rounds??'—'}</div><div style="font-size:10px;color:var(--muted2);letter-spacing:1px;text-transform:uppercase">Avg Rounds</div></div>
+        <div><div style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:22px;color:var(--white)">${m.max_rounds??'—'}</div><div style="font-size:10px;color:var(--muted2);letter-spacing:1px;text-transform:uppercase">Most Rounds</div></div>
+        <div><div style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:22px;color:var(--ct)">${t1w}</div><div style="font-size:10px;color:var(--muted2);letter-spacing:1px;text-transform:uppercase">Team 1 Wins</div></div>
+        <div><div style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:22px;color:var(--t)">${t2w}</div><div style="font-size:10px;color:var(--muted2);letter-spacing:1px;text-transform:uppercase">Team 2 Wins</div></div>
+      </div>
+      <div style="padding:0 18px 16px">
+        <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--muted2);margin-bottom:4px"><span style="color:var(--ct)">${pct1}%</span><span style="color:var(--t)">${pct2}%</span></div>
+        <div style="height:6px;border-radius:3px;overflow:hidden;display:flex">
+          <div style="width:${pct1}%;background:var(--ct);transition:width .6s"></div>
+          <div style="flex:1;background:var(--t);transition:width .6s"></div>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--muted2);margin-top:3px"><span>Team 1</span><span>Team 2</span></div>
+      </div>
+    </div>`;
+  }).join('');
+  el.innerHTML = `<div class="page-title">Map Stats <span class="sub">${data.length} maps</span></div>${cards}`;
+}
 
+// ── Head-to-Head ──────────────────────────────────────────────────────────────
+async function loadH2H() {
+  const el = document.getElementById('p-h2h');
+  el.innerHTML = `
+    <div class="page-title">Head-to-Head</div>
+    <div class="card" style="padding:20px 22px;margin-bottom:16px">
+      <div style="display:grid;grid-template-columns:1fr auto 1fr;gap:12px;align-items:end">
+        <div>
+          <div style="font-size:11px;color:var(--muted2);letter-spacing:1px;text-transform:uppercase;margin-bottom:6px">Player 1</div>
+          <input id="h2h-p1" placeholder="Enter player name…" style="width:100%;padding:9px 12px;background:var(--surface2);border:1px solid var(--border2);border-radius:3px;color:var(--white);font-family:'Rajdhani',sans-serif;font-size:14px;outline:none">
+        </div>
+        <div style="font-family:'Rajdhani',sans-serif;font-weight:800;font-size:22px;color:var(--muted);padding-bottom:2px">VS</div>
+        <div>
+          <div style="font-size:11px;color:var(--muted2);letter-spacing:1px;text-transform:uppercase;margin-bottom:6px">Player 2</div>
+          <input id="h2h-p2" placeholder="Enter player name…" style="width:100%;padding:9px 12px;background:var(--surface2);border:1px solid var(--border2);border-radius:3px;color:var(--white);font-family:'Rajdhani',sans-serif;font-size:14px;outline:none">
+        </div>
+      </div>
+      <button onclick="runH2H()" style="margin-top:14px;width:100%;padding:10px;border:1px solid var(--orange);border-radius:3px;background:var(--orange-glow);color:var(--orange);font-family:'Rajdhani',sans-serif;font-weight:700;font-size:13px;letter-spacing:1.5px;text-transform:uppercase;cursor:pointer">Compare</button>
+    </div>
+    <div id="h2h-result"></div>`;
+}
+
+async function runH2H() {
+  const p1 = document.getElementById('h2h-p1').value.trim();
+  const p2 = document.getElementById('h2h-p2').value.trim();
+  const res = document.getElementById('h2h-result');
+  if (!p1 || !p2) { res.innerHTML = '<div class="empty">Enter both player names.</div>'; return; }
+  res.innerHTML = '<div class="loading"><div class="spin"></div><br>Loading…</div>';
+
+  const [data, s1data, s2data] = await Promise.all([
+    fetch(`/api/h2h?p1=${encodeURIComponent(p1)}&p2=${encodeURIComponent(p2)}`).then(r=>r.json()).catch(()=>({})),
+    fetch('/api/leaderboard').then(r=>r.json()).catch(()=>[]),  // for steam ids
+  ]);
+
+  if (data.error || !data.p1 || !data.p2) {
+    res.innerHTML = `<div class="empty">${data.error || 'One or both players not found.'}</div>`; return;
+  }
+
+  const d1 = data.p1, d2 = data.p2;
+
+  // Fetch Steam avatars
+  const [st1, st2] = await Promise.all([
+    d1.steamid64 && d1.steamid64!=='0' ? fetch('/api/steam/'+d1.steamid64).then(r=>r.json()).catch(()=>({})) : Promise.resolve({}),
+    d2.steamid64 && d2.steamid64!=='0' ? fetch('/api/steam/'+d2.steamid64).then(r=>r.json()).catch(()=>({})) : Promise.resolve({}),
+  ]);
+
+  function avatar(p, st, size=56) {
+    return st.avatar
+      ? `<img src="${st.avatar}" style="width:${size}px;height:${size}px;border-radius:50%;object-fit:cover;border:2px solid var(--border2)">`
+      : `<div style="width:${size}px;height:${size}px;border-radius:50%;background:linear-gradient(135deg,var(--orange),var(--orange2));display:flex;align-items:center;justify-content:center;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:${Math.floor(size*.35)}px;color:#000">${initials(p.name)}</div>`;
+  }
+
+  const stats = [
+    {label:'Matches',  k:'matches'},
+    {label:'Kills',    k:'kills'},
+    {label:'Deaths',   k:'deaths'},
+    {label:'Assists',  k:'assists'},
+    {label:'K/D',      k:'kd',      dec:2},
+    {label:'ADR',      k:'adr',     dec:1},
+    {label:'HS%',      k:'hs_pct',  dec:1, suffix:'%'},
+    {label:'Damage',   k:'damage'},
+    {label:'Aces',     k:'aces'},
+    {label:'Clutches', k:'clutch_wins'},
+    {label:'Entry Wins',k:'entry_wins'},
+  ];
+
+  const rows = stats.map(s => {
+    const v1 = parseFloat(d1[s.k]??0), v2 = parseFloat(d2[s.k]??0);
+    const fmt = v => s.dec ? v.toFixed(s.dec)+(s.suffix||'') : Number(v).toLocaleString()+(s.suffix||'');
+    const w1 = v1 > v2, w2 = v2 > v1;
+    return `<tr style="border-bottom:1px solid var(--border)">
+      <td style="padding:10px 14px;text-align:right;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:16px;color:${w1?'var(--win)':'var(--white)'}">${fmt(v1)}</td>
+      <td style="padding:10px 14px;text-align:center;font-size:10px;color:var(--muted2);letter-spacing:1px;text-transform:uppercase;white-space:nowrap">${s.label}</td>
+      <td style="padding:10px 14px;text-align:left;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:16px;color:${w2?'var(--win)':'var(--white)'}">${fmt(v2)}</td>
+    </tr>`;
+  }).join('');
+
+  res.innerHTML = `
+    <div class="card" style="overflow:hidden">
+      <div style="display:grid;grid-template-columns:1fr 60px 1fr;align-items:center;padding:20px 14px;background:var(--surface2);border-bottom:1px solid var(--border)">
+        <div style="display:flex;flex-direction:column;align-items:center;gap:8px;cursor:pointer" onclick="go('player',{name:'${esc(d1.name)}'},'h2h')">
+          ${avatar(d1,st1)}
+          <div style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:16px;color:var(--white);text-align:center">${esc(st1.name||d1.name)}</div>
+        </div>
+        <div style="font-family:'Rajdhani',sans-serif;font-weight:800;font-size:20px;color:var(--muted);text-align:center">VS</div>
+        <div style="display:flex;flex-direction:column;align-items:center;gap:8px;cursor:pointer" onclick="go('player',{name:'${esc(d2.name)}'},'h2h')">
+          ${avatar(d2,st2)}
+          <div style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:16px;color:var(--white);text-align:center">${esc(st2.name||d2.name)}</div>
+        </div>
+      </div>
+      <table style="width:100%;border-collapse:collapse">
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
+}
+
+// ── Server Status ─────────────────────────────────────────────────────────────
 async function loadServer() {
-  const el = document.getElementById('p-server');
-  // Keep existing content while refreshing (avoid flicker on auto-refresh)
+  const el = document.getElementById('p-status');
   if (!el.dataset.loaded) {
     el.innerHTML = '<div class="loading"><div class="spin"></div><br>Querying server…</div>';
   }
@@ -1036,7 +1301,7 @@ async function loadServer() {
 
   el.dataset.loaded = '1';
   el.innerHTML = `
-    <div class="page-title">Server Status <span class="sub">auto-refreshes every 30s • last: ${now}</span></div>
+    <div class="page-title">Server Status <span class="sub">last checked: ${now} • <span style="cursor:pointer;color:var(--orange)" onclick="document.getElementById('p-status').dataset.loaded='';loadServer()">↻ Refresh</span></span></div>
 
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
 
@@ -1046,8 +1311,12 @@ async function loadServer() {
         ${s.online ? `
         <div style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:13px;color:var(--muted2);letter-spacing:1px;text-transform:uppercase;margin-bottom:4px">Server</div>
         <div style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:16px;color:var(--white);margin-bottom:14px">${esc(s.server_name||'CS2 Server')}</div>
-        <div style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:13px;color:var(--muted2);letter-spacing:1px;text-transform:uppercase;margin-bottom:4px">Connect</div>
-        <div style="font-family:'Rajdhani',sans-serif;font-size:13px;color:var(--orange);letter-spacing:.5px;cursor:pointer" onclick="navigator.clipboard.writeText('connect ${esc(s.connect)}').then(()=>alert('Copied!'))" title="Click to copy">connect ${esc(s.connect)} 📋</div>
+        <div id="connect-str" style="font-family:'Rajdhani',sans-serif;font-size:12px;color:var(--muted2);margin-bottom:10px;letter-spacing:.5px">connect ${esc(s.connect)}</div>
+        <button onclick="navigator.clipboard.writeText('connect ${esc(s.connect)}').then(()=>{const b=document.getElementById('copy-btn');b.textContent='✅ Copied!';b.style.borderColor='var(--win)';b.style.color='var(--win)';setTimeout(()=>{b.textContent='📋 Copy Connect';b.style.borderColor='';b.style.color='';},2000)})"
+          id="copy-btn"
+          style="width:100%;padding:10px;border:1px solid var(--orange);border-radius:3px;background:var(--orange-glow);color:var(--orange);font-family:'Rajdhani',sans-serif;font-weight:700;font-size:13px;letter-spacing:1.5px;text-transform:uppercase;cursor:pointer;transition:all .18s">
+          📋 Copy Connect
+        </button>
         ` : `<div style="color:var(--muted2);font-size:13px;margin-top:8px">The server is currently unreachable.</div>`}
       </div>
 
@@ -1081,11 +1350,6 @@ async function loadServer() {
       </table>
     </div>`;
 
-  // Schedule auto-refresh only while on this page
-  clearTimeout(_serverRefreshTimer);
-  _serverRefreshTimer = setTimeout(() => {
-    if (document.getElementById('p-server').style.display !== 'none') loadServer();
-  }, 30000);
 }
 
 // ── Leaderboard ───────────────────────────────────────────────────────────────
@@ -1226,6 +1490,8 @@ async def start_http_server():
     app.router.add_get('/api/match/{matchid}', handle_api_match)
     app.router.add_get('/api/demos',          handle_api_demos)
     app.router.add_get('/api/leaderboard',   handle_api_leaderboard)
+    app.router.add_get('/api/mapstats',      handle_api_mapstats)
+    app.router.add_get('/api/h2h',           handle_api_h2h)
     app.router.add_get('/api/status',        handle_api_status)
     app.router.add_get('/stats',             handle_stats_page)
     app.router.add_get('/',                  handle_stats_page)
