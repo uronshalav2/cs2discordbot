@@ -1440,20 +1440,9 @@ async function loadMaps() {
     const db        = dbByMap[mapname] || {};
     const avgRnd    = db.avg_rounds  ? parseFloat(db.avg_rounds).toFixed(1)  : '—';
     const maxRnd    = db.max_rounds  ? parseInt(db.max_rounds)                : '—';
-    const t1wins    = parseInt(db.t1_wins||0);
-    const t2wins    = parseInt(db.t2_wins||0);
-    const dbTotal   = parseInt(db.total_matches||0);
-    const draws     = dbTotal - t1wins - t2wins;
-    const winPct    = dbTotal > 0 ? Math.round((t1wins/dbTotal)*100) : 0;
     const mapImg    = MAP_IMGS[mapname];
 
-    const statsBar = dbTotal > 0 ? `
-      <div style="display:flex;align-items:center;gap:8px;margin-top:8px">
-        <div style="flex:1;height:3px;background:rgba(255,255,255,.1);border-radius:2px;overflow:hidden">
-          <div style="height:100%;width:${winPct}%;background:linear-gradient(90deg,var(--ct),var(--orange));border-radius:2px"></div>
-        </div>
-        <span style="font-size:10px;color:rgba(255,255,255,.4);white-space:nowrap">${t1wins}W · ${t2wins}L${draws>0?` · ${draws}D`:''}</span>
-      </div>` : '';
+    const statsBar = '';
 
     return `
     <div style="position:relative;border-radius:6px;overflow:hidden;margin-bottom:12px;border:1px solid rgba(255,255,255,.06)">
@@ -1480,7 +1469,6 @@ async function loadMaps() {
           </div>
         </div>
       </div>
-      ${statsBar ? `<div style="background:rgba(8,10,12,.85);padding:10px 20px;border-top:1px solid rgba(255,255,255,.06)">${statsBar}</div>` : ''}
     </div>`;
   }).join('');
 
