@@ -721,17 +721,17 @@ nav{background:var(--surface);border-bottom:2px solid var(--border);display:flex
 .adr-highlight{color:var(--orange)}
 
 /* MATCHES LIST */
-.matches-list .match-item{position:relative;overflow:hidden;display:flex;align-items:center;gap:14px;padding:14px 20px;border-bottom:1px solid var(--border);cursor:pointer;transition:filter .15s;min-height:72px}
-.matches-list .match-item:hover{filter:brightness(1.08)}
+.matches-list .match-item{position:relative;overflow:hidden;display:flex;align-items:center;gap:14px;padding:0;border-bottom:2px solid rgba(0,0,0,.6);cursor:pointer;transition:filter .15s;min-height:76px}
+.matches-list .match-item:hover{filter:brightness(1.12)}
 .matches-list .match-item:last-child{border-bottom:none}
 .match-item .m-bg{position:absolute;inset:0;background-size:cover;background-position:center;z-index:0}
-.match-item .m-overlay{position:absolute;inset:0;background:linear-gradient(90deg,rgba(10,13,20,.97) 0%,rgba(10,13,20,.82) 45%,rgba(10,13,20,.55) 100%);z-index:1}
-.match-item .m-content{position:relative;z-index:2;display:flex;align-items:center;gap:14px;width:100%}
-.m-id{font-size:11px;color:var(--muted);width:42px;font-family:'Rajdhani',sans-serif;font-weight:600}
+.match-item .m-overlay{position:absolute;inset:0;background:linear-gradient(90deg,rgba(6,8,14,.96) 0%,rgba(6,8,14,.88) 35%,rgba(6,8,14,.6) 65%,rgba(6,8,14,.3) 100%);z-index:1}
+.match-item .m-content{position:relative;z-index:2;display:flex;align-items:center;gap:14px;width:100%;padding:14px 20px}
+.m-id{font-size:11px;color:rgba(255,255,255,.5);width:42px;font-family:'Rajdhani',sans-serif;font-weight:600;flex-shrink:0}
 .m-teams{flex:1}
-.m-teams-str{font-size:12px;color:var(--muted2);margin-bottom:2px}
-.m-score{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:20px;color:var(--white)}
-.m-date{font-size:11px;color:var(--muted);text-align:right;white-space:nowrap}
+.m-teams-str{font-size:12px;color:rgba(255,255,255,.75);margin-bottom:3px;font-weight:500}
+.m-score{font-family:'Rajdhani',sans-serif;font-weight:800;font-size:22px;color:#fff;text-shadow:0 1px 6px rgba(0,0,0,.8)}
+.m-date{font-size:11px;color:rgba(255,255,255,.55);text-align:right;white-space:nowrap;text-shadow:0 1px 4px rgba(0,0,0,.9)}
 
 /* PROFILE */
 .profile-top{background:linear-gradient(135deg,var(--surface) 0%,#141c28 100%);border:1px solid var(--border);border-radius:4px;padding:22px 24px;margin-bottom:12px;display:flex;align-items:center;gap:20px}
@@ -1236,50 +1236,119 @@ async function loadMaps() {
 }
 
 // ── Head-to-Head ──────────────────────────────────────────────────────────────
+let _h2hPlayers = null;
+let _h2hSel = [null, null]; // [player1, player2]
+
 async function loadH2H() {
   const el = document.getElementById('p-h2h');
+  el.innerHTML = '<div class="loading"><div class="spin"></div><br>Loading players…</div>';
+  if (!_h2hPlayers) {
+    const data = await fetch('/api/leaderboard').then(r=>r.json()).catch(()=>[]);
+    // Fetch Steam avatars for all
+    await Promise.all(data.slice(0,30).map(async p => {
+      if (p.steamid64 && p.steamid64 !== '0') {
+        const s = await fetch('/api/steam/'+p.steamid64).then(r=>r.json()).catch(()=>({}));
+        if (s.avatar) p._steam_avatar = s.avatar;
+        if (s.name)   p._steam_name   = s.name;
+      }
+    }));
+    _h2hPlayers = data;
+  }
+  renderH2HPicker();
+}
+
+function renderH2HPicker() {
+  const el = document.getElementById('p-h2h');
+  const players = _h2hPlayers || [];
+  const [p1, p2] = _h2hSel;
+
+  const slotHtml = (slot, p) => {
+    if (p) {
+      const av = p._steam_avatar
+        ? `<img src="${p._steam_avatar}" style="width:48px;height:48px;border-radius:50%;object-fit:cover;border:2px solid ${slot===0?'var(--ct)':'var(--t)'}">`
+        : `<div style="width:48px;height:48px;border-radius:50%;background:var(--surface2);border:2px solid ${slot===0?'var(--ct)':'var(--t)'};display:flex;align-items:center;justify-content:center;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:16px;color:${slot===0?'var(--ct)':'var(--t)'}">${initials(p.name)}</div>`;
+      return `<div style="display:flex;flex-direction:column;align-items:center;gap:6px;flex:1">
+        <div style="font-size:10px;color:var(--muted2);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:2px">Player ${slot+1}</div>
+        ${av}
+        <div style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:14px;color:#fff">${esc(p._steam_name||p.name)}</div>
+        <button onclick="_h2hSel[${slot}]=null;renderH2HPicker()" style="padding:3px 10px;background:transparent;border:1px solid var(--border);border-radius:3px;color:var(--muted2);font-size:11px;font-family:'Rajdhani',sans-serif;cursor:pointer;letter-spacing:1px">✕ Clear</button>
+      </div>`;
+    }
+    return `<div style="display:flex;flex-direction:column;align-items:center;gap:6px;flex:1">
+      <div style="font-size:10px;color:var(--muted2);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:2px">Player ${slot+1}</div>
+      <div style="width:48px;height:48px;border-radius:50%;border:2px dashed ${slot===0?'rgba(56,189,248,.4)':'rgba(251,146,60,.4)'};display:flex;align-items:center;justify-content:center">
+        <span style="font-size:22px;color:var(--muted2)">?</span>
+      </div>
+      <div style="font-size:12px;color:var(--muted2)">Select below</div>
+    </div>`;
+  };
+
+  const canCompare = p1 && p2 && p1.name !== p2.name;
+
+  const cards = players.map((p,i) => {
+    const isP1 = p1 && p1.name === p.name;
+    const isP2 = p2 && p2.name === p.name;
+    const selected = isP1 || isP2;
+    const av = p._steam_avatar
+      ? `<img src="${p._steam_avatar}" style="width:38px;height:38px;border-radius:50%;object-fit:cover;flex-shrink:0">`
+      : `<div style="width:38px;height:38px;border-radius:50%;background:var(--surface2);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:13px;color:var(--muted2)">${initials(p.name)}</div>`;
+    const badge = isP1
+      ? `<span style="font-size:9px;padding:1px 6px;border-radius:2px;background:rgba(56,189,248,.2);border:1px solid rgba(56,189,248,.4);color:var(--ct);font-family:'Rajdhani',sans-serif;font-weight:700;letter-spacing:1px">P1</span>`
+      : isP2
+      ? `<span style="font-size:9px;padding:1px 6px;border-radius:2px;background:rgba(251,146,60,.2);border:1px solid rgba(251,146,60,.4);color:var(--t);font-family:'Rajdhani',sans-serif;font-weight:700;letter-spacing:1px">P2</span>`
+      : '';
+    return `<div onclick="h2hSelect(${i})" style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:4px;cursor:pointer;transition:background .13s;background:${selected?'rgba(255,255,255,.05)':'transparent'};border:1px solid ${selected?'rgba(255,255,255,.12)':'transparent'}">
+      ${av}
+      <div style="flex:1;min-width:0">
+        <div style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:14px;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(p._steam_name||p.name)}</div>
+        <div style="font-size:11px;color:var(--muted2)">${p.kills??0} kills · ${parseFloat(p.kd??0).toFixed(2)} K/D · ${p.matches??0} matches</div>
+      </div>
+      ${badge}
+    </div>`;
+  }).join('');
+
   el.innerHTML = `
     <div class="page-title">Head-to-Head</div>
-    <div class="card" style="padding:20px 22px;margin-bottom:16px">
-      <div style="display:grid;grid-template-columns:1fr auto 1fr;gap:12px;align-items:end">
-        <div>
-          <div style="font-size:11px;color:var(--muted2);letter-spacing:1px;text-transform:uppercase;margin-bottom:6px">Player 1</div>
-          <input id="h2h-p1" placeholder="Enter player name…" style="width:100%;padding:9px 12px;background:var(--surface2);border:1px solid var(--border2);border-radius:3px;color:var(--white);font-family:'Rajdhani',sans-serif;font-size:14px;outline:none">
-        </div>
-        <div style="font-family:'Rajdhani',sans-serif;font-weight:800;font-size:22px;color:var(--muted);padding-bottom:2px">VS</div>
-        <div>
-          <div style="font-size:11px;color:var(--muted2);letter-spacing:1px;text-transform:uppercase;margin-bottom:6px">Player 2</div>
-          <input id="h2h-p2" placeholder="Enter player name…" style="width:100%;padding:9px 12px;background:var(--surface2);border:1px solid var(--border2);border-radius:3px;color:var(--white);font-family:'Rajdhani',sans-serif;font-size:14px;outline:none">
-        </div>
+    <div class="card" style="padding:20px 22px;margin-bottom:12px">
+      <div style="display:grid;grid-template-columns:1fr 48px 1fr;align-items:center;gap:12px;margin-bottom:18px">
+        ${slotHtml(0,p1)}
+        <div style="font-family:'Rajdhani',sans-serif;font-weight:800;font-size:20px;color:var(--muted);text-align:center">VS</div>
+        ${slotHtml(1,p2)}
       </div>
-      <button onclick="runH2H()" style="margin-top:14px;width:100%;padding:10px;border:1px solid var(--orange);border-radius:3px;background:var(--orange-glow);color:var(--orange);font-family:'Rajdhani',sans-serif;font-weight:700;font-size:13px;letter-spacing:1.5px;text-transform:uppercase;cursor:pointer">Compare</button>
+      <button onclick="runH2H()" ${canCompare?'':'disabled'}
+        style="width:100%;padding:11px;border:1px solid ${canCompare?'var(--orange)':'var(--border)'};border-radius:3px;background:${canCompare?'var(--orange-glow)':'transparent'};color:${canCompare?'var(--orange)':'var(--muted2)'};font-family:'Rajdhani',sans-serif;font-weight:700;font-size:13px;letter-spacing:2px;text-transform:uppercase;cursor:${canCompare?'pointer':'default'};transition:all .2s">
+        ${canCompare?'Compare':'Select 2 players to compare'}
+      </button>
     </div>
-    <div id="h2h-result"></div>`;
+    <div class="card" style="padding:8px 8px;max-height:380px;overflow-y:auto">${cards}</div>
+    <div id="h2h-result" style="margin-top:12px"></div>`;
+}
+
+function h2hSelect(idx) {
+  const p = _h2hPlayers[idx];
+  if (_h2hSel[0] && _h2hSel[0].name === p.name) { _h2hSel[0] = null; }
+  else if (_h2hSel[1] && _h2hSel[1].name === p.name) { _h2hSel[1] = null; }
+  else if (!_h2hSel[0]) { _h2hSel[0] = p; }
+  else if (!_h2hSel[1]) { _h2hSel[1] = p; }
+  else { _h2hSel[0] = _h2hSel[1]; _h2hSel[1] = p; }
+  renderH2HPicker();
 }
 
 async function runH2H() {
-  const p1 = document.getElementById('h2h-p1').value.trim();
-  const p2 = document.getElementById('h2h-p2').value.trim();
+  const [p1, p2] = _h2hSel;
   const res = document.getElementById('h2h-result');
-  if (!p1 || !p2) { res.innerHTML = '<div class="empty">Enter both player names.</div>'; return; }
+  if (!p1 || !p2) return;
   res.innerHTML = '<div class="loading"><div class="spin"></div><br>Loading…</div>';
 
-  const [data, s1data, s2data] = await Promise.all([
-    fetch(`/api/h2h?p1=${encodeURIComponent(p1)}&p2=${encodeURIComponent(p2)}`).then(r=>r.json()).catch(()=>({})),
-    fetch('/api/leaderboard').then(r=>r.json()).catch(()=>[]),  // for steam ids
-  ]);
+  const data = await fetch(`/api/h2h?p1=${encodeURIComponent(p1.name)}&p2=${encodeURIComponent(p2.name)}`).then(r=>r.json()).catch(()=>({}));
 
   if (data.error || !data.p1 || !data.p2) {
     res.innerHTML = `<div class="empty">${data.error || 'One or both players not found.'}</div>`; return;
   }
 
   const d1 = data.p1, d2 = data.p2;
-
-  // Fetch Steam avatars
-  const [st1, st2] = await Promise.all([
-    d1.steamid64 && d1.steamid64!=='0' ? fetch('/api/steam/'+d1.steamid64).then(r=>r.json()).catch(()=>({})) : Promise.resolve({}),
-    d2.steamid64 && d2.steamid64!=='0' ? fetch('/api/steam/'+d2.steamid64).then(r=>r.json()).catch(()=>({})) : Promise.resolve({}),
-  ]);
+  const st1 = {avatar: p1._steam_avatar, name: p1._steam_name};
+  const st2 = {avatar: p2._steam_avatar, name: p2._steam_name};
 
   function avatar(p, st, size=56) {
     return st.avatar
@@ -1288,16 +1357,16 @@ async function runH2H() {
   }
 
   const stats = [
-    {label:'Matches',  k:'matches'},
-    {label:'Kills',    k:'kills'},
-    {label:'Deaths',   k:'deaths'},
-    {label:'Assists',  k:'assists'},
-    {label:'K/D',      k:'kd',      dec:2},
-    {label:'ADR',      k:'adr',     dec:1},
-    {label:'HS%',      k:'hs_pct',  dec:1, suffix:'%'},
-    {label:'Damage',   k:'damage'},
-    {label:'Aces',     k:'aces'},
-    {label:'Clutches', k:'clutch_wins'},
+    {label:'Matches',   k:'matches'},
+    {label:'Kills',     k:'kills'},
+    {label:'Deaths',    k:'deaths'},
+    {label:'Assists',   k:'assists'},
+    {label:'K/D',       k:'kd',      dec:2},
+    {label:'ADR',       k:'adr',     dec:1},
+    {label:'HS%',       k:'hs_pct',  dec:1, suffix:'%'},
+    {label:'Damage',    k:'damage'},
+    {label:'Aces',      k:'aces'},
+    {label:'Clutches',  k:'clutch_wins'},
     {label:'Entry Wins',k:'entry_wins'},
   ];
 
@@ -1317,12 +1386,12 @@ async function runH2H() {
       <div style="display:grid;grid-template-columns:1fr 60px 1fr;align-items:center;padding:20px 14px;background:var(--surface2);border-bottom:1px solid var(--border)">
         <div style="display:flex;flex-direction:column;align-items:center;gap:8px;cursor:pointer" onclick="go('player',{name:'${esc(d1.name)}'},'h2h')">
           ${avatar(d1,st1)}
-          <div style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:16px;color:var(--white);text-align:center">${esc(st1.name||d1.name)}</div>
+          <div style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:16px;color:var(--ct);text-align:center">${esc(st1.name||d1.name)}</div>
         </div>
         <div style="font-family:'Rajdhani',sans-serif;font-weight:800;font-size:20px;color:var(--muted);text-align:center">VS</div>
         <div style="display:flex;flex-direction:column;align-items:center;gap:8px;cursor:pointer" onclick="go('player',{name:'${esc(d2.name)}'},'h2h')">
           ${avatar(d2,st2)}
-          <div style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:16px;color:var(--white);text-align:center">${esc(st2.name||d2.name)}</div>
+          <div style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:16px;color:var(--t);text-align:center">${esc(st2.name||d2.name)}</div>
         </div>
       </div>
       <table style="width:100%;border-collapse:collapse">
@@ -1399,7 +1468,7 @@ function renderLeaderboard(data, sortKey) {
       : `<span style="display:inline-block;width:24px;height:24px;border-radius:50%;background:var(--surface2);vertical-align:middle;margin-right:8px;text-align:center;line-height:24px;font-size:10px;font-family:'Rajdhani',sans-serif;font-weight:700;color:var(--muted2)">${initials(p.name)}</span>`;
     const displayName = esc(p._steam_name || p.name);
     return `<tr class="${rankCls}" onclick="go('player',{name:'${esc(p.name)}'},'leaderboard')">
-      <td>${rank===1?'🥇':rank===2?'🥈':rank===3?'🥉':rank}</td>
+      <td style="${rank<=3?`color:${['var(--orange)','#a0aec0','#b87333'][rank-1]};font-family:'Rajdhani',sans-serif;font-weight:800;font-size:15px`:'color:var(--muted2)'}">${rank}</td>
       <td>${avatarEl}<span class="pname">${displayName}</span></td>
       <td>${p.kills??0}</td>
       <td>${p.deaths??0}</td>
@@ -1418,19 +1487,35 @@ function renderLeaderboard(data, sortKey) {
   const top3 = sorted.slice(0,3);
   const podiumCard = (p, rank) => {
     if (!p) return '';
-    const medals = ['🥇','🥈','🥉'];
-    const colors = ['var(--orange)','#a0aec0','#b87333'];
+    const colors     = ['var(--orange)','#a0aec0','#b87333'];
+    const glowColors = ['rgba(255,85,0,.18)','rgba(160,174,192,.14)','rgba(184,115,51,.15)'];
+    const borderColors = ['rgba(255,85,0,.35)','rgba(160,174,192,.3)','rgba(184,115,51,.3)'];
+    const rankLabels = ['1ST','2ND','3RD'];
+    const c = colors[rank];
     const avatarEl = p._steam_avatar
-      ? `<img src="${p._steam_avatar}" style="width:52px;height:52px;border-radius:50%;object-fit:cover;border:2px solid ${colors[rank]};margin-bottom:8px" alt="${esc(p.name)}">`
-      : `<div style="width:52px;height:52px;border-radius:50%;background:var(--surface);border:2px solid ${colors[rank]};display:flex;align-items:center;justify-content:center;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:18px;color:${colors[rank]};margin:0 auto 8px">${initials(p.name)}</div>`;
-    return `<div style="flex:1;background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:16px 14px;text-align:center;cursor:pointer" onclick="go('player',{name:'${esc(p.name)}'},'leaderboard')">
-      <div style="font-size:24px;margin-bottom:6px">${medals[rank]}</div>
-      ${avatarEl}
-      <div style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:16px;color:${colors[rank]};margin-bottom:8px">${esc(p.name)}</div>
+      ? `<img src="${p._steam_avatar}" style="width:56px;height:56px;border-radius:50%;object-fit:cover;border:2px solid ${c};margin-bottom:10px" alt="${esc(p.name)}">`
+      : `<div style="width:56px;height:56px;border-radius:50%;background:var(--surface);border:2px solid ${c};display:flex;align-items:center;justify-content:center;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:20px;color:${c};margin:0 auto 10px">${initials(p.name)}</div>`;
+    return `<div style="
+        flex:1;
+        background:${glowColors[rank]};
+        backdrop-filter:blur(12px);
+        -webkit-backdrop-filter:blur(12px);
+        border:1px solid ${borderColors[rank]};
+        border-top:2px solid ${c};
+        border-radius:6px;
+        padding:18px 14px;
+        text-align:center;
+        cursor:pointer;
+        position:relative;
+        overflow:hidden;
+      " onclick="go('player',{name:'${esc(p.name)}'},'leaderboard')">
+      <div style="position:absolute;top:10px;left:14px;font-family:'Rajdhani',sans-serif;font-weight:800;font-size:11px;letter-spacing:2px;color:${c};opacity:.9">${rankLabels[rank]}</div>
+      <div style="margin-top:6px">${avatarEl}</div>
+      <div style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:15px;color:#fff;margin-bottom:12px">${esc(p._steam_name||p.name)}</div>
       <div style="display:flex;justify-content:center;gap:16px;flex-wrap:wrap">
-        <div><div style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:20px;color:var(--white)">${p.kills??0}</div><div style="font-size:10px;color:var(--muted2);letter-spacing:1px;text-transform:uppercase">Kills</div></div>
-        <div><div style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:20px;color:var(--white)">${parseFloat(p.kd??0).toFixed(2)}</div><div style="font-size:10px;color:var(--muted2);letter-spacing:1px;text-transform:uppercase">K/D</div></div>
-        <div><div style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:20px;color:var(--white)">${p.matches??0}</div><div style="font-size:10px;color:var(--muted2);letter-spacing:1px;text-transform:uppercase">Matches</div></div>
+        <div><div style="font-family:'Rajdhani',sans-serif;font-weight:800;font-size:20px;color:#fff">${p.kills??0}</div><div style="font-size:10px;color:rgba(255,255,255,.5);letter-spacing:1px;text-transform:uppercase">Kills</div></div>
+        <div><div style="font-family:'Rajdhani',sans-serif;font-weight:800;font-size:20px;color:#fff">${parseFloat(p.kd??0).toFixed(2)}</div><div style="font-size:10px;color:rgba(255,255,255,.5);letter-spacing:1px;text-transform:uppercase">K/D</div></div>
+        <div><div style="font-family:'Rajdhani',sans-serif;font-weight:800;font-size:20px;color:#fff">${p.matches??0}</div><div style="font-size:10px;color:rgba(255,255,255,.5);letter-spacing:1px;text-transform:uppercase">Matches</div></div>
       </div>
     </div>`;
   };
