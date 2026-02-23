@@ -16,7 +16,7 @@
   --table-head-bg:linear-gradient(180deg,rgba(var(--orange-rgb),.18) 0%,rgba(var(--orange-rgb),.06) 100%);--table-team-divider:rgba(0,0,0,.3);
 }
 *{box-sizing:border-box;margin:0;padding:0}
-html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;font-size:13px;scroll-behavior:smooth}
+html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;font-size:13px}
 /* NAV */
 nav{background:var(--nav-bg);border-bottom:2px solid var(--nav-border);display:flex;align-items:center;padding:0 20px;height:50px;position:sticky;top:0;z-index:200;gap:0;transition:background .2s,border-color .2s}
 .logo{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:26px;letter-spacing:-2px;color:var(--orange);text-transform:uppercase;margin-right:20px;white-space:nowrap;display:flex;align-items:center;line-height:1}
@@ -148,7 +148,7 @@ nav{background:var(--nav-bg);border-bottom:2px solid var(--nav-border);display:f
 .award-lbl{font-size:10px;color:var(--muted2);text-align:right;margin-top:1px}
 
 /* MATCH SCOREBOARD */
-.match-header-card{background:var(--surface);border:1px solid rgba(var(--orange-rgb),.3);border-radius:4px;padding:18px 22px;margin-bottom:12px;box-shadow:0 0 20px rgba(var(--orange-rgb),.06),inset 0 1px 0 rgba(255,255,255,.04)}
+.match-header-card{background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:18px 22px;margin-bottom:12px}
 .match-score-row{display:flex;align-items:center;gap:12px;margin-bottom:6px}
 .team-block{flex:1}
 .team-nm{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:17px;letter-spacing:.5px;text-transform:uppercase}
@@ -182,7 +182,6 @@ nav{background:var(--nav-bg);border-bottom:2px solid var(--nav-border);display:f
 .adr-highlight{color:var(--orange)}
 
 /* MATCHES LIST */
-.matches-list{}
 .matches-list .match-item{position:relative;overflow:hidden;display:flex;align-items:flex-end;padding:0;border-bottom:1px solid rgba(var(--orange-rgb),.15);cursor:pointer;transition:transform .22s ease,box-shadow .22s ease,border-color .22s ease;min-height:140px;border-left:none;border-right:1px solid rgba(var(--orange-rgb),.1);will-change:transform}
 .matches-list .match-item:hover{transform:translateX(4px);border-color:rgba(var(--orange-rgb),.45);box-shadow:0 0 22px rgba(var(--orange-rgb),.18)}
 .matches-list .match-item:last-child{border-bottom:1px solid rgba(var(--orange-rgb),.15)}
@@ -265,11 +264,6 @@ nav{background:var(--nav-bg);border-bottom:2px solid var(--nav-border);display:f
 .h2h-top-card::after{content:'';position:absolute;inset:0;background:radial-gradient(circle at var(--sx) var(--sy),rgba(255,140,60,.22) 0%,rgba(var(--orange-rgb),.08) 35%,transparent 65%);pointer-events:none;opacity:0;transition:opacity .4s ease}
 .h2h-top-card.shine-active::after{opacity:1}
 
-/* PREDICT RESULT CARD - glossy */
-.pred-result-card{--sx:50%;--sy:50%;background:linear-gradient(135deg,rgba(var(--orange-rgb),.12) 0%,rgba(10,12,14,.7) 50%,rgba(var(--orange-rgb),.06) 100%);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);border:1px solid rgba(var(--orange-rgb),.35);border-radius:10px;padding:20px;margin-bottom:10px;position:relative;overflow:hidden;box-shadow:0 0 40px rgba(var(--orange-rgb),.15),0 8px 32px rgba(0,0,0,.6),inset 0 1px 0 rgba(255,255,255,.08)}
-.pred-result-card::after{content:'';position:absolute;inset:0;background:radial-gradient(circle at var(--sx) var(--sy),rgba(255,140,60,.22) 0%,rgba(var(--orange-rgb),.08) 35%,transparent 65%);pointer-events:none;opacity:0;transition:opacity .4s ease}
-.pred-result-card.shine-active::after{opacity:1}
-
 /* H2H CLEAR BUTTON */
 .h2h-clear-btn{padding:3px 10px;background:transparent;border:1px solid var(--border);border-radius:3px;color:var(--muted2);font-size:11px;font-family:'Rajdhani',sans-serif;cursor:pointer;letter-spacing:1px;transition:all .2s;position:relative;overflow:hidden}
 .h2h-clear-btn::before{content:'';position:absolute;inset:0;background:linear-gradient(135deg,rgba(255,255,255,.07) 0%,transparent 60%);pointer-events:none}
@@ -301,18 +295,11 @@ nav{background:var(--nav-bg);border-bottom:2px solid var(--nav-border);display:f
 
 /* PREDICT PAGE */
 .predict-team-box{background:linear-gradient(135deg,rgba(var(--orange-rgb),.07) 0%,rgba(10,12,14,.8) 100%);border:1px solid rgba(var(--orange-rgb),.2);border-radius:8px;padding:14px}
-.predict-team-box.team-b{background:linear-gradient(135deg,rgba(91,196,245,.06) 0%,rgba(10,12,14,.8) 100%);border-color:rgba(91,196,245,.2)}
 .predict-slot{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:5px;border:1px solid var(--border);background:var(--surface);margin-bottom:6px;cursor:pointer;transition:all .15s;min-height:48px}
 .predict-slot:hover{border-color:rgba(var(--orange-rgb),.4);background:rgba(var(--orange-rgb),.04)}
 .predict-slot.filled{border-color:rgba(var(--orange-rgb),.35);background:rgba(var(--orange-rgb),.06)}
-.predict-team-box.team-b .predict-slot:hover{border-color:rgba(91,196,245,.45);background:rgba(91,196,245,.04)}
-.predict-team-box.team-b .predict-slot.filled{border-color:rgba(91,196,245,.35);background:rgba(91,196,245,.06)}
-.predict-team-box.team-b .predict-slot.empty-slot:hover{border-bottom-color:#5bc4f5;color:#5bc4f5;background:rgba(91,196,245,.03)}
-.predict-slot{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:5px;border:1px solid var(--border);background:var(--surface);margin-bottom:6px;cursor:pointer;transition:all .15s;min-height:48px}
-.predict-slot:hover{border-color:rgba(var(--orange-rgb),.4);background:rgba(var(--orange-rgb),.04)}
-.predict-slot.filled{border-color:rgba(var(--orange-rgb),.35);background:rgba(var(--orange-rgb),.06)}
-.predict-slot.empty-slot{border:1px solid transparent;border-bottom:1px solid var(--border2);border-radius:0;background:transparent;justify-content:center;color:var(--muted2);font-size:12px;font-family:'Rajdhani',sans-serif;letter-spacing:1px;transition:border-bottom-color .15s,color .15s,background .15s}
-.predict-slot.empty-slot:hover{border-bottom-color:var(--orange);color:var(--orange);background:rgba(var(--orange-rgb),.03)}
+.predict-slot.empty-slot{border-style:dashed;border-color:var(--muted);justify-content:center;color:var(--muted2);font-size:12px;font-family:'Rajdhani',sans-serif;letter-spacing:1px}
+.predict-slot.empty-slot:hover{border-color:var(--orange);color:var(--orange)}
 .predict-player-row{display:flex;align-items:center;gap:10px;padding:8px 10px;cursor:pointer;transition:background .12s;border-bottom:1px solid var(--border)}
 .predict-player-row:last-child{border-bottom:none}
 .predict-player-row:hover{background:rgba(var(--orange-rgb),.05)}
@@ -392,6 +379,46 @@ nav{background:var(--nav-bg);border-bottom:2px solid var(--nav-border);display:f
 .win-rate-ring{position:relative;width:54px;height:54px;flex-shrink:0}
 .win-rate-ring svg{transform:rotate(-90deg)}
 .win-rate-ring-label{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:'Rajdhani',sans-serif;font-weight:800;font-size:13px;color:var(--white)}
+
+/* ── NOTIFICATION SYSTEM ─────────────────────────────────────────────────── */
+.notif-badge{position:absolute;top:-4px;right:-4px;min-width:16px;height:16px;border-radius:8px;background:var(--orange);color:#000;font-family:'Rajdhani',sans-serif;font-weight:800;font-size:10px;display:flex;align-items:center;justify-content:center;padding:0 4px;pointer-events:none;animation:badgePop .3s cubic-bezier(.34,1.56,.64,1) forwards;box-shadow:0 0 8px rgba(var(--orange-rgb),.7);border:2px solid var(--nav-bg)}
+@keyframes badgePop{from{transform:scale(0);opacity:0}to{transform:scale(1);opacity:1}}
+.notif-wrap{position:relative;flex-shrink:0}
+.notif-btn{width:34px;height:34px;border-radius:6px;background:transparent;border:1px solid var(--border2);color:var(--muted2);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .18s}
+.notif-btn:hover,.notif-wrap.open .notif-btn{color:var(--orange);border-color:var(--orange);background:var(--orange-glow)}
+.notif-btn svg{width:16px;height:16px}
+/* Dropdown panel */
+.notif-panel{position:absolute;top:calc(100% + 8px);right:0;width:320px;background:var(--nav-bg);border:1px solid var(--border);border-radius:8px;box-shadow:0 12px 40px rgba(0,0,0,.55),0 0 0 1px rgba(var(--orange-rgb),.08);z-index:400;opacity:0;pointer-events:none;transform:translateY(-6px);transition:opacity .18s,transform .18s;overflow:hidden}
+.notif-wrap.open .notif-panel{opacity:1;pointer-events:auto;transform:translateY(0)}
+.notif-panel-header{display:flex;align-items:center;justify-content:space-between;padding:12px 14px;background:var(--table-head-bg);border-bottom:1px solid rgba(var(--orange-rgb),.2);box-shadow:inset 0 1px 0 rgba(var(--orange-rgb),.15)}
+.notif-panel-title{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:11px;letter-spacing:2px;text-transform:uppercase;color:rgba(var(--orange-rgb),.85)}
+.notif-clear-all{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--muted2);background:none;border:none;cursor:pointer;padding:2px 6px;border-radius:2px;transition:color .15s}
+.notif-clear-all:hover{color:var(--orange)}
+.notif-list{max-height:360px;overflow-y:auto}
+.notif-item{display:flex;gap:10px;padding:12px 14px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .12s;position:relative}
+.notif-item:last-child{border-bottom:none}
+.notif-item:hover{background:rgba(var(--orange-rgb),.04)}
+.notif-item.unread::before{content:'';position:absolute;left:0;top:0;bottom:0;width:2px;background:var(--orange)}
+.notif-item.unread{background:rgba(var(--orange-rgb),.03)}
+.notif-map-thumb{width:44px;height:44px;border-radius:4px;object-fit:cover;flex-shrink:0;background:var(--surface2)}
+.notif-item-body{flex:1;min-width:0}
+.notif-item-score{font-family:'Rajdhani',sans-serif;font-weight:800;font-size:15px;line-height:1;margin-bottom:3px}
+.notif-item-teams{font-size:11px;color:var(--muted2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:2px}
+.notif-item-meta{font-size:10px;color:var(--muted);letter-spacing:.5px}
+.notif-empty{padding:32px 16px;text-align:center;color:var(--muted2);font-family:'Rajdhani',sans-serif;font-size:12px;letter-spacing:1px;text-transform:uppercase}
+
+/* ── MATCH FILTER BAR ────────────────────────────────────────────────────── */
+.match-filter-bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:12px;padding:12px 14px;background:var(--card-bg);border:1px solid var(--border);border-radius:6px}
+.mf-input{padding:7px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:3px;color:var(--white);font-family:'Rajdhani',sans-serif;font-size:13px;outline:none;transition:border-color .15s;min-width:160px}
+.mf-input:focus{border-color:rgba(var(--orange-rgb),.5)}
+.mf-input::placeholder{color:var(--muted2)}
+.mf-select{padding:7px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:3px;color:var(--white);font-family:'Rajdhani',sans-serif;font-size:13px;cursor:pointer;outline:none;transition:border-color .15s}
+.mf-select:focus{border-color:rgba(var(--orange-rgb),.5)}
+.mf-clear{padding:7px 14px;background:transparent;border:1px solid var(--border);border-radius:3px;color:var(--muted2);font-family:'Rajdhani',sans-serif;font-size:12px;letter-spacing:1px;text-transform:uppercase;cursor:pointer;transition:all .15s;white-space:nowrap}
+.mf-clear:hover{color:var(--orange);border-color:var(--orange);background:var(--orange-glow)}
+.mf-count{font-size:11px;color:var(--muted2);margin-left:auto;font-family:'Rajdhani',sans-serif;font-weight:600;letter-spacing:1px;white-space:nowrap}
+.mf-date-group{display:flex;gap:4px;align-items:center}
+.mf-date-label{font-size:10px;color:var(--muted2);letter-spacing:1px;text-transform:uppercase;white-space:nowrap}
 </style>
 </head>
 <body>
@@ -433,6 +460,22 @@ nav{background:var(--nav-bg);border-bottom:2px solid var(--nav-border);display:f
     <div class="tab-indicator" id="tab-indicator"></div>
   </div>
   <div class="nav-right">
+    <div class="notif-wrap" id="notif-wrap">
+      <button class="notif-btn" id="notif-btn" onclick="toggleNotifPanel(event)" title="Notifications" aria-label="Notifications">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+        </svg>
+      </button>
+      <div class="notif-panel" id="notif-panel">
+        <div class="notif-panel-header">
+          <span class="notif-panel-title">Notifications</span>
+          <button class="notif-clear-all" onclick="clearAllNotifs()">Mark all read</button>
+        </div>
+        <div class="notif-list" id="notif-list">
+          <div class="notif-empty">No notifications yet</div>
+        </div>
+      </div>
+    </div>
     <button class="settings-btn" onclick="openSettings()" title="Settings" aria-label="Settings">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
@@ -590,44 +633,6 @@ function moveTabIndicator(page) {
 
   // Hidden pages (player, match) — keep indicator where it is
   indicator.style.opacity = '0';
-}
-
-// ── GitHub JSON Fallback ─────────────────────────────────────────────────────
-// If the local API returns empty/error, automatically try the GitHub backup.
-// Fill in your repo details here — the stats page will self-heal after a wipe.
-const _GH = {
-  enabled: false,          // ← set to true once you've set up the repo
-  user:    'YOUR_GITHUB_USERNAME',
-  repo:    'reshtan-stats-backup',
-  branch:  'main',
-};
-const _GH_BASE = `https://raw.githubusercontent.com/${_GH.user}/${_GH.repo}/${_GH.branch}/snapshots`;
-
-// Fetch from local API; if result is empty/null, fall back to GitHub snapshot
-async function apiFetch(endpoint, ghFile) {
-  try {
-    const r = await fetch(endpoint);
-    if (r.ok) {
-      const data = await r.json();
-      // Consider it valid if it's a non-empty array or a non-error object
-      if (Array.isArray(data) ? data.length > 0 : (data && !data.error)) {
-        return data;
-      }
-    }
-  } catch(_) {}
-
-  // Local failed or empty — try GitHub if enabled
-  if (_GH.enabled && ghFile) {
-    try {
-      const r = await fetch(`${_GH_BASE}/${ghFile}`);
-      if (r.ok) {
-        const data = await r.json();
-        console.info(`[RG] Using GitHub backup for: ${ghFile}`);
-        return data;
-      }
-    } catch(_) {}
-  }
-  return ghFile && ghFile.startsWith('matches/') ? {} : [];
 }
 
 const _pages = ['matches','leaderboard','maps','h2h','specialists','demos','player','match','predict','team'];
@@ -998,13 +1003,56 @@ function demoBtn(demo, small=false) {
 }
 
 // ── Matches ───────────────────────────────────────────────────────────────────
-async function loadMatches() {
-  spin('p-matches');
-  const data = await apiFetch('/api/matches?limit=30', 'matches.json');
-  if(!Array.isArray(data)||!data.length){
-    document.getElementById('p-matches').innerHTML=emptyState('matches','No Matches Yet','Completed matches will appear here');return;
+let _allMatches = [];   // full cache (up to 200)
+let _mFilters = {map:'', team:'', dateFrom:'', dateTo:''};
+
+async function loadMatches(forceRefresh) {
+  const el = document.getElementById('p-matches');
+  // Only fetch if cache empty or forced
+  if (!_allMatches.length || forceRefresh) {
+    spin('p-matches');
+    const data = await fetch('/api/matches?limit=200').then(r=>r.json()).catch(()=>[]);
+    if (!Array.isArray(data) || !data.length) {
+      el.innerHTML = emptyState('matches','No Matches Yet','Completed matches will appear here'); return;
+    }
+    _allMatches = data;
   }
-  const items = data.map(m=>{
+  renderMatches();
+}
+
+function renderMatches() {
+  const el = document.getElementById('p-matches');
+  if (!_allMatches.length) return;
+
+  // All unique maps for filter dropdown
+  const maps = [...new Set(_allMatches.map(m=>m.mapname).filter(Boolean))].sort();
+  const mapOpts = ['<option value="">All Maps</option>',
+    ...maps.map(m=>`<option value="${esc(m)}" ${_mFilters.map===m?'selected':''}>${esc(m)}</option>`)
+  ].join('');
+
+  // Apply filters
+  let filtered = _allMatches.filter(m => {
+    if (_mFilters.map && m.mapname !== _mFilters.map) return false;
+    if (_mFilters.team) {
+      const q = _mFilters.team.toLowerCase();
+      const t1 = (m.team1_name||'').toLowerCase();
+      const t2 = (m.team2_name||'').toLowerCase();
+      if (!t1.includes(q) && !t2.includes(q)) return false;
+    }
+    if (_mFilters.dateFrom) {
+      const d = new Date(m.end_time);
+      if (isNaN(d) || d < new Date(_mFilters.dateFrom)) return false;
+    }
+    if (_mFilters.dateTo) {
+      const d = new Date(m.end_time);
+      if (isNaN(d) || d > new Date(_mFilters.dateTo + 'T23:59:59')) return false;
+    }
+    return true;
+  });
+
+  const hasFilter = _mFilters.map || _mFilters.team || _mFilters.dateFrom || _mFilters.dateTo;
+
+  const items = filtered.map(m => {
     const bgStyle = MAP_IMGS[m.mapname] ? `background-image:url('${MAP_IMGS[m.mapname]}')` : 'background:var(--surface2)';
     return `
     <div class="match-item" onclick="go('match',{id:'${m.matchid}'},'matches')">
@@ -1023,15 +1071,33 @@ async function loadMatches() {
         <div class="m-pill"><div class="m-date-pill">${fmtDate(m.end_time)}</div></div>
       </div>
     </div>`;
-  }).join('');
-  document.getElementById('p-matches').innerHTML = `
-    <div class="matches-list" style="border-radius:4px">${items}</div>`;
+  }).join('') || `<div style="padding:40px;text-align:center;color:var(--muted2);font-family:'Rajdhani',sans-serif;font-size:14px;letter-spacing:1px">No matches match your filters</div>`;
+
+  el.innerHTML = `
+    <div class="match-filter-bar">
+      <input class="mf-input" placeholder="Search team..." value="${esc(_mFilters.team)}"
+        oninput="_mFilters.team=this.value;renderMatches()" style="flex:1;min-width:120px;max-width:200px">
+      <select class="mf-select" onchange="_mFilters.map=this.value;renderMatches()">${mapOpts}</select>
+      <div class="mf-date-group">
+        <span class="mf-date-label">From</span>
+        <input type="date" class="mf-input" style="min-width:0;width:130px" value="${_mFilters.dateFrom}"
+          onchange="_mFilters.dateFrom=this.value;renderMatches()">
+      </div>
+      <div class="mf-date-group">
+        <span class="mf-date-label">To</span>
+        <input type="date" class="mf-input" style="min-width:0;width:130px" value="${_mFilters.dateTo}"
+          onchange="_mFilters.dateTo=this.value;renderMatches()">
+      </div>
+      ${hasFilter ? `<button class="mf-clear" onclick="_mFilters={map:'',team:'',dateFrom:'',dateTo:''};renderMatches()">Clear</button>` : ''}
+      <span class="mf-count">${filtered.length} / ${_allMatches.length}</span>
+    </div>
+    <div class="matches-list" style="border-radius:4px;overflow:hidden">${items}</div>`;
 }
 
 // ── Match Detail ──────────────────────────────────────────────────────────────
 async function loadMatch(id) {
   spin('p-match');
-  const d = await apiFetch('/api/match/'+id, `matches/${id}.json`).then(d=>d&&!d.error?d:{error:'not found'});
+  const d = await fetch('/api/match/'+id).then(r=>r.json()).catch(()=>({error:'fetch failed'}));
   if(d.error){document.getElementById('p-match').innerHTML=`<div class="empty">${d.error}</div>`;return}
 
   const meta=d.meta||{}, maps=d.maps||[], players=d.players||[], demo=d.demo||{};
@@ -1103,7 +1169,7 @@ async function loadMatch(id) {
     const {t1, t2, n1, n2} = splitTeams(mapPlayers);
     return `
       <div style="margin-bottom:14px">
-        <div class="card ovx" style="border-color:rgba(var(--orange-rgb),.3);box-shadow:0 0 20px rgba(var(--orange-rgb),.06),inset 0 1px 0 rgba(255,255,255,.04)">
+        <div class="card ovx">
           <table class="sb-table">
             <thead><tr>
               <th>Player</th><th>K</th><th>D</th><th>A</th>
@@ -1314,7 +1380,7 @@ async function loadMaps() {
   const el = document.getElementById('p-maps');
   _getSpinnerSvg().then(svg=>{el.innerHTML='<div class="loading"><span class="spin" style="display:inline-flex;align-items:center;justify-content:center;color:var(--orange)">'+svg+'</span></div>'});
   const [dbStats, demos] = await Promise.all([
-    apiFetch('/api/mapstats', 'mapstats.json'),
+    fetch('/api/mapstats').then(r=>r.json()).catch(()=>[]),
     fetch('/api/demos').then(r=>r.json()).catch(()=>[]),
   ]);
 
@@ -1388,7 +1454,7 @@ async function loadH2H() {
   const el = document.getElementById('p-h2h');
   _getSpinnerSvg().then(svg=>{el.innerHTML='<div class="loading"><span class="spin" style="display:inline-flex;align-items:center;justify-content:center;color:var(--orange)">'+svg+'</span></div>'});
   if (!_h2hPlayers) {
-    const data = await apiFetch('/api/leaderboard', 'leaderboard.json');
+    const data = await fetch('/api/leaderboard').then(r=>r.json()).catch(()=>[]);
     // Fetch Steam avatars for all
     await Promise.all(data.slice(0,30).map(async p => {
       if (p.steamid64 && p.steamid64 !== '0') {
@@ -1570,14 +1636,14 @@ let _lbSort = 'kills';
 async function loadLeaderboard() {
   const el = document.getElementById('p-leaderboard');
   _getSpinnerSvg().then(svg=>{el.innerHTML='<div class="loading"><span class="spin" style="display:inline-flex;align-items:center;justify-content:center;color:var(--orange)">'+svg+'</span></div>'});
-  const data = await apiFetch('/api/leaderboard', 'leaderboard.json');
+  const data = await fetch('/api/leaderboard').then(r=>r.json()).catch(()=>[]);
   if (!Array.isArray(data) || !data.length) {
     el.innerHTML = emptyState('leaderboard','No Player Data','Stats will appear after matches are completed');
     return;
   }
   // Compute win/loss streak per player from match history
   try {
-    const matches = await apiFetch('/api/matches?limit=100', 'matches.json');
+    const matches = await fetch('/api/matches?limit=100').then(r=>r.json()).catch(()=>[]);
     if (Array.isArray(matches) && matches.length) {
       // Sort oldest→newest so we can walk forward
       const sorted = [...matches].sort((a,b)=>new Date(a.end_time)-new Date(b.end_time));
@@ -1809,7 +1875,7 @@ async function loadSpecialists() {
   const el = document.getElementById('p-specialists');
   if (_specData) { renderSpecialists(_specData, _specTab); return; }
   _getSpinnerSvg().then(svg=>{el.innerHTML='<div class="loading"><span class="spin" style="display:inline-flex;align-items:center;justify-content:center;color:var(--orange)">'+svg+'</span></div>'});
-  const data = await apiFetch('/api/specialists', 'specialists.json');
+  const data = await fetch('/api/specialists').then(r=>r.json()).catch(()=>[]);
   if (!Array.isArray(data) || !data.length) {
     el.innerHTML = emptyState('specialists','No Specialist Data','Clutch kings, entry fraggers and more will appear here'); return;
   }
@@ -2055,7 +2121,6 @@ const _shineObs = new MutationObserver(() => {
   attachShine('.profile-top');
   attachShine('.podium-card');
   attachShine('.h2h-top-card');
-  attachShine('.pred-result-card');
 });
 _shineObs.observe(document.getElementById('app'), {childList:true, subtree:true});
 
@@ -2068,7 +2133,7 @@ async function loadPredict() {
   const el = document.getElementById('p-predict');
   _getSpinnerSvg().then(svg=>{el.innerHTML='<div class="loading"><span class="spin" style="display:inline-flex;align-items:center;justify-content:center;color:var(--orange)">'+svg+'</span></div>'});
   if (!_predictPlayers) {
-    const data = await apiFetch('/api/leaderboard', 'leaderboard.json');
+    const data = await fetch('/api/leaderboard').then(r=>r.json()).catch(()=>[]);
     await Promise.all(data.slice(0,40).map(async p => {
       if (p.steamid64 && p.steamid64 !== '0') {
         const s = await fetch('/api/steam/'+p.steamid64).then(r=>r.json()).catch(()=>({}));
@@ -2113,8 +2178,8 @@ function renderPredict() {
 
   const resultHtml = canPredict
     ? buildPrediction(t1, t2)
-    : `<div style="padding:28px;text-align:center;font-size:12px;letter-spacing:.5px">
-        ${5-t1.length > 0 ? `<span style="color:var(--orange)">Team A needs ${5-t1.length} more.</span> ` : ''}${5-t2.length > 0 ? `<span style="color:#5bc4f5">Team B needs ${5-t2.length} more.</span>` : ''}
+    : `<div style="padding:28px;text-align:center;color:var(--muted2);font-size:12px;letter-spacing:.5px">
+        ${5-t1.length > 0 ? `Team A needs ${5-t1.length} more. ` : ''}${5-t2.length > 0 ? `Team B needs ${5-t2.length} more.` : ''}
        </div>`;
 
   el.innerHTML = `
@@ -2123,14 +2188,14 @@ function renderPredict() {
         <div style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:11px;letter-spacing:2px;text-transform:uppercase;color:var(--orange);margin-bottom:10px">Team A</div>
         ${teamSlots(0)}
       </div>
-      <div class="predict-team-box team-b">
+      <div class="predict-team-box" style="border-color:rgba(91,196,245,.2);background:linear-gradient(135deg,rgba(91,196,245,.06) 0%,rgba(10,12,14,.8) 100%)">
         <div style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:11px;letter-spacing:2px;text-transform:uppercase;color:var(--ct);margin-bottom:10px">Team B</div>
         ${teamSlots(1)}
       </div>
     </div>
     <div id="predict-result">${resultHtml}</div>
     <div id="predict-picker" style="display:none;margin-top:10px">
-      <div class="card" style="padding:0;max-height:360px;overflow-y:auto;border-color:rgba(var(--orange-rgb),.3)" id="predict-picker-list"></div>
+      <div class="card" style="padding:0;max-height:360px;overflow-y:auto" id="predict-picker-list"></div>
     </div>`;
 }
 
@@ -2162,15 +2227,6 @@ function predictOpenPicker(teamIdx) {
       <span onclick="document.getElementById('predict-picker').style.display='none'" style="cursor:pointer;color:var(--muted2);font-size:18px;line-height:1">&times;</span>
     </div>
     ${rows}`;
-  const pickerCard = document.getElementById('predict-picker-list');
-  if (pickerCard) {
-    if (teamIdx === 0) {
-      const rgb = getComputedStyle(document.documentElement).getPropertyValue('--orange-rgb').trim();
-      pickerCard.style.borderColor = `rgba(${rgb},.3)`;
-    } else {
-      pickerCard.style.borderColor = 'rgba(91,196,245,.3)';
-    }
-  }
   pickerEl.style.display = 'block';
 }
 
@@ -2249,34 +2305,34 @@ function buildPrediction(t1, t2) {
 
   const r1 = roles(t1), r2 = roles(t2);
   return `
-    <div class="pred-result-card">
-      <div style="text-align:center;margin-bottom:12px;position:relative;z-index:1">
+    <div class="card" style="padding:20px;margin-bottom:10px">
+      <div style="text-align:center;margin-bottom:12px">
         <div style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:18px;color:var(--white)">
           ${winner ? `<span style="color:${wColor}">Team ${winner}</span> predicted to win` : 'Even matchup'}
         </div>
         <div style="font-size:11px;color:var(--muted2);margin-top:3px">Based on K/D, ADR, HS%, KAST and Rating</div>
       </div>
-      <div style="display:flex;justify-content:space-between;margin-bottom:4px;position:relative;z-index:1">
+      <div style="display:flex;justify-content:space-between;margin-bottom:4px">
         <span style="font-family:'Rajdhani',sans-serif;font-weight:800;font-size:22px;color:var(--orange)">${pct1}%</span>
         <span style="font-family:'Rajdhani',sans-serif;font-weight:800;font-size:22px;color:var(--ct)">${pct2}%</span>
       </div>
-      <div class="pred-bar-wrap" style="position:relative;z-index:1">
+      <div class="pred-bar-wrap">
         <div class="pred-bar-t1" style="width:${pct1}%">A</div>
         <div class="pred-bar-t2" style="width:${pct2}%">B</div>
       </div>
-      <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--muted2);position:relative;z-index:1"><span>Team A</span><span>Team B</span></div>
+      <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--muted2)"><span>Team A</span><span>Team B</span></div>
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
-      <div class="card" style="padding:14px;border-color:rgba(var(--orange-rgb),.3);box-shadow:0 0 16px rgba(var(--orange-rgb),.06),inset 0 1px 0 rgba(255,255,255,.04)">
+      <div class="card" style="padding:14px">
         <div style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:11px;letter-spacing:2px;text-transform:uppercase;color:var(--orange);margin-bottom:10px">Team A Roles</div>
         ${r1.map(({label,p})=>roleCard(label,p,'var(--orange)')).join('')}
       </div>
-      <div class="card" style="padding:14px;border-color:rgba(91,196,245,.25);box-shadow:0 0 16px rgba(91,196,245,.05),inset 0 1px 0 rgba(255,255,255,.04)">
+      <div class="card" style="padding:14px">
         <div style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:11px;letter-spacing:2px;text-transform:uppercase;color:var(--ct);margin-bottom:10px">Team B Roles</div>
         ${r2.map(({label,p})=>roleCard(label,p,'var(--ct)')).join('')}
       </div>
     </div>
-    <div class="card" style="padding:14px;border-color:rgba(var(--orange-rgb),.3);box-shadow:0 0 16px rgba(var(--orange-rgb),.06),inset 0 1px 0 rgba(255,255,255,.04)">
+    <div class="card" style="padding:14px">
       <div style="display:flex;justify-content:space-between;padding:4px 0 8px;border-bottom:1px solid var(--border)">
         <span style="font-size:10px;font-family:'Rajdhani',sans-serif;font-weight:700;letter-spacing:1px;color:var(--orange)">TEAM A</span>
         <span style="font-size:10px;font-family:'Rajdhani',sans-serif;font-weight:700;letter-spacing:1px;color:var(--muted2)">STAT COMPARISON</span>
@@ -2294,149 +2350,58 @@ async function loadTeam() {
   if (_teamCache) { renderTeam(_teamCache); return; }
   _getSpinnerSvg().then(svg=>{el.innerHTML='<div class="loading"><span class="spin" style="display:inline-flex;align-items:center;justify-content:center;color:var(--orange)">'+svg+'</span></div>'});
 
-  // Step 1: get match list (metadata only - players array is NOT included here)
-  const matchList = await apiFetch('/api/matches?limit=200', 'matches.json');
-  if (!Array.isArray(matchList) || !matchList.length) {
+  const matches = await fetch('/api/matches?limit=200').then(r=>r.json()).catch(()=>[]);
+  if (!Array.isArray(matches) || !matches.length) {
     el.innerHTML = emptyState('team','No Match Data','Team stats will appear after matches are completed'); return;
   }
 
-  // Step 2: fetch each match individually in parallel to get full player data
-  const BATCH = 10; // concurrent requests at a time
-  const fullMatches = [];
-  for (let i = 0; i < matchList.length; i += BATCH) {
-    const batch = matchList.slice(i, i + BATCH);
-    const results = await Promise.all(
-      batch.map(m => apiFetch('/api/match/' + m.matchid, `matches/${m.matchid}.json`).catch(()=>null))
-    );
-    results.forEach(r => { if (r && !r.error) fullMatches.push(r); });
-  }
-
-  if (!fullMatches.length) {
-    el.innerHTML = emptyState('team','No Match Data','Team stats will appear after matches are completed'); return;
-  }
-
-  // ── Aggregate by team name ────────────────────────────────────────────────
-  // Key by team name. Match detail response shape: {meta, maps, players, demo}
-  // scores & team names live on meta; mapname on each maps[] entry.
+  // ── Aggregate lineups ──────────────────────────────────────────────────────
+  // key = sorted comma-separated player names of team1 (or whichever side won)
+  // We track each "team" as the team1 roster per match.
   const lineupMap = {};
 
-  fullMatches.forEach(m => {
-    // Support both flat (old api) and nested (fshost get5 api) response shapes
-    const meta    = m.meta || m;
+  matches.forEach(m => {
     const players = Array.isArray(m.players) ? m.players : [];
-    const mapsArr = Array.isArray(m.maps) ? m.maps : [];
-
     const t1 = players.filter(p=>String(p.team||'').toLowerCase()==='team1');
     const t2 = players.filter(p=>String(p.team||'').toLowerCase()==='team2');
-
-    // Scores: prefer meta totals, fallback to first map
-    const firstMap = mapsArr[0] || {};
-    const s1 = parseInt(meta.team1_score ?? meta.map_team1_score ?? firstMap.team1_score ?? 0);
-    const s2 = parseInt(meta.team2_score ?? meta.map_team2_score ?? firstMap.team2_score ?? 0);
-
-    // Team names: meta → player.team_name → fallback
-    const name1 = (meta.team1_name||'').trim() || (t1[0]&&t1[0].team_name) || 'Team 1';
-    const name2 = (meta.team2_name||'').trim() || (t2[0]&&t2[0].team_name) || 'Team 2';
+    const s1 = parseInt(m.map_team1_score ?? m.team1_score ?? 0);
+    const s2 = parseInt(m.map_team2_score ?? m.team2_score ?? 0);
 
     [
-      {roster: t1, teamName: name1, score: s1, opponentScore: s2},
-      {roster: t2, teamName: name2, score: s2, opponentScore: s1},
-    ].forEach(({roster, teamName, score, opponentScore}) => {
-      if (roster.length < 2) return;
-      const key = teamName.toLowerCase();
+      {roster: t1, score: s1, opponentScore: s2},
+      {roster: t2, score: s2, opponentScore: s1},
+    ].forEach(({roster, score, opponentScore}) => {
+      if (roster.length < 2) return; // skip empty sides
+      const names = roster.map(p=>p.name||'?').sort();
+      const key = names.join('|');
       if (!lineupMap[key]) {
-        lineupMap[key] = {teamName, aliases: new Set([teamName]), playerSet: new Set(), matchRosters:[], names:[], wins:0, losses:0, draws:0, maps:{}, roundsFor:0, roundsAgainst:0};
+        lineupMap[key] = {names, wins:0, losses:0, draws:0, maps:{}, roundsFor:0, roundsAgainst:0};
       }
       const lu = lineupMap[key];
-      lu.teamName = teamName;
-      lu.aliases.add(teamName);
-      roster.forEach(p => { if (p.name) lu.playerSet.add(p.name); });
-      // Store this match's exact roster as a signature for merge detection
-      const matchSig = roster.map(p=>p.name).filter(Boolean).sort().join('|');
-      if (matchSig && !lu.matchRosters.includes(matchSig)) lu.matchRosters.push(matchSig);
       if (score > opponentScore) lu.wins++;
       else if (score < opponentScore) lu.losses++;
       else lu.draws++;
       lu.roundsFor += score;
       lu.roundsAgainst += opponentScore;
-      // Accumulate per-map stats across all maps[] in this match
-      (mapsArr.length ? mapsArr : (meta.mapname ? [{mapname: meta.mapname}] : [])).forEach(mp => {
-        const mn = mp.mapname || mp.map;
-        if (!mn) return;
-        const ms1 = parseInt(mp.team1_score ?? 0);
-        const ms2 = parseInt(mp.team2_score ?? 0);
-        const mScore = roster === t1 ? ms1 : ms2;
-        const mOpp   = roster === t1 ? ms2 : ms1;
-        if (!lu.maps[mn]) lu.maps[mn] = {w:0, l:0};
-        if (mScore > mOpp) lu.maps[mn].w++;
-        else lu.maps[mn].l++;
-      });
-      // Fallback: if no maps array, use top-level mapname
-      if (!mapsArr.length && (meta.mapname || m.mapname)) {
-        const mn = meta.mapname || m.mapname;
-        if (!lu.maps[mn]) lu.maps[mn] = {w:0, l:0};
-        if (score > opponentScore) lu.maps[mn].w++;
-        else lu.maps[mn].l++;
+      if (m.mapname) {
+        if (!lu.maps[m.mapname]) lu.maps[m.mapname] = {w:0, l:0};
+        if (score > opponentScore) lu.maps[m.mapname].w++;
+        else lu.maps[m.mapname].l++;
       }
     });
   });
-
-  // Flatten playerSet → sorted names array (all players ever on this team)
-  Object.values(lineupMap).forEach(lu => { lu.names = [...lu.playerSet].sort(); });
-
-  // ── Merge teams that share identical per-match lineups ────────────────────
-  // Strategy: two team names are the same org if they ever fielded the exact
-  // same 5-player roster in a single match. We use per-match snapshots stored
-  // in matchRosters (built above) rather than the accumulated playerSet, so a
-  // team with a sub doesn't accidentally merge with a different team.
-  const rosterSigMap = {}; // rosterKey (per-match) → primary lineupMap key
-  Object.entries(lineupMap).forEach(([key, lu]) => {
-    // Check each per-match roster snapshot this team has
-    (lu.matchRosters || []).forEach(sig => {
-      if (!rosterSigMap[sig]) {
-        rosterSigMap[sig] = key;
-      } else if (rosterSigMap[sig] !== key) {
-        // Another team name fielded the exact same lineup — merge
-        const primaryKey = rosterSigMap[sig];
-        if (!lineupMap[primaryKey] || !lineupMap[key]) return; // already merged
-        const primary   = lineupMap[primaryKey];
-        const secondary = lineupMap[key];
-        primary.wins          += secondary.wins;
-        primary.losses        += secondary.losses;
-        primary.draws         += secondary.draws;
-        primary.roundsFor     += secondary.roundsFor;
-        primary.roundsAgainst += secondary.roundsAgainst;
-        secondary.aliases.forEach(a => primary.aliases.add(a));
-        secondary.playerSet.forEach(p => primary.playerSet.add(p));
-        Object.entries(secondary.maps).forEach(([map, {w,l}]) => {
-          if (!primary.maps[map]) primary.maps[map] = {w:0, l:0};
-          primary.maps[map].w += w;
-          primary.maps[map].l += l;
-        });
-        // Prefer the name with more matches as display name
-        const pt = primary.wins + primary.losses + primary.draws;
-        const st = secondary.wins + secondary.losses + secondary.draws;
-        if (st > pt) primary.teamName = secondary.teamName;
-        delete lineupMap[key];
-      }
-    });
-  });
-
-  // Re-flatten names after potential merges
-  Object.values(lineupMap).forEach(lu => { lu.names = [...lu.playerSet].sort(); });
 
   // Sort by total matches played desc
   const lineups = Object.values(lineupMap)
     .map(lu => {
       const total = lu.wins + lu.losses + lu.draws;
       const winRate = total > 0 ? Math.round((lu.wins/total)*100) : 0;
+      // Best map: highest win rate with >=1 win
       const mapEntries = Object.entries(lu.maps).map(([map,{w,l}])=>({map,w,l,pct:w/(w+l)*100}));
       mapEntries.sort((a,b)=>b.pct-a.pct);
       const bestMap = mapEntries.find(m=>m.w>0) || mapEntries[0] || null;
       const avgRoundDiff = total > 0 ? ((lu.roundsFor - lu.roundsAgainst)/total).toFixed(1) : '—';
-      // Aliases: other names this team has played under (excluding primary)
-      const aliasNames = [...lu.aliases].filter(a => a.toLowerCase() !== lu.teamName.toLowerCase());
-      return {...lu, total, winRate, mapEntries, bestMap, avgRoundDiff, aliasNames};
+      return {...lu, total, winRate, mapEntries, bestMap, avgRoundDiff};
     })
     .filter(lu => lu.total >= 1)
     .sort((a,b) => b.total - a.total);
@@ -2484,17 +2449,9 @@ function renderTeam(lineups) {
       </div>`;
     }).join('');
 
-    const aliasBadges = lu.aliasNames && lu.aliasNames.length
-      ? lu.aliasNames.map(a=>`<span style="padding:1px 6px;border-radius:2px;border:1px solid var(--border2);background:var(--surface2);font-size:10px;font-weight:600;color:var(--muted2);letter-spacing:.5px;text-transform:none;font-family:'Rajdhani',sans-serif">${esc(a)}</span>`).join('')
-      : '';
-    const mergedNote = lu.aliasNames && lu.aliasNames.length
-      ? `<span style="font-size:10px;color:var(--muted2);margin-left:6px;font-weight:400;letter-spacing:0;text-transform:none">also: ${aliasBadges}</span>`
-      : '';
     return `<div class="team-stat-card" style="margin-bottom:12px">
       <div class="team-stat-card-header">
-        <div style="display:flex;align-items:center;flex-wrap:wrap;gap:6px;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:13px;letter-spacing:1.5px;text-transform:uppercase;color:rgba(var(--orange-rgb),.9)">
-          ${esc(lu.teamName)}<span style="font-size:10px;font-weight:500;letter-spacing:1px;color:var(--muted2);text-transform:none">${lu.names.length} player${lu.names.length!==1?'s':''}</span>${mergedNote}
-        </div>
+        <div style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:11px;letter-spacing:2px;text-transform:uppercase;color:rgba(var(--orange-rgb),.8)">Lineup #${idx+1} — ${lu.names.length} Players</div>
         ${lu.bestMap ? `<span style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted2)">Best: ${lu.bestMap.map.replace('de_','').toUpperCase()}</span>` : ''}
       </div>
       <div style="display:flex">
@@ -2518,13 +2475,220 @@ function renderTeam(lineups) {
 
   el.innerHTML = `
     <div style="margin-bottom:16px;display:flex;align-items:center;justify-content:space-between">
-      <div class="page-title" style="margin:0">Team Stats <span class="sub">${lineups.length} team${lineups.length!==1?'s':''} · ${lineups.filter(l=>l.aliasNames&&l.aliasNames.length).length} merged</span></div>
+      <div class="page-title" style="margin:0">Team Stats <span class="sub">${lineups.length} lineup${lineups.length!==1?'s':''} tracked</span></div>
       <button onclick="_teamCache=null;loadTeam()" style="padding:6px 14px;background:transparent;border:1px solid var(--border);border-radius:3px;color:var(--muted2);font-family:'Rajdhani',sans-serif;font-size:11px;letter-spacing:1px;cursor:pointer;text-transform:uppercase">Refresh</button>
     </div>
     ${cards}`;
 
   attachShine();
 }
+
+
+// ── Match Notifications — persistent dropdown panel, polls every 30 min ────────
+const _POLL_INTERVAL = 30 * 60 * 1000; // 30 minutes
+let _pollTimer = null;
+let _notifItems = [];   // [{match, unread, ts}]
+let _notifOpen = false;
+
+// ── Persistence ───────────────────────────────────────────────────────────────
+function _notifSave() {
+  try {
+    // Save last 20 items + last-seen id
+    const toSave = _notifItems.slice(0, 20).map(n => ({
+      matchid: n.match.matchid,
+      team1_name: n.match.team1_name,
+      team2_name: n.match.team2_name,
+      mapname: n.match.mapname,
+      map_team1_score: n.match.map_team1_score ?? n.match.team1_score,
+      map_team2_score: n.match.map_team2_score ?? n.match.team2_score,
+      end_time: n.match.end_time,
+      unread: n.unread,
+      ts: n.ts,
+    }));
+    localStorage.setItem('rg-notifs', JSON.stringify(toSave));
+  } catch(e) {}
+}
+function _notifLoad() {
+  try {
+    const raw = localStorage.getItem('rg-notifs');
+    if (!raw) return;
+    const items = JSON.parse(raw);
+    if (Array.isArray(items)) {
+      _notifItems = items.map(n => ({match: n, unread: n.unread, ts: n.ts}));
+    }
+  } catch(e) {}
+}
+function _getLastSeen() {
+  try { return localStorage.getItem('rg-last-match'); } catch(e) { return null; }
+}
+function _setLastSeen(id) {
+  try { localStorage.setItem('rg-last-match', String(id)); } catch(e) {}
+}
+
+// ── Polling ───────────────────────────────────────────────────────────────────
+async function _pollMatches() {
+  try {
+    const data = await fetch('/api/matches?limit=20').then(r=>r.json()).catch(()=>[]);
+    if (!Array.isArray(data) || !data.length) return;
+
+    const lastSeen = _getLastSeen();
+    const newestId = String(data[0].matchid);
+
+    // First run — just record baseline, no notifications
+    if (!lastSeen) {
+      _setLastSeen(newestId);
+      return;
+    }
+
+    // Find new matches
+    const newMatches = [];
+    for (const m of data) {
+      if (String(m.matchid) === lastSeen) break;
+      newMatches.push(m);
+    }
+
+    if (newMatches.length > 0) {
+      // Prepend to notification list (newest first)
+      newMatches.forEach(m => {
+        _notifItems.unshift({match: m, unread: true, ts: m.end_time || new Date().toISOString()});
+      });
+      // Cap at 50
+      if (_notifItems.length > 50) _notifItems = _notifItems.slice(0, 50);
+      _notifSave();
+      _setLastSeen(newestId);
+
+      // Update match cache
+      if (_allMatches.length) {
+        const existingIds = new Set(_allMatches.map(m=>String(m.matchid)));
+        newMatches.filter(m=>!existingIds.has(String(m.matchid))).reverse().forEach(m=>_allMatches.unshift(m));
+        if (_curPage === 'matches') renderMatches();
+      }
+
+      _renderNotifBadge();
+      if (!_notifOpen) _renderNotifPanel(); // update panel if closed
+    }
+  } catch(e) { /* silent fail */ }
+}
+
+// ── Badge ─────────────────────────────────────────────────────────────────────
+function _renderNotifBadge() {
+  const wrap = document.getElementById('notif-wrap');
+  if (!wrap) return;
+  const unreadCount = _notifItems.filter(n=>n.unread).length;
+  const existing = wrap.querySelector('.notif-badge');
+  if (existing) existing.remove();
+  if (unreadCount > 0) {
+    const badge = document.createElement('span');
+    badge.className = 'notif-badge';
+    badge.textContent = unreadCount > 9 ? '9+' : unreadCount;
+    wrap.appendChild(badge);
+  }
+}
+
+// ── Panel toggle ──────────────────────────────────────────────────────────────
+function toggleNotifPanel(e) {
+  e.stopPropagation();
+  const wrap = document.getElementById('notif-wrap');
+  if (!wrap) return;
+  _notifOpen = !_notifOpen;
+  wrap.classList.toggle('open', _notifOpen);
+  if (_notifOpen) {
+    _renderNotifPanel();
+    // Mark all as read after a short delay (UX feel)
+    setTimeout(() => {
+      _notifItems.forEach(n => n.unread = false);
+      _notifSave();
+      _renderNotifBadge();
+      // Refresh read state in panel (remove unread styling)
+      document.querySelectorAll('.notif-item.unread').forEach(el => el.classList.remove('unread'));
+    }, 600);
+  }
+}
+
+function closeNotifPanel() {
+  _notifOpen = false;
+  document.getElementById('notif-wrap')?.classList.remove('open');
+}
+
+// Close when clicking outside
+document.addEventListener('click', e => {
+  if (_notifOpen && !document.getElementById('notif-wrap')?.contains(e.target)) {
+    closeNotifPanel();
+  }
+});
+
+// ── Render panel items ────────────────────────────────────────────────────────
+function _renderNotifPanel() {
+  const list = document.getElementById('notif-list');
+  if (!list) return;
+
+  if (!_notifItems.length) {
+    list.innerHTML = '<div class="notif-empty">No notifications yet</div>';
+    return;
+  }
+
+  list.innerHTML = _notifItems.map((n, idx) => {
+    const m = n.match;
+    const s1 = m.map_team1_score ?? m.team1_score ?? 0;
+    const s2 = m.map_team2_score ?? m.team2_score ?? 0;
+    const t1 = m.team1_name || 'Team 1';
+    const t2 = m.team2_name || 'Team 2';
+    const mapName = (m.mapname||'').replace('de_','').toUpperCase() || 'UNKNOWN';
+    const mapImg = m.mapname && MAP_IMGS[m.mapname] ? MAP_IMGS[m.mapname] : null;
+    const timeAgo = _timeAgo(n.ts);
+    const winner = s1 > s2 ? t1 : s2 > s1 ? t2 : null;
+    const winnerColor = s1 > s2 ? 'var(--ct)' : 'var(--t)';
+
+    return `<div class="notif-item${n.unread?' unread':''}" onclick="notifGoMatch('${esc(m.matchid)}')">
+      ${mapImg
+        ? `<img class="notif-map-thumb" src="${mapImg}" onerror="this.style.background='var(--surface2)'">`
+        : `<div class="notif-map-thumb" style="display:flex;align-items:center;justify-content:center;font-family:'Rajdhani',sans-serif;font-size:9px;font-weight:700;color:var(--muted2);letter-spacing:1px">${mapName}</div>`}
+      <div class="notif-item-body">
+        <div class="notif-item-score">
+          <span style="color:var(--ct);font-family:'Rajdhani',sans-serif">${s1}</span>
+          <span style="color:var(--muted2);margin:0 5px;font-size:12px">:</span>
+          <span style="color:var(--t);font-family:'Rajdhani',sans-serif">${s2}</span>
+          ${winner ? `<span style="font-family:'Rajdhani',sans-serif;font-size:10px;font-weight:700;color:${winnerColor};margin-left:8px;letter-spacing:1px;text-transform:uppercase">${esc(winner)} won</span>` : ''}
+        </div>
+        <div class="notif-item-teams">${esc(t1)} vs ${esc(t2)}</div>
+        <div class="notif-item-meta">${mapName} · ${timeAgo}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function notifGoMatch(matchId) {
+  closeNotifPanel();
+  _navStack = [];
+  go('match', {id: matchId});
+}
+
+function clearAllNotifs() {
+  _notifItems = [];
+  _notifSave();
+  _renderNotifBadge();
+  _renderNotifPanel();
+}
+
+function _timeAgo(ts) {
+  if (!ts) return '';
+  const diff = Date.now() - new Date(ts).getTime();
+  if (isNaN(diff)) return '';
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1)  return 'just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24)  return `${hrs}h ago`;
+  return `${Math.floor(hrs/24)}d ago`;
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+_notifLoad();           // restore saved notifications from localStorage
+_renderNotifBadge();    // show badge if there are unread items from last session
+_renderNotifPanel();    // pre-populate panel with saved items
+
+_pollMatches();                                   // immediate silent check
+_pollTimer = setInterval(_pollMatches, _POLL_INTERVAL); // then every 30 min
 
 // Check for ?match= URL param to deep-link
 const urlParams = new URLSearchParams(location.search);
