@@ -167,19 +167,41 @@ async def handle_api_matches(request):
             d = r.get('end_time') or ''
             return str(d)
         results.sort(key=sort_key, reverse=True)
+
+        # Flag any matches that have edits in the DB
+        try:
+            conn2 = get_db()
+            c2 = conn2.cursor()
+            c2.execute("SELECT matchid FROM match_edits")
+            edited_ids = {str(row[0]) for row in c2.fetchall()}
+            c2.close(); conn2.close()
+            for r in results:
+                r['is_edited'] = r['matchid'] in edited_ids
+        except Exception:
+            pass
+
         return _json_response(results[:limit])
     except Exception as e:
         return _json_response({"error": str(e)})
 
 
 async def handle_api_match(request):
-    """GET /api/match/{matchid} - pure fshost JSON source."""
+    """GET /api/match/{matchid} — fshost JSON merged with any DB edits."""
     matchid = request.match_info.get('matchid', '')
     try:
         loop = asyncio.get_running_loop()
         data = await loop.run_in_executor(None, _fetch_fshost_match_json, matchid)
         if not data:
             return _json_response({"error": f"No fshost data found for match {matchid}"})
+
+        # Auto-save raw fshost JSON to DB (non-blocking, best-effort)
+        asyncio.ensure_future(loop.run_in_executor(None, _save_raw_to_db, matchid, data))
+
+        # Apply any stored edits on top of raw data
+        edits = _get_edits(matchid)
+        if edits:
+            data = _deep_merge(data, edits)
+
         t1 = data.get('team1', {})
         t2 = data.get('team2', {})
         meta = {
@@ -191,6 +213,7 @@ async def handle_api_match(request):
             'winner':      data.get('winner', ''),
             'end_time':    data.get('date'),
             'start_time':  data.get('date'),
+            'is_edited':   bool(edits),   # flag so frontend can show "Edited" badge
         }
         maps = [{
             'matchid':      matchid,
@@ -588,37 +611,269 @@ async def handle_api_status(request):
             "player_list": [],
         })
 
+# ─────────────────────────────────────────────────────────────────────────────
+# MATCH EDIT API — save fshost JSONs to DB, apply edits, serve merged result
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _deep_merge(base: dict, overrides: dict) -> dict:
+    """
+    Recursively merge overrides into base dict.
+    For player lists: match by steamid64 and merge per-player fields.
+    For team dicts: merge nested keys.
+    """
+    result = dict(base)
+    for key, val in overrides.items():
+        if key in ('team1', 'team2') and isinstance(val, dict) and isinstance(result.get(key), dict):
+            # Merge team-level fields
+            merged_team = dict(result[key])
+            for tk, tv in val.items():
+                if tk == 'players' and isinstance(tv, list):
+                    # Merge player overrides by steamid64
+                    orig_players = {str(p.get('steam_id', p.get('steamid64', ''))): p
+                                    for p in merged_team.get('players', [])}
+                    for op in tv:
+                        pid = str(op.get('steam_id', op.get('steamid64', '')))
+                        if pid and pid in orig_players:
+                            orig_players[pid] = {**orig_players[pid], **op}
+                        elif pid:
+                            orig_players[pid] = op
+                    merged_team['players'] = list(orig_players.values())
+                else:
+                    merged_team[tk] = tv
+            result[key] = merged_team
+        elif isinstance(val, dict) and isinstance(result.get(key), dict):
+            result[key] = _deep_merge(result[key], val)
+        else:
+            result[key] = val
+    return result
+
+
+def _get_edits(matchid: str) -> dict:
+    """Load edit overrides for a match from DB. Returns {} if none."""
+    try:
+        conn = get_db()
+        c = conn.cursor(dictionary=True)
+        c.execute("SELECT edits_json FROM match_edits WHERE matchid = %s", (str(matchid),))
+        row = c.fetchone()
+        c.close(); conn.close()
+        if row and row['edits_json']:
+            return json.loads(row['edits_json'])
+    except Exception as e:
+        print(f"[edits] Load error for {matchid}: {e}")
+    return {}
+
+
+def _save_raw_to_db(matchid: str, raw: dict):
+    """Upsert the raw fshost JSON into fshost_matches table."""
+    try:
+        conn = get_db()
+        c = conn.cursor()
+        c.execute("""
+            INSERT INTO fshost_matches (matchid, raw_json, fetched_at)
+            VALUES (%s, %s, NOW())
+            ON DUPLICATE KEY UPDATE raw_json = VALUES(raw_json), updated_at = NOW()
+        """, (str(matchid), json.dumps(raw, default=str)))
+        conn.commit()
+        c.close(); conn.close()
+    except Exception as e:
+        print(f"[DB] Save raw error for {matchid}: {e}")
+
+
+async def handle_api_auth_edit(request):
+    """POST /api/auth/edit — verify edit password, return simple token."""
+    try:
+        body = await request.json()
+        password = body.get('password', '')
+        if password == EDIT_PASSWORD:
+            # Simple token = base64(matchid:password) — stateless, good enough
+            import base64
+            token = base64.b64encode(f"edit:{EDIT_PASSWORD}".encode()).decode()
+            return _json_response({"ok": True, "token": token})
+        return web.Response(
+            text=json.dumps({"ok": False, "error": "Wrong password"}),
+            content_type='application/json',
+            status=401,
+            headers={"Access-Control-Allow-Origin": "*"},
+        )
+    except Exception as e:
+        return _json_response({"ok": False, "error": str(e)})
+
+
+def _verify_edit_token(request) -> bool:
+    """Check Authorization header for a valid edit token."""
+    import base64
+    auth = request.headers.get('Authorization', '')
+    if not auth.startswith('Bearer '):
+        return False
+    try:
+        token = auth[7:]
+        decoded = base64.b64decode(token.encode()).decode()
+        return decoded == f"edit:{EDIT_PASSWORD}"
+    except Exception:
+        return False
+
+
+async def handle_api_save_match(request):
+    """
+    POST /api/match/{matchid}/save
+    Saves the raw fshost JSON for this match into fshost_matches table.
+    Called automatically by the frontend when it first fetches a match.
+    No auth required — it's just caching the public fshost data.
+    """
+    matchid = request.match_info.get('matchid', '')
+    try:
+        body = await request.json()
+        raw = body.get('raw_json') or body  # accept full body as raw or wrapped
+        if not raw or not isinstance(raw, dict):
+            return _json_response({"ok": False, "error": "No JSON body"})
+        _save_raw_to_db(matchid, raw)
+        return _json_response({"ok": True, "matchid": matchid})
+    except Exception as e:
+        return _json_response({"ok": False, "error": str(e)})
+
+
+async def handle_api_get_edits(request):
+    """GET /api/match/{matchid}/edits — return the stored edits for a match (if any)."""
+    matchid = request.match_info.get('matchid', '')
+    edits = _get_edits(matchid)
+    has_raw = False
+    try:
+        conn = get_db()
+        c = conn.cursor()
+        c.execute("SELECT 1 FROM fshost_matches WHERE matchid = %s", (str(matchid),))
+        has_raw = c.fetchone() is not None
+        c.close(); conn.close()
+    except Exception:
+        pass
+    return _json_response({"matchid": matchid, "edits": edits, "has_raw": has_raw})
+
+
+async def handle_api_patch_match(request):
+    """
+    PATCH /api/match/{matchid}/edit
+    Save edited fields for a match.
+    Requires Bearer token from /api/auth/edit.
+
+    Body: { "edits": { ...partial fshost JSON fields to override... } }
+
+    The edits are stored as a partial JSON overlay.
+    On GET /api/match/{matchid}, the backend merges raw + edits.
+    """
+    matchid = request.match_info.get('matchid', '')
+
+    if not _verify_edit_token(request):
+        return web.Response(
+            text=json.dumps({"ok": False, "error": "Unauthorized"}),
+            content_type='application/json',
+            status=401,
+            headers={"Access-Control-Allow-Origin": "*"},
+        )
+    try:
+        body = await request.json()
+        edits = body.get('edits')
+        if edits is None or not isinstance(edits, dict):
+            return _json_response({"ok": False, "error": "Missing 'edits' object in body"})
+
+        conn = get_db()
+        c = conn.cursor()
+        c.execute("""
+            INSERT INTO match_edits (matchid, edits_json, edited_at)
+            VALUES (%s, %s, NOW())
+            ON DUPLICATE KEY UPDATE edits_json = VALUES(edits_json), edited_at = NOW()
+        """, (str(matchid), json.dumps(edits, default=str)))
+        conn.commit()
+        c.close(); conn.close()
+
+        # Bust fshost cache so the next GET /api/match fetches fresh merged data
+        global _MATCHID_DEMO_CACHE
+        _MATCHID_DEMO_CACHE = None
+
+        return _json_response({"ok": True, "matchid": matchid})
+    except Exception as e:
+        return _json_response({"ok": False, "error": str(e)})
+
+
+async def handle_api_revert_match(request):
+    """
+    DELETE /api/match/{matchid}/edit
+    Remove all edits for a match, reverting to raw fshost data.
+    Requires Bearer token.
+    """
+    matchid = request.match_info.get('matchid', '')
+    if not _verify_edit_token(request):
+        return web.Response(
+            text=json.dumps({"ok": False, "error": "Unauthorized"}),
+            content_type='application/json',
+            status=401,
+            headers={"Access-Control-Allow-Origin": "*"},
+        )
+    try:
+        conn = get_db()
+        c = conn.cursor()
+        c.execute("DELETE FROM match_edits WHERE matchid = %s", (str(matchid),))
+        conn.commit()
+        c.close(); conn.close()
+        return _json_response({"ok": True, "matchid": matchid, "reverted": True})
+    except Exception as e:
+        return _json_response({"ok": False, "error": str(e)})
+
+
+async def handle_options(request):
+    """Handle CORS preflight OPTIONS requests for edit endpoints."""
+    return web.Response(
+        status=204,
+        headers={
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "GET, POST, PATCH, DELETE, OPTIONS",
+            "Access-Control-Allow-Headers": "Content-Type, Authorization",
+        }
+    )
+
+
 async def handle_stats_page(request):
     """GET /stats — serve stats.html as a static file"""
     return web.FileResponse(HTML_PATH)
 
 async def start_http_server():
     app = web.Application()
-    app.router.add_get('/api/specialists',    handle_api_specialists)
-    app.router.add_get('/api/player/{name}', handle_api_player)
-    app.router.add_get('/api/steam/{steamid64}', handle_api_steam)
-    app.router.add_get('/api/matches',       handle_api_matches)
-    app.router.add_get('/api/match/{matchid}', handle_api_match)
-    app.router.add_get('/api/demos',          handle_api_demos)
-    app.router.add_get('/api/leaderboard',   handle_api_leaderboard)
-    app.router.add_get('/api/mapstats',      handle_api_mapstats)
-    app.router.add_get('/api/h2h',           handle_api_h2h)
-    app.router.add_get('/api/status',        handle_api_status)
-    app.router.add_get('/stats',             handle_stats_page)
-    app.router.add_get('/',                  handle_stats_page)
-    app.router.add_get('/health',            handle_health_check)
-    
+    app.router.add_get('/api/specialists',             handle_api_specialists)
+    app.router.add_get('/api/player/{name}',           handle_api_player)
+    app.router.add_get('/api/steam/{steamid64}',       handle_api_steam)
+    app.router.add_get('/api/matches',                 handle_api_matches)
+    app.router.add_get('/api/match/{matchid}',         handle_api_match)
+    app.router.add_get('/api/demos',                   handle_api_demos)
+    app.router.add_get('/api/leaderboard',             handle_api_leaderboard)
+    app.router.add_get('/api/mapstats',                handle_api_mapstats)
+    app.router.add_get('/api/h2h',                     handle_api_h2h)
+    app.router.add_get('/api/status',                  handle_api_status)
+    # ── Match edit endpoints ──────────────────────────────────────────────────
+    app.router.add_post('/api/auth/edit',              handle_api_auth_edit)
+    app.router.add_post('/api/match/{matchid}/save',   handle_api_save_match)
+    app.router.add_get('/api/match/{matchid}/edits',   handle_api_get_edits)
+    app.router.add_route('PATCH',  '/api/match/{matchid}/edit',  handle_api_patch_match)
+    app.router.add_route('DELETE', '/api/match/{matchid}/edit',  handle_api_revert_match)
+    # CORS preflight for edit endpoints
+    app.router.add_route('OPTIONS', '/api/auth/edit',             handle_options)
+    app.router.add_route('OPTIONS', '/api/match/{matchid}/save',  handle_options)
+    app.router.add_route('OPTIONS', '/api/match/{matchid}/edit',  handle_options)
+    app.router.add_route('OPTIONS', '/api/match/{matchid}/edits', handle_options)
+    # ── Static pages ─────────────────────────────────────────────────────────
+    app.router.add_get('/stats',   handle_stats_page)
+    app.router.add_get('/',        handle_stats_page)
+    app.router.add_get('/health',  handle_health_check)
+
     port = int(os.getenv('PORT', 8080))
     runner = web.AppRunner(app)
     await runner.setup()
     site = web.TCPSite(runner, '0.0.0.0', port)
     await site.start()
-    
+
     print(f"✓ HTTP log endpoint started on port {port}")
     return runner
 
 TOKEN = os.getenv("TOKEN")
 STEAM_API_KEY = os.getenv("STEAM_API_KEY", "")
+EDIT_PASSWORD = os.getenv("EDIT_PASSWORD", "changeme")   # set this in Railway env vars
 SERVER_IP = os.getenv("SERVER_IP", "127.0.0.1")
 SERVER_PORT = int(os.getenv("SERVER_PORT", 27015))
 RCON_IP = os.getenv("RCON_IP", SERVER_IP)
@@ -685,6 +940,27 @@ def init_database():
 
     # Bot-managed tables (session tracking, snapshots)
 
+    # ── fshost match cache: stores the full parsed JSON from fshost ──────────
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS fshost_matches (
+            matchid       VARCHAR(64)  PRIMARY KEY,
+            raw_json      LONGTEXT     NOT NULL,
+            fetched_at    DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at    DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        ) CHARACTER SET utf8mb4
+    """)
+
+    # ── match_edits: override fields layered on top of raw fshost JSON ───────
+    # Stores a partial JSON object — only the fields the user changed.
+    # Backend merges: raw_json DEEP-MERGED WITH edits_json → final response.
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS match_edits (
+            matchid       VARCHAR(64)  PRIMARY KEY,
+            edits_json    LONGTEXT     NOT NULL,
+            edited_at     DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            edited_by     VARCHAR(128) DEFAULT NULL
+        ) CHARACTER SET utf8mb4
+    """)
 
     # map_stats and player_stats are intentionally NOT created here.
     # MatchZy writes matchzy_stats_maps, matchzy_stats_players, and
