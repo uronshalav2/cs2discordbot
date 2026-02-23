@@ -13,7 +13,7 @@
   --text:#a8b0b8;--white:#dde1e7;--muted:#3a3e44;--muted2:#575e68;
   --nav-bg:#09090b;--nav-border:var(--border);--subnav-bg:#0c0d0f;
   --card-bg:#0c0e10;--stat-box-bg:#0a0c0e;--stat-box-top-bg:rgba(var(--orange-rgb),.07);
-  --table-head-bg:rgba(0,0,0,.5);--table-team-divider:rgba(0,0,0,.3);
+  --table-head-bg:linear-gradient(180deg,rgba(var(--orange-rgb),.18) 0%,rgba(var(--orange-rgb),.06) 100%);--table-team-divider:rgba(0,0,0,.3);
 }
 *{box-sizing:border-box;margin:0;padding:0}
 html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;font-size:13px}
@@ -91,11 +91,11 @@ nav{background:var(--nav-bg);border-bottom:2px solid var(--nav-border);display:f
 /* LEADERBOARD */
 .lb-wrap{overflow-x:auto;border:1px solid rgba(var(--orange-rgb),.3)!important;box-shadow:0 0 20px rgba(var(--orange-rgb),.06),inset 0 1px 0 rgba(255,255,255,.04)!important;border-radius:4px}
 .lb-table{width:100%;border-collapse:collapse;min-width:680px}
-.lb-table thead tr{background:var(--table-head-bg)}
-.lb-table th{padding:8px 12px;text-align:right;font-family:'Rajdhani',sans-serif;font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--muted2);border-bottom:1px solid var(--border);white-space:nowrap;user-select:none}
+.lb-table thead tr{background:var(--table-head-bg);box-shadow:inset 0 1px 0 rgba(var(--orange-rgb),.25),inset 0 -1px 0 rgba(var(--orange-rgb),.12)}
+.lb-table th{padding:8px 12px;text-align:right;font-family:'Rajdhani',sans-serif;font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:rgba(var(--orange-rgb),.7);border-bottom:1px solid rgba(var(--orange-rgb),.25);white-space:nowrap;user-select:none}
 .lb-table th.sortable{cursor:pointer;transition:color .15s}
-.lb-table th.sortable:hover{color:var(--text)}
-.lb-table th.sort-active{color:var(--orange)}
+.lb-table th.sortable:hover{color:var(--orange)}
+.lb-table th.sort-active{color:var(--orange);text-shadow:0 0 12px rgba(var(--orange-rgb),.6)}
 .lb-table th.sort-active::after{content:' ▼';font-size:8px;opacity:.8}
 .lb-table th:first-child,.lb-table th:nth-child(2){text-align:left}
 .lb-table td{padding:9px 12px;text-align:right;border-bottom:1px solid var(--border);font-size:13px;white-space:nowrap}
@@ -168,7 +168,7 @@ nav{background:var(--nav-bg);border-bottom:2px solid var(--nav-border);display:f
 
 /* SCOREBOARD TABLE */
 .sb-table{width:100%;border-collapse:collapse;min-width:620px}
-.sb-table th{padding:7px 10px;text-align:right;font-family:'Rajdhani',sans-serif;font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--muted2);background:var(--table-head-bg);border-bottom:1px solid var(--border);white-space:nowrap}
+.sb-table th{padding:7px 10px;text-align:right;font-family:'Rajdhani',sans-serif;font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:rgba(var(--orange-rgb),.7);background:var(--table-head-bg);border-bottom:1px solid rgba(var(--orange-rgb),.25);white-space:nowrap;box-shadow:inset 0 1px 0 rgba(var(--orange-rgb),.2)}
 .sb-table th:first-child{text-align:left}
 .sb-table td{padding:9px 10px;text-align:right;border-bottom:1px solid var(--border);font-size:13px}
 .sb-table td:first-child{text-align:left;color:var(--white);font-family:'Rajdhani',sans-serif;font-weight:600;font-size:14px;cursor:pointer;letter-spacing:.3px}
@@ -230,7 +230,7 @@ nav{background:var(--nav-bg);border-bottom:2px solid var(--nav-border);display:f
 
 /* PLAYER MATCH HISTORY */
 .ph-table{width:100%;border-collapse:collapse;min-width:560px}
-.ph-table th{padding:7px 10px;text-align:right;font-family:'Rajdhani',sans-serif;font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--muted2);background:var(--table-head-bg);border-bottom:1px solid var(--border)}
+.ph-table th{padding:7px 10px;text-align:right;font-family:'Rajdhani',sans-serif;font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:rgba(var(--orange-rgb),.7);background:var(--table-head-bg);border-bottom:1px solid rgba(var(--orange-rgb),.25);box-shadow:inset 0 1px 0 rgba(var(--orange-rgb),.2)}
 .ph-table th:first-child{text-align:left}
 .ph-table td{padding:9px 10px;text-align:right;border-bottom:1px solid var(--border);font-size:13px}
 .ph-table td:first-child{text-align:left;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:14px;color:var(--white)}
@@ -1233,7 +1233,7 @@ async function loadPlayer(name) {
 // ── Map Stats ─────────────────────────────────────────────────────────────────
 async function loadMaps() {
   const el = document.getElementById('p-maps');
-  el.innerHTML = _getSpinnerSvg().then(svg=>{el.innerHTML='<div class="loading"><span class="spin" style="display:inline-flex;align-items:center;justify-content:center;color:var(--orange)">'+svg+'</span></div>'});
+  _getSpinnerSvg().then(svg=>{el.innerHTML='<div class="loading"><span class="spin" style="display:inline-flex;align-items:center;justify-content:center;color:var(--orange)">'+svg+'</span></div>'});
   const [dbStats, demos] = await Promise.all([
     fetch('/api/mapstats').then(r=>r.json()).catch(()=>[]),
     fetch('/api/demos').then(r=>r.json()).catch(()=>[]),
@@ -1307,7 +1307,7 @@ let _h2hSel = [null, null]; // [player1, player2]
 
 async function loadH2H() {
   const el = document.getElementById('p-h2h');
-  el.innerHTML = _getSpinnerSvg().then(svg=>{el.innerHTML='<div class="loading"><span class="spin" style="display:inline-flex;align-items:center;justify-content:center;color:var(--orange)">'+svg+'</span></div>'});
+  _getSpinnerSvg().then(svg=>{el.innerHTML='<div class="loading"><span class="spin" style="display:inline-flex;align-items:center;justify-content:center;color:var(--orange)">'+svg+'</span></div>'});
   if (!_h2hPlayers) {
     const data = await fetch('/api/leaderboard').then(r=>r.json()).catch(()=>[]);
     // Fetch Steam avatars for all
@@ -1406,7 +1406,7 @@ async function runH2H() {
   if (!p1 || !p2 || !body) return;
 
   // Show loading state inside the expanding body
-  body.innerHTML = _getSpinnerSvg().then(svg=>{el.innerHTML='<div class="loading"><span class="spin" style="display:inline-flex;align-items:center;justify-content:center;color:var(--orange)">'+svg+'</span></div>'});
+  _getSpinnerSvg().then(svg=>{body.innerHTML='<div class="loading"><span class="spin" style="display:inline-flex;align-items:center;justify-content:center;color:var(--orange)">'+svg+'</span></div>'});
   body.classList.add('open');
 
   // Collapse picker
@@ -1490,7 +1490,7 @@ function h2hBack() {
 let _lbSort = 'kills';
 async function loadLeaderboard() {
   const el = document.getElementById('p-leaderboard');
-  el.innerHTML = _getSpinnerSvg().then(svg=>{el.innerHTML='<div class="loading"><span class="spin" style="display:inline-flex;align-items:center;justify-content:center;color:var(--orange)">'+svg+'</span></div>'});
+  _getSpinnerSvg().then(svg=>{el.innerHTML='<div class="loading"><span class="spin" style="display:inline-flex;align-items:center;justify-content:center;color:var(--orange)">'+svg+'</span></div>'});
   const data = await fetch('/api/leaderboard').then(r=>r.json()).catch(()=>[]);
   if (!Array.isArray(data) || !data.length) {
     el.innerHTML = emptyState('leaderboard','No Player Data','Stats will appear after matches are completed');
@@ -1693,7 +1693,7 @@ let _specData = null;
 async function loadSpecialists() {
   const el = document.getElementById('p-specialists');
   if (_specData) { renderSpecialists(_specData, _specTab); return; }
-  el.innerHTML = _getSpinnerSvg().then(svg=>{el.innerHTML='<div class="loading"><span class="spin" style="display:inline-flex;align-items:center;justify-content:center;color:var(--orange)">'+svg+'</span></div>'});
+  _getSpinnerSvg().then(svg=>{el.innerHTML='<div class="loading"><span class="spin" style="display:inline-flex;align-items:center;justify-content:center;color:var(--orange)">'+svg+'</span></div>'});
   const data = await fetch('/api/specialists').then(r=>r.json()).catch(()=>[]);
   if (!Array.isArray(data) || !data.length) {
     el.innerHTML = emptyState('specialists','No Specialist Data','Clutch kings, entry fraggers and more will appear here'); return;
@@ -1744,7 +1744,7 @@ function renderSpecialists(data, tab) {
   }
 
   const rankColors = ['var(--orange)','#a0aec0','#b87333'];
-  const headerCols = cols.map(c=>`<th style="padding:8px 16px;text-align:center;font-family:'Rajdhani',sans-serif;font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--muted2)">${c.label}</th>`).join('');
+  const headerCols = cols.map(c=>`<th style="padding:8px 16px;text-align:center;font-family:'Rajdhani',sans-serif;font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:rgba(var(--orange-rgb),.7);border-bottom:1px solid rgba(var(--orange-rgb),.25)">${c.label}</th>`).join('');
   const rows = sorted.map((p,i) => {
     const rank = i+1;
     const rankStr = rank <= 3
@@ -1766,9 +1766,9 @@ function renderSpecialists(data, tab) {
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px">${tabsHtml}</div>
     <div class="card lb-wrap">
       <table class="lb-table" style="width:100%;border-collapse:collapse">
-        <thead><tr style="background:rgba(0,0,0,.35)">
-          <th style="padding:8px 14px;width:48px"></th>
-          <th style="padding:8px 14px;text-align:left;font-family:'Rajdhani',sans-serif;font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--muted2)">Player</th>
+        <thead><tr style="background:var(--table-head-bg);box-shadow:inset 0 1px 0 rgba(var(--orange-rgb),.2),inset 0 -1px 0 rgba(var(--orange-rgb),.12)">
+          <th style="padding:8px 14px;width:48px;border-bottom:1px solid rgba(var(--orange-rgb),.25)"></th>
+          <th style="padding:8px 14px;text-align:left;font-family:'Rajdhani',sans-serif;font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:rgba(var(--orange-rgb),.7);border-bottom:1px solid rgba(var(--orange-rgb),.25)">Player</th>
           ${headerCols}
         </tr></thead>
         <tbody>${rows}</tbody>
@@ -1782,7 +1782,7 @@ let _demoFilters = {map:''};
 async function loadDemos() {
   const el = document.getElementById('p-demos');
   if (_demoData) { renderDemos(); return; }
-  el.innerHTML = _getSpinnerSvg().then(svg=>{el.innerHTML='<div class="loading"><span class="spin" style="display:inline-flex;align-items:center;justify-content:center;color:var(--orange)">'+svg+'</span></div>'});
+  _getSpinnerSvg().then(svg=>{el.innerHTML='<div class="loading"><span class="spin" style="display:inline-flex;align-items:center;justify-content:center;color:var(--orange)">'+svg+'</span></div>'});
   const data = await fetch('/api/demos').then(r=>r.json()).catch(()=>[]);
   if (!Array.isArray(data) || !data.length) {
     el.innerHTML = emptyState('demos','No Demos Found','Demo files will appear here once uploaded'); return;
@@ -1950,7 +1950,7 @@ let _predictTeams   = [[], []];
 
 async function loadPredict() {
   const el = document.getElementById('p-predict');
-  el.innerHTML = _getSpinnerSvg().then(svg=>{el.innerHTML='<div class="loading"><span class="spin" style="display:inline-flex;align-items:center;justify-content:center;color:var(--orange)">'+svg+'</span></div>'});
+  _getSpinnerSvg().then(svg=>{el.innerHTML='<div class="loading"><span class="spin" style="display:inline-flex;align-items:center;justify-content:center;color:var(--orange)">'+svg+'</span></div>'});
   if (!_predictPlayers) {
     const data = await fetch('/api/leaderboard').then(r=>r.json()).catch(()=>[]);
     await Promise.all(data.slice(0,40).map(async p => {
