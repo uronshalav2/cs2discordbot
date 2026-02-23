@@ -440,16 +440,17 @@ def _apply_match_player_edits(players: list, matchid: str) -> list:
     """
     Patch a per-match player list with stored edits.
     Recalculates kd / hs_pct / adr when base stats are edited.
+    Also appends any new players added via the edit modal (edits.new_players).
     """
     edits = _get_edits(matchid)
     if not edits:
         return players
     player_edits = edits.get('players', {})
-    if not player_edits:
-        return players
     out = []
+    existing_sids = set()
     for p in players:
         sid = str(p.get('steamid64') or p.get('steam_id') or '')
+        existing_sids.add(sid)
         pe  = player_edits.get(sid, {})
         if pe:
             p = dict(p)
@@ -465,6 +466,36 @@ def _apply_match_player_edits(players: list, matchid: str) -> list:
             if 'damage' in pe:
                 p['adr'] = round(dmg / 30, 1)
         out.append(p)
+
+    # Append new players that were added via the edit modal
+    new_players = edits.get('new_players', [])
+    for np in new_players:
+        sid = str(np.get('steamid64', '') or '')
+        if not sid or sid in existing_sids:
+            continue  # skip duplicates or invalid
+        kills  = int(np.get('kills', 0) or 0)
+        deaths = int(np.get('deaths', 0) or 0)
+        hs     = int(np.get('head_shot_kills', 0) or 0)
+        dmg    = int(np.get('damage', 0) or 0)
+        new_p = {
+            'steamid64':      sid,
+            'steam_id':       sid,
+            'name':           np.get('name', 'Unknown'),
+            'team':           np.get('team', ''),
+            'kills':          kills,
+            'deaths':         deaths,
+            'assists':        int(np.get('assists', 0) or 0),
+            'damage':         dmg,
+            'rating':         float(np.get('rating', 0) or 0),
+            'kast':           float(np.get('kast', 0) or 0),
+            'kd':             round(kills / deaths, 2) if deaths else float(kills),
+            'hs_pct':         round(hs / kills * 100, 1) if kills else 0.0,
+            'adr':            round(dmg / 30, 1),
+            'head_shot_kills':hs,
+            'is_added':       True,  # flag so UI can distinguish if needed
+        }
+        out.append(new_p)
+        existing_sids.add(sid)
     return out
 
 
