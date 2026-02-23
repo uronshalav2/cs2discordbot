@@ -1154,6 +1154,7 @@ async def handle_api_matchzy_players(request):
             resolve_method = "raw_id_fallback"
 
         # ── Fetch players for resolved matchid ────────────────────────────────
+        # JOIN matchzy_stats_maps to get total rounds for per-round normalization
         c.execute(f"""
             SELECT
                 p.steamid64,
@@ -1177,10 +1178,13 @@ async def handle_api_matchzy_players(request):
                 p.flash_count,
                 p.flash_successes,
                 p.mapnumber,
+                (m.team1_score + m.team2_score) AS total_rounds,
                 ROUND(p.kills / NULLIF(p.deaths, 0), 2)             AS kd,
                 ROUND(p.head_shot_kills / NULLIF(p.kills,0)*100, 1) AS hs_pct,
-                ROUND(p.damage / 30.0, 1)                            AS adr
+                ROUND(p.damage / NULLIF(m.team1_score + m.team2_score, 0), 1) AS adr
             FROM {MATCHZY_TABLES['players']} p
+            LEFT JOIN {MATCHZY_TABLES['maps']} m
+                ON m.matchid = p.matchid AND m.mapnumber = p.mapnumber
             WHERE p.matchid = %s
             ORDER BY p.team, p.kills DESC
         """, (mz_matchid,))
@@ -1199,6 +1203,44 @@ async def handle_api_matchzy_players(request):
                           'entry_wins','utility_damage','flash_successes'):
                 if row.get(field) is None:
                     row[field] = 0
+
+            # ── Estimate Rating (HLTV 2.0-inspired approximation) ─────────────
+            # Formula: (KPR*0.73 + DPR_inv*0.53 + impact*0.50 + ADR*0.0073 + 0.48) scaled
+            # where impact = 2.13*KPR + 0.42*(assists/rounds) - 0.41
+            r = int(row.get('total_rounds') or 0)
+            k = int(row.get('kills') or 0)
+            d = int(row.get('deaths') or 0)
+            a = int(row.get('assists') or 0)
+            dmg = int(row.get('damage') or 0)
+            if r > 0:
+                kpr     = k / r
+                dpr     = d / r
+                apr     = a / r
+                adr_val = dmg / r
+                impact  = 2.13 * kpr + 0.42 * apr - 0.41
+                rating  = 0.0073 * adr_val + 0.3591 * kpr - 0.5329 * dpr + 0.2372 * impact + 0.9523
+                row['rating'] = round(max(0.01, rating), 2)
+            else:
+                row['rating'] = None
+
+            # ── Estimate KAST ─────────────────────────────────────────────────
+            # KAST = rounds with Kill/Assist/Survive/Trade. We approximate:
+            # Rounds survived  = total_rounds - deaths
+            # Rounds with kill = kills (capped at rounds)
+            # Rounds with assist = assists (partial overlap assumed)
+            # We use: KAST ≈ min(100, (survived + kill_rounds + assist_rounds) / rounds * correction)
+            # This is an estimate — real KAST needs round-by-round data.
+            if r > 0:
+                survived      = max(0, r - d)
+                kill_rounds   = min(k, r)          # upper bound
+                assist_rounds = min(a, max(0, r - kill_rounds))
+                raw_kast      = (survived + kill_rounds + assist_rounds) / r
+                # Apply a mild compression — empirically KAST rarely exceeds 85 for average players
+                kast_est      = min(99.0, raw_kast * 72.0)
+                row['kast']   = round(kast_est, 1)
+            else:
+                row['kast'] = None
+
             result.append(row)
 
         return _json_response({
