@@ -373,30 +373,57 @@ nav{background:var(--nav-bg);border-bottom:2px solid var(--nav-border);display:f
 .notif-btn{width:34px;height:34px;border-radius:6px;background:transparent;border:1px solid var(--border2);color:var(--muted2);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .18s;flex-shrink:0;position:relative}
 .notif-btn:hover{color:var(--orange);border-color:var(--orange);background:var(--orange-glow)}
 .notif-btn svg{width:16px;height:16px}
-.notif-badge{position:absolute;top:-5px;right:-5px;min-width:16px;height:16px;padding:0 4px;border-radius:8px;background:var(--orange);color:#000;font-family:'Rajdhani',sans-serif;font-weight:800;font-size:10px;line-height:16px;text-align:center;pointer-events:none;display:none;box-shadow:0 0 8px rgba(var(--orange-rgb),.5)}
+.notif-badge{position:absolute;top:-5px;right:-5px;min-width:16px;height:16px;padding:0 4px;border-radius:8px;background:var(--orange);color:#000;font-family:'Rajdhani',sans-serif;font-weight:800;font-size:10px;line-height:16px;text-align:center;pointer-events:none;display:none;box-shadow:0 0 8px rgba(var(--orange-rgb),.5);animation:notif-pop .2s cubic-bezier(.4,0,.2,1)}
 .notif-badge.show{display:block}
+@keyframes notif-pop{from{transform:scale(0)}to{transform:scale(1)}}
 
-.notif-dropdown{position:absolute;top:calc(100% + 8px);right:0;width:320px;max-height:420px;background:var(--subnav-bg);border:1px solid var(--border);border-radius:8px;box-shadow:0 12px 40px rgba(0,0,0,.5);z-index:400;opacity:0;pointer-events:none;transform:translateY(-6px);transition:opacity .18s,transform .18s;overflow:hidden;display:flex;flex-direction:column}
+.notif-dropdown{position:absolute;top:calc(100% + 8px);right:0;width:320px;max-height:440px;background:var(--subnav-bg);border:1px solid rgba(var(--orange-rgb),.3);border-radius:8px;box-shadow:0 12px 40px rgba(0,0,0,.6),0 0 0 1px rgba(var(--orange-rgb),.08),inset 0 1px 0 rgba(255,255,255,.04);z-index:400;opacity:0;pointer-events:none;transform:translateY(-6px);transition:opacity .18s,transform .18s;overflow:hidden;display:flex;flex-direction:column}
 .notif-dropdown.open{opacity:1;pointer-events:auto;transform:translateY(0)}
-.notif-header{padding:10px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
-.notif-header-title{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:12px;letter-spacing:1.5px;text-transform:uppercase;color:var(--white)}
-.notif-clear-btn{font-family:'Rajdhani',sans-serif;font-weight:600;font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--muted2);cursor:pointer;padding:2px 6px;border-radius:3px;border:1px solid var(--border);background:transparent;transition:all .15s}
-.notif-clear-btn:hover{color:var(--orange);border-color:var(--orange)}
-.notif-list{overflow-y:auto;flex:1}
-.notif-item{padding:10px 14px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .12s;display:flex;align-items:flex-start;gap:10px}
+
+/* Header */
+.notif-header{padding:10px 14px;background:linear-gradient(180deg,rgba(var(--orange-rgb),.14) 0%,rgba(var(--orange-rgb),.05) 100%);border-bottom:1px solid rgba(var(--orange-rgb),.25);display:flex;align-items:center;justify-content:space-between;flex-shrink:0;box-shadow:inset 0 1px 0 rgba(var(--orange-rgb),.2)}
+.notif-header-title{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:12px;letter-spacing:1.5px;text-transform:uppercase;color:var(--orange);text-shadow:0 0 12px rgba(var(--orange-rgb),.4)}
+.notif-clear-btn{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--muted2);cursor:pointer;padding:3px 8px;border-radius:3px;border:1px solid var(--border2);background:transparent;transition:all .15s}
+.notif-clear-btn:hover{color:var(--orange);border-color:var(--orange);background:var(--orange-glow)}
+
+/* List */
+.notif-list{overflow-y:auto;flex:1;scrollbar-width:thin;scrollbar-color:var(--border2) transparent}
+.notif-list::-webkit-scrollbar{width:4px}
+.notif-list::-webkit-scrollbar-track{background:transparent}
+.notif-list::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px}
+
+/* Notification rows — orange-tinted */
+.notif-item{padding:11px 14px;border-bottom:1px solid rgba(var(--orange-rgb),.1);cursor:pointer;transition:background .12s,border-color .12s;display:flex;align-items:flex-start;gap:10px;border-left:2px solid transparent;position:relative}
 .notif-item:last-child{border-bottom:none}
-.notif-item:hover{background:rgba(var(--orange-rgb),.04)}
-.notif-item.unread{background:rgba(var(--orange-rgb),.06)}
-.notif-item.unread:hover{background:rgba(var(--orange-rgb),.1)}
-.notif-dot{width:7px;height:7px;border-radius:50%;background:var(--orange);flex-shrink:0;margin-top:4px;box-shadow:0 0 6px rgba(var(--orange-rgb),.6)}
-.notif-dot.read{background:transparent}
+.notif-item:hover{background:rgba(var(--orange-rgb),.07);border-left-color:rgba(var(--orange-rgb),.4)}
+.notif-item.unread{background:rgba(var(--orange-rgb),.08);border-left-color:var(--orange)}
+.notif-item.unread:hover{background:rgba(var(--orange-rgb),.13)}
+
+/* Unread pulse dot */
+.notif-dot{width:7px;height:7px;border-radius:50%;background:var(--orange);flex-shrink:0;margin-top:5px;box-shadow:0 0 8px rgba(var(--orange-rgb),.7)}
+.notif-dot.read{background:var(--border2);box-shadow:none}
+
+/* Row content */
 .notif-content{flex:1;min-width:0}
-.notif-title{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:13px;color:var(--white);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.notif-sub{font-size:11px;color:var(--muted2);margin-top:2px}
-.notif-time{font-size:10px;color:var(--muted);margin-top:3px;font-family:'Rajdhani',sans-serif}
-.notif-empty{padding:32px 16px;text-align:center;color:var(--muted2);font-size:12px;font-family:'Rajdhani',sans-serif;font-weight:600;letter-spacing:1px;text-transform:uppercase}
-.notif-footer{padding:8px 14px;border-top:1px solid var(--border);text-align:center;flex-shrink:0}
-.notif-footer-btn{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:var(--orange);cursor:pointer;opacity:.8;transition:opacity .15s;background:none;border:none}
+.notif-title{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:13px;letter-spacing:.4px;color:var(--orange);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.notif-item.read .notif-title,.notif-item:not(.unread) .notif-title{color:var(--white)}
+.notif-sub{font-size:11px;color:rgba(var(--orange-rgb),.7);margin-top:2px;font-family:'Rajdhani',sans-serif;font-weight:600;letter-spacing:.5px}
+.notif-item:not(.unread) .notif-sub{color:var(--muted2)}
+.notif-time{font-size:10px;color:var(--muted2);margin-top:3px;font-family:'Rajdhani',sans-serif;letter-spacing:.3px}
+
+/* Arrow chevron on hover */
+.notif-item::after{content:'›';position:absolute;right:12px;top:50%;transform:translateY(-50%);font-size:16px;color:var(--orange);opacity:0;transition:opacity .12s,right .12s}
+.notif-item:hover::after{opacity:.6;right:10px}
+
+/* Empty state */
+.notif-empty{padding:36px 16px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:10px}
+.notif-empty-icon{opacity:.2}
+.notif-empty-title{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:13px;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted2)}
+.notif-empty-sub{font-size:11px;color:var(--muted2);opacity:.6;letter-spacing:.3px}
+
+/* Footer */
+.notif-footer{padding:8px 14px;border-top:1px solid rgba(var(--orange-rgb),.15);text-align:center;flex-shrink:0;background:rgba(var(--orange-rgb),.03)}
+.notif-footer-btn{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:var(--orange);cursor:pointer;opacity:.75;transition:opacity .15s;background:none;border:none}
 .notif-footer-btn:hover{opacity:1}
 
 /* STREAK BADGE */
@@ -2618,7 +2645,14 @@ function _renderNotifList() {
   if (!list) return;
 
   if (!store.notifications.length) {
-    list.innerHTML = '<div class="notif-empty">No new matches yet</div>';
+    list.innerHTML = `
+      <div class="notif-empty">
+        <svg class="notif-empty-icon" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="var(--orange)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+        </svg>
+        <div class="notif-empty-title">No Notifications</div>
+        <div class="notif-empty-sub">New matches will appear here automatically</div>
+      </div>`;
     return;
   }
 
