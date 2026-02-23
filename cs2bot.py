@@ -1059,6 +1059,88 @@ async def handle_api_revert_match(request):
         return _json_response({"ok": False, "error": str(e)})
 
 
+async def handle_api_matchzy_players(request):
+    """
+    GET /api/match/{matchid}/matchzy_players
+    Returns all players for this matchid from matchzy_stats_players DB,
+    including ones missing from the fshost JSON. Computes kd, hs_pct, adr.
+    Also returns which steamid64s are already present in the fshost JSON
+    so the frontend can highlight truly missing players.
+    """
+    matchid = request.match_info.get('matchid', '')
+    try:
+        conn = get_db()
+        if not matchzy_tables_exist(conn):
+            conn.close()
+            return _json_response({"error": "MatchZy tables not found"})
+
+        c = conn.cursor(dictionary=True)
+        c.execute(f"""
+            SELECT
+                p.steamid64,
+                p.name,
+                p.team,
+                p.kills,
+                p.deaths,
+                p.assists,
+                p.damage,
+                p.head_shot_kills,
+                p.enemies5k,
+                p.enemies4k,
+                p.enemies3k,
+                p.v1_count,
+                p.v1_wins,
+                p.v2_count,
+                p.v2_wins,
+                p.entry_count,
+                p.entry_wins,
+                p.utility_damage,
+                p.flash_count,
+                p.flash_successes,
+                p.mapnumber,
+                ROUND(p.kills / NULLIF(p.deaths, 0), 2)                      AS kd,
+                ROUND(p.head_shot_kills / NULLIF(p.kills, 0) * 100, 1)       AS hs_pct,
+                ROUND(p.damage / 30.0, 1)                                     AS adr
+            FROM {MATCHZY_TABLES['players']} p
+            WHERE p.matchid = %s
+            ORDER BY p.team, p.kills DESC
+        """, (str(matchid),))
+        rows = c.fetchall()
+        c.close()
+        conn.close()
+
+        # Also get the fshost player steamids so we can flag who's missing
+        try:
+            fshost_data = _fetch_fshost_match_json(matchid)
+            fshost_sids = set()
+            if fshost_data:
+                for tk in ('team1', 'team2'):
+                    for fp in fshost_data.get(tk, {}).get('players', []):
+                        sid = str(fp.get('steam_id', '') or '')
+                        if sid and sid != '0':
+                            fshost_sids.add(sid)
+        except Exception:
+            fshost_sids = set()
+
+        # Annotate each row
+        result = []
+        for row in rows:
+            sid = str(row.get('steamid64') or '')
+            row['in_fshost'] = sid in fshost_sids
+            row['is_missing'] = sid not in fshost_sids
+            # Normalise None → 0 for numeric fields
+            for field in ('kills','deaths','assists','damage','head_shot_kills',
+                          'enemies5k','enemies4k','enemies3k','v1_wins','v2_wins',
+                          'entry_wins','utility_damage','flash_successes'):
+                if row.get(field) is None:
+                    row[field] = 0
+            result.append(row)
+
+        return _json_response({"players": result, "fshost_sids": list(fshost_sids)})
+    except Exception as e:
+        return _json_response({"error": str(e)})
+
+
 async def start_http_server():
     app = web.Application()
     app.router.add_get('/api/specialists',             handle_api_specialists)
@@ -1074,13 +1156,15 @@ async def start_http_server():
     # ── Edit endpoints ────────────────────────────────────────────────────────
     app.router.add_post('/api/auth/edit',              handle_api_auth_edit)
     app.router.add_post('/api/match/{matchid}/save',   handle_api_save_match)
-    app.router.add_get('/api/match/{matchid}/edits',   handle_api_get_edits)
+    app.router.add_get('/api/match/{matchid}/edits',           handle_api_get_edits)
+    app.router.add_get('/api/match/{matchid}/matchzy_players', handle_api_matchzy_players)
     app.router.add_route('PATCH',  '/api/match/{matchid}/edit', handle_api_patch_match)
     app.router.add_route('DELETE', '/api/match/{matchid}/edit', handle_api_revert_match)
-    app.router.add_route('OPTIONS', '/api/auth/edit',             handle_options)
-    app.router.add_route('OPTIONS', '/api/match/{matchid}/save',  handle_options)
-    app.router.add_route('OPTIONS', '/api/match/{matchid}/edit',  handle_options)
-    app.router.add_route('OPTIONS', '/api/match/{matchid}/edits', handle_options)
+    app.router.add_route('OPTIONS', '/api/auth/edit',                          handle_options)
+    app.router.add_route('OPTIONS', '/api/match/{matchid}/save',               handle_options)
+    app.router.add_route('OPTIONS', '/api/match/{matchid}/edit',               handle_options)
+    app.router.add_route('OPTIONS', '/api/match/{matchid}/edits',              handle_options)
+    app.router.add_route('OPTIONS', '/api/match/{matchid}/matchzy_players',    handle_options)
     # ── Static ────────────────────────────────────────────────────────────────
     app.router.add_get('/stats',   handle_stats_page)
     app.router.add_get('/',        handle_stats_page)
