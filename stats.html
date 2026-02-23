@@ -2256,8 +2256,24 @@ async function loadTeam() {
   if (_teamCache) { renderTeam(_teamCache); return; }
   _getSpinnerSvg().then(svg=>{el.innerHTML='<div class="loading"><span class="spin" style="display:inline-flex;align-items:center;justify-content:center;color:var(--orange)">'+svg+'</span></div>'});
 
-  const matches = await fetch('/api/matches?limit=200').then(r=>r.json()).catch(()=>[]);
-  if (!Array.isArray(matches) || !matches.length) {
+  // Step 1: get match list (metadata only - players array is NOT included here)
+  const matchList = await fetch('/api/matches?limit=200').then(r=>r.json()).catch(()=>[]);
+  if (!Array.isArray(matchList) || !matchList.length) {
+    el.innerHTML = emptyState('team','No Match Data','Team stats will appear after matches are completed'); return;
+  }
+
+  // Step 2: fetch each match individually in parallel to get full player data
+  const BATCH = 10; // concurrent requests at a time
+  const fullMatches = [];
+  for (let i = 0; i < matchList.length; i += BATCH) {
+    const batch = matchList.slice(i, i + BATCH);
+    const results = await Promise.all(
+      batch.map(m => fetch('/api/match/' + m.matchid).then(r=>r.json()).catch(()=>null))
+    );
+    results.forEach(r => { if (r && !r.error) fullMatches.push(r); });
+  }
+
+  if (!fullMatches.length) {
     el.innerHTML = emptyState('team','No Match Data','Team stats will appear after matches are completed'); return;
   }
 
@@ -2266,7 +2282,7 @@ async function loadTeam() {
   // All unique players ever seen on that team are tracked separately.
   const lineupMap = {};
 
-  matches.forEach(m => {
+  fullMatches.forEach(m => {
     const players = Array.isArray(m.players) ? m.players : [];
     const t1 = players.filter(p=>String(p.team||'').toLowerCase()==='team1');
     const t2 = players.filter(p=>String(p.team||'').toLowerCase()==='team2');
@@ -2285,7 +2301,7 @@ async function loadTeam() {
         lineupMap[key] = {teamName, playerSet: new Set(), names:[], wins:0, losses:0, draws:0, maps:{}, roundsFor:0, roundsAgainst:0};
       }
       const lu = lineupMap[key];
-      lu.teamName = teamName; // keep latest casing
+      lu.teamName = teamName;
       roster.forEach(p => { if (p.name) lu.playerSet.add(p.name); });
       if (score > opponentScore) lu.wins++;
       else if (score < opponentScore) lu.losses++;
