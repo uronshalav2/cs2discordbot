@@ -11,19 +11,55 @@
   --orange:#ff5500;--orange2:#ff7733;--orange-glow:rgba(255,85,0,.15);
   --ct:#5bc4f5;--t:#f0a842;--win:#22c55e;--loss:#ef4444;
   --text:#a8b0b8;--white:#dde1e7;--muted:#3a3e44;--muted2:#575e68;
+  --nav-bg:#09090b;--nav-border:var(--border);--subnav-bg:#0c0d0f;
+}
+[data-theme="light"]{
+  --bg:#f0f2f5;--surface:#ffffff;--surface2:#e8eaed;--border:#d1d5db;--border2:#9ca3af;
+  --text:#4b5563;--white:#111827;--muted:#d1d5db;--muted2:#6b7280;
+  --nav-bg:#ffffff;--nav-border:#e5e7eb;--subnav-bg:#f9fafb;
 }
 *{box-sizing:border-box;margin:0;padding:0}
 html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;font-size:13px}
 /* NAV */
-nav{background:#09090b;border-bottom:2px solid var(--border);display:flex;align-items:center;padding:0 20px;height:50px;position:sticky;top:0;z-index:200;gap:0}
-.logo{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:26px;letter-spacing:-2px;color:var(--orange);text-transform:uppercase;margin-right:28px;white-space:nowrap;display:flex;align-items:center;line-height:1}
+nav{background:var(--nav-bg);border-bottom:2px solid var(--nav-border);display:flex;align-items:center;padding:0 20px;height:50px;position:sticky;top:0;z-index:200;gap:0;transition:background .2s,border-color .2s}
+.logo{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:26px;letter-spacing:-2px;color:var(--orange);text-transform:uppercase;margin-right:20px;white-space:nowrap;display:flex;align-items:center;line-height:1}
 .tabs{display:flex;gap:0;height:100%;position:relative}
-.tab{height:100%;padding:0 16px;display:flex;align-items:center;font-family:'Rajdhani',sans-serif;font-weight:600;font-size:12px;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted2);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-2px;transition:color .18s,background .18s;position:relative}
+
+/* Tab groups */
+.tab-group{position:relative;display:flex;height:100%}
+.tab-group-label{height:100%;padding:0 14px;display:flex;align-items:center;gap:5px;font-family:'Rajdhani',sans-serif;font-weight:600;font-size:12px;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted2);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-2px;transition:color .18s,background .18s;white-space:nowrap;user-select:none}
+.tab-group-label:hover{color:var(--text);background:rgba(255,255,255,.03)}
+.tab-group-label.group-active{color:var(--orange)}
+.tab-group-label svg{transition:transform .2s}
+.tab-group:hover .tab-group-label svg,.tab-group-label.open svg{transform:rotate(180deg)}
+.tab-group-arrow{opacity:.5;width:10px;height:10px}
+
+/* Dropdown sub-menu */
+.tab-dropdown{position:absolute;top:calc(100% + 2px);left:0;min-width:160px;background:var(--subnav-bg);border:1px solid var(--border);border-radius:6px;padding:4px;box-shadow:0 8px 24px rgba(0,0,0,.4);opacity:0;pointer-events:none;transform:translateY(-6px);transition:opacity .18s,transform .18s;z-index:300}
+.tab-group:hover .tab-dropdown{opacity:1;pointer-events:auto;transform:translateY(0)}
+.tab-dd-item{padding:9px 12px;border-radius:4px;font-family:'Rajdhani',sans-serif;font-weight:600;font-size:12px;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted2);cursor:pointer;transition:all .12s;white-space:nowrap}
+.tab-dd-item:hover{color:var(--text);background:rgba(255,255,255,.05)}
+.tab-dd-item.active{color:var(--orange);background:var(--orange-glow)}
+
+/* Single tabs (Matches, Demos) */
+.tab{height:100%;padding:0 14px;display:flex;align-items:center;font-family:'Rajdhani',sans-serif;font-weight:600;font-size:12px;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted2);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-2px;transition:color .18s,background .18s;position:relative;white-space:nowrap}
 .tab:hover{color:var(--text);background:rgba(255,255,255,.03)}
 .tab.active{color:var(--orange)}
 /* Sliding underline indicator */
 .tab-indicator{position:absolute;bottom:-2px;height:2px;background:var(--orange);transition:left .25s cubic-bezier(.4,0,.2,1),width .25s cubic-bezier(.4,0,.2,1);pointer-events:none;box-shadow:0 0 8px rgba(255,85,0,.6);border-radius:1px}
-.nav-right{margin-left:auto;display:flex;gap:8px;align-items:center}
+.nav-right{margin-left:auto;display:flex;gap:10px;align-items:center}
+
+/* Dark mode toggle */
+.theme-toggle{width:38px;height:22px;border-radius:11px;background:var(--border2);border:1px solid var(--border2);cursor:pointer;position:relative;transition:background .25s;flex-shrink:0}
+.theme-toggle.light{background:rgba(255,85,0,.3);border-color:var(--orange)}
+.theme-toggle-knob{position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:var(--muted2);transition:transform .25s,background .25s}
+.theme-toggle.light .theme-toggle-knob{transform:translateX(16px);background:var(--orange)}
+.theme-toggle-icon{position:absolute;inset:0;display:flex;align-items:center;font-size:10px;pointer-events:none}
+.theme-toggle-icon.moon{justify-content:flex-start;padding-left:4px}
+.theme-toggle-icon.sun{justify-content:flex-end;padding-right:4px;opacity:0;transition:opacity .2s}
+.theme-toggle.light .theme-toggle-icon.sun{opacity:1}
+.theme-toggle.light .theme-toggle-icon.moon{opacity:0}
+
 /* Hamburger */
 .hamburger{display:none;flex-direction:column;justify-content:center;gap:5px;width:36px;height:36px;cursor:pointer;padding:4px;border-radius:3px;margin-left:auto;flex-shrink:0}
 .hamburger span{display:block;height:2px;background:var(--orange);border-radius:2px;transition:all .25s}
@@ -33,19 +69,19 @@ nav{background:#09090b;border-bottom:2px solid var(--border);display:flex;align-
 /* Mobile drawer */
 .mobile-menu{display:none;position:fixed;top:50px;left:0;right:0;bottom:0;background:rgba(0,0,0,.6);z-index:199;backdrop-filter:blur(4px)}
 .mobile-menu.open{display:block}
-.mobile-drawer{background:#09090b;border-bottom:2px solid var(--border);padding:8px 0}
-.mobile-tab{padding:14px 24px;font-family:'Rajdhani',sans-serif;font-weight:600;font-size:14px;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted2);cursor:pointer;border-left:3px solid transparent;transition:all .15s}
+.mobile-drawer{background:var(--nav-bg);border-bottom:2px solid var(--border);padding:8px 0}
+.mobile-section{padding:8px 24px 4px;font-family:'Rajdhani',sans-serif;font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--muted);border-top:1px solid var(--border);margin-top:4px}
+.mobile-section:first-child{border-top:none;margin-top:0}
+.mobile-tab{padding:11px 24px;font-family:'Rajdhani',sans-serif;font-weight:600;font-size:14px;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted2);cursor:pointer;border-left:3px solid transparent;transition:all .15s}
 .mobile-tab:hover{color:var(--text);background:rgba(255,255,255,.03)}
 .mobile-tab.active{color:var(--orange);border-left-color:var(--orange);background:var(--orange-glow)}
-.mobile-skins{display:block;padding:14px 24px;font-family:'Rajdhani',sans-serif;font-weight:600;font-size:14px;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted2);text-decoration:none;border-top:1px solid var(--border);margin-top:4px}
+.mobile-theme-row{padding:12px 24px;display:flex;align-items:center;justify-content:space-between;border-top:1px solid var(--border);margin-top:4px}
+.mobile-theme-label{font-family:'Rajdhani',sans-serif;font-weight:600;font-size:12px;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted2)}
 @media(max-width:768px){
   .tabs{display:none}
   .nav-right{display:none}
   .hamburger{display:flex}
 }
-.btn-sm{padding:5px 12px;border:1px solid var(--border2);border-radius:3px;font-size:11px;font-family:'Rajdhani',sans-serif;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:var(--muted2);cursor:pointer;transition:all .18s;white-space:nowrap}
-.btn-sm:hover{border-color:var(--orange);color:var(--orange)}
-.btn-sm.active-btn{border-color:var(--orange);color:var(--orange);background:var(--orange-glow)}
 
 /* LAYOUT */
 #app{max-width:1100px;margin:0 auto;padding:20px 16px}
@@ -307,17 +343,45 @@ nav{background:#09090b;border-bottom:2px solid var(--border);display:flex;align-
 <nav>
   <div class="logo"><span style="font-size:22px;font-weight:800;letter-spacing:-1px">R</span><span style="font-size:22px;font-weight:300;letter-spacing:-1px;color:var(--orange2)">G</span></div>
   <div class="tabs">
+    <!-- Single: Matches -->
     <div class="tab active" data-p="matches">Matches</div>
-    <div class="tab" data-p="leaderboard">Leaderboard</div>
-    <div class="tab" data-p="maps">Maps</div>
-    <div class="tab" data-p="h2h">Head-to-Head</div>
-    <div class="tab" data-p="specialists">Specialists</div>
+
+    <!-- Group: Stats -->
+    <div class="tab-group" id="tg-stats">
+      <div class="tab-group-label" id="tgl-stats">
+        Stats
+        <svg class="tab-group-arrow" viewBox="0 0 10 10" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M2 3.5L5 6.5L8 3.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
+      <div class="tab-dropdown">
+        <div class="tab-dd-item" data-p="leaderboard" onclick="_navStack=[];go('leaderboard')">Leaderboard</div>
+        <div class="tab-dd-item" data-p="maps" onclick="_navStack=[];go('maps')">Maps</div>
+        <div class="tab-dd-item" data-p="specialists" onclick="_navStack=[];go('specialists')">Specialists</div>
+      </div>
+    </div>
+
+    <!-- Group: Players -->
+    <div class="tab-group" id="tg-players">
+      <div class="tab-group-label" id="tgl-players">
+        Players
+        <svg class="tab-group-arrow" viewBox="0 0 10 10" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M2 3.5L5 6.5L8 3.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
+      <div class="tab-dropdown">
+        <div class="tab-dd-item" data-p="h2h" onclick="_navStack=[];go('h2h')">Head-to-Head</div>
+        <div class="tab-dd-item" data-p="predict" onclick="_navStack=[];go('predict')">Predict</div>
+      </div>
+    </div>
+
+    <!-- Single: Demos -->
     <div class="tab" data-p="demos">Demos</div>
-    <div class="tab" data-p="predict">Predict</div>
+
     <div class="tab-indicator" id="tab-indicator"></div>
   </div>
   <div class="nav-right">
-    <a href="https://skins.fsho.st" target="_blank" class="btn-sm" style="text-decoration:none">🎨 Skins</a>
+    <div class="theme-toggle" id="theme-toggle" onclick="toggleTheme()" title="Toggle light/dark mode">
+      <div class="theme-toggle-knob"></div>
+      <div class="theme-toggle-icon moon">🌙</div>
+      <div class="theme-toggle-icon sun">☀️</div>
+    </div>
   </div>
   <div class="hamburger" id="hamburger" onclick="toggleMenu()">
     <span></span><span></span><span></span>
@@ -325,14 +389,29 @@ nav{background:#09090b;border-bottom:2px solid var(--border);display:flex;align-
 </nav>
 <div class="mobile-menu" id="mobile-menu" onclick="closeMenu()">
   <div class="mobile-drawer" onclick="event.stopPropagation()">
+    <div class="mobile-section" style="border-top:none;margin-top:0;padding-top:12px">Matches</div>
     <div class="mobile-tab active" data-p="matches" onclick="_navStack=[];go('matches');closeMenu()">Matches</div>
+
+    <div class="mobile-section">Stats</div>
     <div class="mobile-tab" data-p="leaderboard" onclick="_navStack=[];go('leaderboard');closeMenu()">Leaderboard</div>
     <div class="mobile-tab" data-p="maps" onclick="_navStack=[];go('maps');closeMenu()">Maps</div>
-    <div class="mobile-tab" data-p="h2h" onclick="_navStack=[];go('h2h');closeMenu()">Head-to-Head</div>
     <div class="mobile-tab" data-p="specialists" onclick="_navStack=[];go('specialists');closeMenu()">Specialists</div>
-    <div class="mobile-tab" data-p="demos" onclick="_navStack=[];go('demos');closeMenu()">Demos</div>
+
+    <div class="mobile-section">Players</div>
+    <div class="mobile-tab" data-p="h2h" onclick="_navStack=[];go('h2h');closeMenu()">Head-to-Head</div>
     <div class="mobile-tab" data-p="predict" onclick="_navStack=[];go('predict');closeMenu()">Predict</div>
-    <a href="https://skins.fsho.st" target="_blank" class="mobile-skins" onclick="closeMenu()">🎨 Skins</a>
+
+    <div class="mobile-section">Files</div>
+    <div class="mobile-tab" data-p="demos" onclick="_navStack=[];go('demos');closeMenu()">Demos</div>
+
+    <div class="mobile-theme-row">
+      <span class="mobile-theme-label">Dark Mode</span>
+      <div class="theme-toggle" id="theme-toggle-mobile" onclick="toggleTheme()" title="Toggle theme">
+        <div class="theme-toggle-knob"></div>
+        <div class="theme-toggle-icon moon">🌙</div>
+        <div class="theme-toggle-icon sun">☀️</div>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -419,6 +498,15 @@ function go(page, params, back) {
     incoming.classList.add('page-in');
     document.querySelectorAll('.tab').forEach(function(t){ t.classList.toggle('active', t.dataset.p===page); });
     document.querySelectorAll('.mobile-tab').forEach(function(t){ t.classList.toggle('active', t.dataset.p===page); });
+    // Update dropdown items active state
+    document.querySelectorAll('.tab-dd-item').forEach(function(t){ t.classList.toggle('active', t.dataset.p===page); });
+    // Update group label active state
+    const groupMap = {leaderboard:'stats',maps:'stats',specialists:'stats',h2h:'players',predict:'players'};
+    document.querySelectorAll('.tab-group-label').forEach(function(l){ l.classList.remove('group-active'); });
+    if (groupMap[page]) {
+      const gl = document.getElementById('tgl-'+groupMap[page]);
+      if (gl) gl.classList.add('group-active');
+    }
     moveTabIndicator(page);
     _curPage = page;
     _curParams = params;
@@ -456,6 +544,23 @@ function goBack(defaultPage) {
   }
 }
 document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',()=>{ _navStack=[]; go(t.dataset.p); }));
+
+// ── Theme toggle ──────────────────────────────────────────────────────────────
+function toggleTheme() {
+  const isLight = document.documentElement.getAttribute('data-theme') === 'light';
+  const next = isLight ? null : 'light';
+  if (next) document.documentElement.setAttribute('data-theme', 'light');
+  else document.documentElement.removeAttribute('data-theme');
+  document.querySelectorAll('.theme-toggle').forEach(el => el.classList.toggle('light', !isLight));
+  try { localStorage.setItem('rg-theme', next || 'dark'); } catch(e){}
+}
+// Restore saved theme
+try {
+  if (localStorage.getItem('rg-theme') === 'light') {
+    document.documentElement.setAttribute('data-theme','light');
+    document.querySelectorAll('.theme-toggle').forEach(el => el.classList.add('light'));
+  }
+} catch(e){}
 
 // ── Animated number counter ───────────────────────────────────────────────────
 // Usage: animateCount(el, targetValue, {duration, decimals, suffix, prefix})
@@ -571,7 +676,6 @@ async function loadMatches() {
       <div class="m-overlay"></div>
       <div class="m-hover-layer"></div>
       <div class="m-content">
-        <div class="m-id">#${m.matchid}</div>
         <div class="m-pill">
           <div class="m-score">${m.map_team1_score??m.team1_score??0} : ${m.map_team2_score??m.team2_score??0}</div>
           <div class="m-teams-str">${esc(m.team1_name||'Team 1')}<br><span style="opacity:.55;font-size:10px">vs</span><br>${esc(m.team2_name||'Team 2')}</div>
@@ -1677,7 +1781,7 @@ function predictOpenPicker(teamIdx) {
   }).join('') : `<div style="padding:24px;text-align:center;color:var(--muted2);font-size:12px">No available players</div>`;
 
   listEl.innerHTML = `
-    <div style="padding:10px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;background:#0c0e10;z-index:1">
+    <div style="padding:10px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;background:var(--surface);z-index:1">
       <span style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:11px;letter-spacing:2px;text-transform:uppercase;color:${teamIdx===0?'var(--orange)':'var(--ct)'}">Adding to Team ${teamIdx===0?'A':'B'}</span>
       <span onclick="document.getElementById('predict-picker').style.display='none'" style="cursor:pointer;color:var(--muted2);font-size:18px;line-height:1">&times;</span>
     </div>
@@ -1733,7 +1837,7 @@ function buildPrediction(t1, t2) {
     return `<div style="display:flex;align-items:center;gap:8px;padding:7px 10px;background:var(--surface);border-radius:4px;border:1px solid var(--border);margin-bottom:5px">
       ${av}
       <div style="min-width:0;flex:1">
-        <div style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:12px;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(p._steam_name||p.name)}</div>
+        <div style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:12px;color:var(--white);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(p._steam_name||p.name)}</div>
         <div style="font-size:9px;letter-spacing:1px;text-transform:uppercase;color:var(--muted2);margin-top:1px">${label}</div>
       </div>
     </div>`;
