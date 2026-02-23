@@ -2345,12 +2345,15 @@ async function loadTeam() {
       if (roster.length < 2) return;
       const key = teamName.toLowerCase();
       if (!lineupMap[key]) {
-        lineupMap[key] = {teamName, aliases: new Set([teamName]), playerSet: new Set(), names:[], wins:0, losses:0, draws:0, maps:{}, roundsFor:0, roundsAgainst:0};
+        lineupMap[key] = {teamName, aliases: new Set([teamName]), playerSet: new Set(), matchRosters:[], names:[], wins:0, losses:0, draws:0, maps:{}, roundsFor:0, roundsAgainst:0};
       }
       const lu = lineupMap[key];
       lu.teamName = teamName;
       lu.aliases.add(teamName);
       roster.forEach(p => { if (p.name) lu.playerSet.add(p.name); });
+      // Store this match's exact roster as a signature for merge detection
+      const matchSig = roster.map(p=>p.name).filter(Boolean).sort().join('|');
+      if (matchSig && !lu.matchRosters.includes(matchSig)) lu.matchRosters.push(matchSig);
       if (score > opponentScore) lu.wins++;
       else if (score < opponentScore) lu.losses++;
       else lu.draws++;
@@ -2378,43 +2381,49 @@ async function loadTeam() {
     });
   });
 
-  // Flatten playerSet → sorted names array
+  // Flatten playerSet → sorted names array (all players ever on this team)
   Object.values(lineupMap).forEach(lu => { lu.names = [...lu.playerSet].sort(); });
 
-  // ── Merge teams with identical current rosters (same sorted player set) ────
-  // A "roster signature" = sorted names of players who appeared in the MOST
-  // RECENT match for that team. Teams that always field the same people but
-  // were given different names get merged; the most-played name wins as primary.
-  const rosterSigMap = {}; // rosterKey → primary lineupMap key
+  // ── Merge teams that share identical per-match lineups ────────────────────
+  // Strategy: two team names are the same org if they ever fielded the exact
+  // same 5-player roster in a single match. We use per-match snapshots stored
+  // in matchRosters (built above) rather than the accumulated playerSet, so a
+  // team with a sub doesn't accidentally merge with a different team.
+  const rosterSigMap = {}; // rosterKey (per-match) → primary lineupMap key
   Object.entries(lineupMap).forEach(([key, lu]) => {
-    const sig = lu.names.join('|');
-    if (!rosterSigMap[sig]) {
-      rosterSigMap[sig] = key;
-    } else {
-      // Merge into existing entry — pick the one with more matches as primary
-      const primaryKey = rosterSigMap[sig];
-      const primary    = lineupMap[primaryKey];
-      const secondary  = lu;
-      // Merge stats into primary
-      primary.wins         += secondary.wins;
-      primary.losses       += secondary.losses;
-      primary.draws        += secondary.draws;
-      primary.roundsFor    += secondary.roundsFor;
-      primary.roundsAgainst+= secondary.roundsAgainst;
-      secondary.aliases.forEach(a => primary.aliases.add(a));
-      Object.entries(secondary.maps).forEach(([map, {w,l}]) => {
-        if (!primary.maps[map]) primary.maps[map] = {w:0, l:0};
-        primary.maps[map].w += w;
-        primary.maps[map].l += l;
-      });
-      // Prefer the name with more total matches as display name
-      const primaryTotal   = primary.wins + primary.losses + primary.draws;
-      const secondaryTotal = secondary.wins + secondary.losses + secondary.draws;
-      if (secondaryTotal > primaryTotal) primary.teamName = secondary.teamName;
-      // Remove the secondary entry
-      delete lineupMap[key];
-    }
+    // Check each per-match roster snapshot this team has
+    (lu.matchRosters || []).forEach(sig => {
+      if (!rosterSigMap[sig]) {
+        rosterSigMap[sig] = key;
+      } else if (rosterSigMap[sig] !== key) {
+        // Another team name fielded the exact same lineup — merge
+        const primaryKey = rosterSigMap[sig];
+        if (!lineupMap[primaryKey] || !lineupMap[key]) return; // already merged
+        const primary   = lineupMap[primaryKey];
+        const secondary = lineupMap[key];
+        primary.wins          += secondary.wins;
+        primary.losses        += secondary.losses;
+        primary.draws         += secondary.draws;
+        primary.roundsFor     += secondary.roundsFor;
+        primary.roundsAgainst += secondary.roundsAgainst;
+        secondary.aliases.forEach(a => primary.aliases.add(a));
+        secondary.playerSet.forEach(p => primary.playerSet.add(p));
+        Object.entries(secondary.maps).forEach(([map, {w,l}]) => {
+          if (!primary.maps[map]) primary.maps[map] = {w:0, l:0};
+          primary.maps[map].w += w;
+          primary.maps[map].l += l;
+        });
+        // Prefer the name with more matches as display name
+        const pt = primary.wins + primary.losses + primary.draws;
+        const st = secondary.wins + secondary.losses + secondary.draws;
+        if (st > pt) primary.teamName = secondary.teamName;
+        delete lineupMap[key];
+      }
+    });
   });
+
+  // Re-flatten names after potential merges
+  Object.values(lineupMap).forEach(lu => { lu.names = [...lu.playerSet].sort(); });
 
   // Sort by total matches played desc
   const lineups = Object.values(lineupMap)
