@@ -592,6 +592,44 @@ function moveTabIndicator(page) {
   indicator.style.opacity = '0';
 }
 
+// ── GitHub JSON Fallback ─────────────────────────────────────────────────────
+// If the local API returns empty/error, automatically try the GitHub backup.
+// Fill in your repo details here — the stats page will self-heal after a wipe.
+const _GH = {
+  enabled: false,          // ← set to true once you've set up the repo
+  user:    'YOUR_GITHUB_USERNAME',
+  repo:    'reshtan-stats-backup',
+  branch:  'main',
+};
+const _GH_BASE = `https://raw.githubusercontent.com/${_GH.user}/${_GH.repo}/${_GH.branch}/snapshots`;
+
+// Fetch from local API; if result is empty/null, fall back to GitHub snapshot
+async function apiFetch(endpoint, ghFile) {
+  try {
+    const r = await fetch(endpoint);
+    if (r.ok) {
+      const data = await r.json();
+      // Consider it valid if it's a non-empty array or a non-error object
+      if (Array.isArray(data) ? data.length > 0 : (data && !data.error)) {
+        return data;
+      }
+    }
+  } catch(_) {}
+
+  // Local failed or empty — try GitHub if enabled
+  if (_GH.enabled && ghFile) {
+    try {
+      const r = await fetch(`${_GH_BASE}/${ghFile}`);
+      if (r.ok) {
+        const data = await r.json();
+        console.info(`[RG] Using GitHub backup for: ${ghFile}`);
+        return data;
+      }
+    } catch(_) {}
+  }
+  return ghFile && ghFile.startsWith('matches/') ? {} : [];
+}
+
 const _pages = ['matches','leaderboard','maps','h2h','specialists','demos','player','match','predict','team'];
 
 // Navigation stack — each entry is {page, params}
@@ -962,7 +1000,7 @@ function demoBtn(demo, small=false) {
 // ── Matches ───────────────────────────────────────────────────────────────────
 async function loadMatches() {
   spin('p-matches');
-  const data = await fetch('/api/matches?limit=30').then(r=>r.json()).catch(()=>[]);
+  const data = await apiFetch('/api/matches?limit=30', 'matches.json');
   if(!Array.isArray(data)||!data.length){
     document.getElementById('p-matches').innerHTML=emptyState('matches','No Matches Yet','Completed matches will appear here');return;
   }
@@ -993,7 +1031,7 @@ async function loadMatches() {
 // ── Match Detail ──────────────────────────────────────────────────────────────
 async function loadMatch(id) {
   spin('p-match');
-  const d = await fetch('/api/match/'+id).then(r=>r.json()).catch(()=>({error:'fetch failed'}));
+  const d = await apiFetch('/api/match/'+id, `matches/${id}.json`).then(d=>d&&!d.error?d:{error:'not found'});
   if(d.error){document.getElementById('p-match').innerHTML=`<div class="empty">${d.error}</div>`;return}
 
   const meta=d.meta||{}, maps=d.maps||[], players=d.players||[], demo=d.demo||{};
@@ -1276,7 +1314,7 @@ async function loadMaps() {
   const el = document.getElementById('p-maps');
   _getSpinnerSvg().then(svg=>{el.innerHTML='<div class="loading"><span class="spin" style="display:inline-flex;align-items:center;justify-content:center;color:var(--orange)">'+svg+'</span></div>'});
   const [dbStats, demos] = await Promise.all([
-    fetch('/api/mapstats').then(r=>r.json()).catch(()=>[]),
+    apiFetch('/api/mapstats', 'mapstats.json'),
     fetch('/api/demos').then(r=>r.json()).catch(()=>[]),
   ]);
 
@@ -1350,7 +1388,7 @@ async function loadH2H() {
   const el = document.getElementById('p-h2h');
   _getSpinnerSvg().then(svg=>{el.innerHTML='<div class="loading"><span class="spin" style="display:inline-flex;align-items:center;justify-content:center;color:var(--orange)">'+svg+'</span></div>'});
   if (!_h2hPlayers) {
-    const data = await fetch('/api/leaderboard').then(r=>r.json()).catch(()=>[]);
+    const data = await apiFetch('/api/leaderboard', 'leaderboard.json');
     // Fetch Steam avatars for all
     await Promise.all(data.slice(0,30).map(async p => {
       if (p.steamid64 && p.steamid64 !== '0') {
@@ -1532,14 +1570,14 @@ let _lbSort = 'kills';
 async function loadLeaderboard() {
   const el = document.getElementById('p-leaderboard');
   _getSpinnerSvg().then(svg=>{el.innerHTML='<div class="loading"><span class="spin" style="display:inline-flex;align-items:center;justify-content:center;color:var(--orange)">'+svg+'</span></div>'});
-  const data = await fetch('/api/leaderboard').then(r=>r.json()).catch(()=>[]);
+  const data = await apiFetch('/api/leaderboard', 'leaderboard.json');
   if (!Array.isArray(data) || !data.length) {
     el.innerHTML = emptyState('leaderboard','No Player Data','Stats will appear after matches are completed');
     return;
   }
   // Compute win/loss streak per player from match history
   try {
-    const matches = await fetch('/api/matches?limit=100').then(r=>r.json()).catch(()=>[]);
+    const matches = await apiFetch('/api/matches?limit=100', 'matches.json');
     if (Array.isArray(matches) && matches.length) {
       // Sort oldest→newest so we can walk forward
       const sorted = [...matches].sort((a,b)=>new Date(a.end_time)-new Date(b.end_time));
@@ -1771,7 +1809,7 @@ async function loadSpecialists() {
   const el = document.getElementById('p-specialists');
   if (_specData) { renderSpecialists(_specData, _specTab); return; }
   _getSpinnerSvg().then(svg=>{el.innerHTML='<div class="loading"><span class="spin" style="display:inline-flex;align-items:center;justify-content:center;color:var(--orange)">'+svg+'</span></div>'});
-  const data = await fetch('/api/specialists').then(r=>r.json()).catch(()=>[]);
+  const data = await apiFetch('/api/specialists', 'specialists.json');
   if (!Array.isArray(data) || !data.length) {
     el.innerHTML = emptyState('specialists','No Specialist Data','Clutch kings, entry fraggers and more will appear here'); return;
   }
@@ -2030,7 +2068,7 @@ async function loadPredict() {
   const el = document.getElementById('p-predict');
   _getSpinnerSvg().then(svg=>{el.innerHTML='<div class="loading"><span class="spin" style="display:inline-flex;align-items:center;justify-content:center;color:var(--orange)">'+svg+'</span></div>'});
   if (!_predictPlayers) {
-    const data = await fetch('/api/leaderboard').then(r=>r.json()).catch(()=>[]);
+    const data = await apiFetch('/api/leaderboard', 'leaderboard.json');
     await Promise.all(data.slice(0,40).map(async p => {
       if (p.steamid64 && p.steamid64 !== '0') {
         const s = await fetch('/api/steam/'+p.steamid64).then(r=>r.json()).catch(()=>({}));
@@ -2257,7 +2295,7 @@ async function loadTeam() {
   _getSpinnerSvg().then(svg=>{el.innerHTML='<div class="loading"><span class="spin" style="display:inline-flex;align-items:center;justify-content:center;color:var(--orange)">'+svg+'</span></div>'});
 
   // Step 1: get match list (metadata only - players array is NOT included here)
-  const matchList = await fetch('/api/matches?limit=200').then(r=>r.json()).catch(()=>[]);
+  const matchList = await apiFetch('/api/matches?limit=200', 'matches.json');
   if (!Array.isArray(matchList) || !matchList.length) {
     el.innerHTML = emptyState('team','No Match Data','Team stats will appear after matches are completed'); return;
   }
@@ -2268,7 +2306,7 @@ async function loadTeam() {
   for (let i = 0; i < matchList.length; i += BATCH) {
     const batch = matchList.slice(i, i + BATCH);
     const results = await Promise.all(
-      batch.map(m => fetch('/api/match/' + m.matchid).then(r=>r.json()).catch(()=>null))
+      batch.map(m => apiFetch('/api/match/' + m.matchid, `matches/${m.matchid}.json`).catch(()=>null))
     );
     results.forEach(r => { if (r && !r.error) fullMatches.push(r); });
   }
@@ -2278,18 +2316,27 @@ async function loadTeam() {
   }
 
   // ── Aggregate by team name ────────────────────────────────────────────────
-  // Key by team name so stats accumulate even when the roster changes.
-  // All unique players ever seen on that team are tracked separately.
+  // Key by team name. Match detail response shape: {meta, maps, players, demo}
+  // scores & team names live on meta; mapname on each maps[] entry.
   const lineupMap = {};
 
   fullMatches.forEach(m => {
+    // Support both flat (old api) and nested (fshost get5 api) response shapes
+    const meta    = m.meta || m;
     const players = Array.isArray(m.players) ? m.players : [];
+    const mapsArr = Array.isArray(m.maps) ? m.maps : [];
+
     const t1 = players.filter(p=>String(p.team||'').toLowerCase()==='team1');
     const t2 = players.filter(p=>String(p.team||'').toLowerCase()==='team2');
-    const s1 = parseInt(m.map_team1_score ?? m.team1_score ?? 0);
-    const s2 = parseInt(m.map_team2_score ?? m.team2_score ?? 0);
-    const name1 = (m.team1_name||'').trim() || (t1[0]&&t1[0].team_name) || 'Team 1';
-    const name2 = (m.team2_name||'').trim() || (t2[0]&&t2[0].team_name) || 'Team 2';
+
+    // Scores: prefer meta totals, fallback to first map
+    const firstMap = mapsArr[0] || {};
+    const s1 = parseInt(meta.team1_score ?? meta.map_team1_score ?? firstMap.team1_score ?? 0);
+    const s2 = parseInt(meta.team2_score ?? meta.map_team2_score ?? firstMap.team2_score ?? 0);
+
+    // Team names: meta → player.team_name → fallback
+    const name1 = (meta.team1_name||'').trim() || (t1[0]&&t1[0].team_name) || 'Team 1';
+    const name2 = (meta.team2_name||'').trim() || (t2[0]&&t2[0].team_name) || 'Team 2';
 
     [
       {roster: t1, teamName: name1, score: s1, opponentScore: s2},
@@ -2298,20 +2345,35 @@ async function loadTeam() {
       if (roster.length < 2) return;
       const key = teamName.toLowerCase();
       if (!lineupMap[key]) {
-        lineupMap[key] = {teamName, playerSet: new Set(), names:[], wins:0, losses:0, draws:0, maps:{}, roundsFor:0, roundsAgainst:0};
+        lineupMap[key] = {teamName, aliases: new Set([teamName]), playerSet: new Set(), names:[], wins:0, losses:0, draws:0, maps:{}, roundsFor:0, roundsAgainst:0};
       }
       const lu = lineupMap[key];
       lu.teamName = teamName;
+      lu.aliases.add(teamName);
       roster.forEach(p => { if (p.name) lu.playerSet.add(p.name); });
       if (score > opponentScore) lu.wins++;
       else if (score < opponentScore) lu.losses++;
       else lu.draws++;
       lu.roundsFor += score;
       lu.roundsAgainst += opponentScore;
-      if (m.mapname) {
-        if (!lu.maps[m.mapname]) lu.maps[m.mapname] = {w:0, l:0};
-        if (score > opponentScore) lu.maps[m.mapname].w++;
-        else lu.maps[m.mapname].l++;
+      // Accumulate per-map stats across all maps[] in this match
+      (mapsArr.length ? mapsArr : (meta.mapname ? [{mapname: meta.mapname}] : [])).forEach(mp => {
+        const mn = mp.mapname || mp.map;
+        if (!mn) return;
+        const ms1 = parseInt(mp.team1_score ?? 0);
+        const ms2 = parseInt(mp.team2_score ?? 0);
+        const mScore = roster === t1 ? ms1 : ms2;
+        const mOpp   = roster === t1 ? ms2 : ms1;
+        if (!lu.maps[mn]) lu.maps[mn] = {w:0, l:0};
+        if (mScore > mOpp) lu.maps[mn].w++;
+        else lu.maps[mn].l++;
+      });
+      // Fallback: if no maps array, use top-level mapname
+      if (!mapsArr.length && (meta.mapname || m.mapname)) {
+        const mn = meta.mapname || m.mapname;
+        if (!lu.maps[mn]) lu.maps[mn] = {w:0, l:0};
+        if (score > opponentScore) lu.maps[mn].w++;
+        else lu.maps[mn].l++;
       }
     });
   });
@@ -2319,17 +2381,53 @@ async function loadTeam() {
   // Flatten playerSet → sorted names array
   Object.values(lineupMap).forEach(lu => { lu.names = [...lu.playerSet].sort(); });
 
+  // ── Merge teams with identical current rosters (same sorted player set) ────
+  // A "roster signature" = sorted names of players who appeared in the MOST
+  // RECENT match for that team. Teams that always field the same people but
+  // were given different names get merged; the most-played name wins as primary.
+  const rosterSigMap = {}; // rosterKey → primary lineupMap key
+  Object.entries(lineupMap).forEach(([key, lu]) => {
+    const sig = lu.names.join('|');
+    if (!rosterSigMap[sig]) {
+      rosterSigMap[sig] = key;
+    } else {
+      // Merge into existing entry — pick the one with more matches as primary
+      const primaryKey = rosterSigMap[sig];
+      const primary    = lineupMap[primaryKey];
+      const secondary  = lu;
+      // Merge stats into primary
+      primary.wins         += secondary.wins;
+      primary.losses       += secondary.losses;
+      primary.draws        += secondary.draws;
+      primary.roundsFor    += secondary.roundsFor;
+      primary.roundsAgainst+= secondary.roundsAgainst;
+      secondary.aliases.forEach(a => primary.aliases.add(a));
+      Object.entries(secondary.maps).forEach(([map, {w,l}]) => {
+        if (!primary.maps[map]) primary.maps[map] = {w:0, l:0};
+        primary.maps[map].w += w;
+        primary.maps[map].l += l;
+      });
+      // Prefer the name with more total matches as display name
+      const primaryTotal   = primary.wins + primary.losses + primary.draws;
+      const secondaryTotal = secondary.wins + secondary.losses + secondary.draws;
+      if (secondaryTotal > primaryTotal) primary.teamName = secondary.teamName;
+      // Remove the secondary entry
+      delete lineupMap[key];
+    }
+  });
+
   // Sort by total matches played desc
   const lineups = Object.values(lineupMap)
     .map(lu => {
       const total = lu.wins + lu.losses + lu.draws;
       const winRate = total > 0 ? Math.round((lu.wins/total)*100) : 0;
-      // Best map: highest win rate with >=1 win
       const mapEntries = Object.entries(lu.maps).map(([map,{w,l}])=>({map,w,l,pct:w/(w+l)*100}));
       mapEntries.sort((a,b)=>b.pct-a.pct);
       const bestMap = mapEntries.find(m=>m.w>0) || mapEntries[0] || null;
       const avgRoundDiff = total > 0 ? ((lu.roundsFor - lu.roundsAgainst)/total).toFixed(1) : '—';
-      return {...lu, total, winRate, mapEntries, bestMap, avgRoundDiff};
+      // Aliases: other names this team has played under (excluding primary)
+      const aliasNames = [...lu.aliases].filter(a => a.toLowerCase() !== lu.teamName.toLowerCase());
+      return {...lu, total, winRate, mapEntries, bestMap, avgRoundDiff, aliasNames};
     })
     .filter(lu => lu.total >= 1)
     .sort((a,b) => b.total - a.total);
@@ -2377,9 +2475,17 @@ function renderTeam(lineups) {
       </div>`;
     }).join('');
 
+    const aliasBadges = lu.aliasNames && lu.aliasNames.length
+      ? lu.aliasNames.map(a=>`<span style="padding:1px 6px;border-radius:2px;border:1px solid var(--border2);background:var(--surface2);font-size:10px;font-weight:600;color:var(--muted2);letter-spacing:.5px;text-transform:none;font-family:'Rajdhani',sans-serif">${esc(a)}</span>`).join('')
+      : '';
+    const mergedNote = lu.aliasNames && lu.aliasNames.length
+      ? `<span style="font-size:10px;color:var(--muted2);margin-left:6px;font-weight:400;letter-spacing:0;text-transform:none">also: ${aliasBadges}</span>`
+      : '';
     return `<div class="team-stat-card" style="margin-bottom:12px">
       <div class="team-stat-card-header">
-        <div style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:13px;letter-spacing:1.5px;text-transform:uppercase;color:rgba(var(--orange-rgb),.9)">${esc(lu.teamName)}<span style="font-size:10px;font-weight:500;letter-spacing:1px;color:var(--muted2);text-transform:none;margin-left:8px">${lu.names.length} player${lu.names.length!==1?'s':''}</span></div>
+        <div style="display:flex;align-items:center;flex-wrap:wrap;gap:6px;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:13px;letter-spacing:1.5px;text-transform:uppercase;color:rgba(var(--orange-rgb),.9)">
+          ${esc(lu.teamName)}<span style="font-size:10px;font-weight:500;letter-spacing:1px;color:var(--muted2);text-transform:none">${lu.names.length} player${lu.names.length!==1?'s':''}</span>${mergedNote}
+        </div>
         ${lu.bestMap ? `<span style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted2)">Best: ${lu.bestMap.map.replace('de_','').toUpperCase()}</span>` : ''}
       </div>
       <div style="display:flex">
@@ -2403,7 +2509,7 @@ function renderTeam(lineups) {
 
   el.innerHTML = `
     <div style="margin-bottom:16px;display:flex;align-items:center;justify-content:space-between">
-      <div class="page-title" style="margin:0">Team Stats <span class="sub">${lineups.length} team${lineups.length!==1?'s':''} tracked</span></div>
+      <div class="page-title" style="margin:0">Team Stats <span class="sub">${lineups.length} team${lineups.length!==1?'s':''} · ${lineups.filter(l=>l.aliasNames&&l.aliasNames.length).length} merged</span></div>
       <button onclick="_teamCache=null;loadTeam()" style="padding:6px 14px;background:transparent;border:1px solid var(--border);border-radius:3px;color:var(--muted2);font-family:'Rajdhani',sans-serif;font-size:11px;letter-spacing:1px;cursor:pointer;text-transform:uppercase">Refresh</button>
     </div>
     ${cards}`;
