@@ -48,7 +48,8 @@ async def handle_api_player(request):
     try:
         conn = get_db()
         c = conn.cursor(dictionary=True)
-        # Career totals
+        # Career totals — also search by edited name
+        # First try exact name, then see if any steamid has this as an edited name
         c.execute(f"""
             SELECT name, steamid64,
                 COUNT(DISTINCT matchid) AS matches,
@@ -66,12 +67,45 @@ async def handle_api_player(request):
             GROUP BY steamid64, name
         """, (name,))
         career = c.fetchone()
+
+        # If not found by DB name, check if it's an edited name and look up by steamid
+        if not career:
+            name_map = _edited_name_map()
+            # reverse: find which steamid has this edited name
+            sid_for_edited = next((sid for sid, n in name_map.items() if n == name), None)
+            if sid_for_edited:
+                c.execute(f"""
+                    SELECT name, steamid64,
+                        COUNT(DISTINCT matchid) AS matches,
+                        SUM(kills) AS kills, SUM(deaths) AS deaths, SUM(assists) AS assists,
+                        SUM(head_shot_kills) AS headshots, SUM(damage) AS total_damage,
+                        SUM(enemies5k) AS aces, SUM(enemies4k) AS quads,
+                        SUM(v1_wins) AS clutch_1v1, SUM(v2_wins) AS clutch_1v2,
+                        SUM(entry_wins) AS entry_wins, SUM(entry_count) AS entry_attempts,
+                        SUM(flash_successes) AS flashes_thrown,
+                        ROUND(SUM(kills)/NULLIF(SUM(deaths),0),2) AS kd,
+                        ROUND(SUM(head_shot_kills)/NULLIF(SUM(kills),0)*100,1) AS hs_pct,
+                        ROUND(SUM(damage)/NULLIF(COUNT(DISTINCT CONCAT(matchid,mapnumber)),0)/30,1) AS adr
+                    FROM {MATCHZY_TABLES['players']}
+                    WHERE steamid64 = %s AND steamid64 != '0'
+                    GROUP BY steamid64, name
+                """, (sid_for_edited,))
+                career = c.fetchone()
+
         if not career:
             c.close(); conn.close()
             return _json_response({"error": "Player not found"})
+
+        # Apply edited name to career row
+        career = dict(career)
+        name_map = _edited_name_map()
+        sid = str(career.get('steamid64') or '')
+        if sid in name_map:
+            career['name'] = name_map[sid]
+
         # Recent matches
         c.execute(f"""
-            SELECT p.matchid, p.mapnumber, p.team,
+            SELECT p.matchid, p.mapnumber, p.team, p.steamid64,
                 p.kills, p.deaths, p.assists, p.damage, p.head_shot_kills,
                 p.enemies5k, p.v1_wins,
                 m.mapname, m.winner, m.team1_score, m.team2_score,
@@ -81,12 +115,16 @@ async def handle_api_player(request):
             FROM {MATCHZY_TABLES['players']} p
             LEFT JOIN {MATCHZY_TABLES['maps']} m ON p.matchid=m.matchid AND p.mapnumber=m.mapnumber
             LEFT JOIN {MATCHZY_TABLES['matches']} mm ON p.matchid=mm.matchid
-            WHERE p.name = %s AND p.steamid64 != '0'
+            WHERE p.steamid64 = %s AND p.steamid64 != '0'
             ORDER BY p.matchid DESC, p.mapnumber DESC
             LIMIT 20
-        """, (name,))
+        """, (sid,))
         recent = c.fetchall()
         c.close(); conn.close()
+
+        # Apply match-level and player-level edits to recent matches
+        recent = _patch_recent_matches(recent)
+
         return _json_response({"career": career, "recent_matches": recent})
     except Exception as e:
         return _json_response({"error": str(e)})
@@ -167,26 +205,32 @@ async def handle_api_matches(request):
             d = r.get('end_time') or ''
             return str(d)
         results.sort(key=sort_key, reverse=True)
+        results = results[:limit]
 
-        # Flag any matches that have edits in the DB
-        try:
-            conn2 = get_db()
-            c2 = conn2.cursor()
-            c2.execute("SELECT matchid FROM match_edits")
-            edited_ids = {str(row[0]) for row in c2.fetchall()}
-            c2.close(); conn2.close()
-            for r in results:
-                r['is_edited'] = r['matchid'] in edited_ids
-        except Exception:
-            pass
+        # ── Apply edits to match list (team names, scores, map) ──────────────
+        all_edits = _get_all_edits()
+        edited_ids = set(all_edits.keys())
+        for r in results:
+            mid   = str(r['matchid'])
+            edits = all_edits.get(mid, {})
+            r['is_edited'] = mid in edited_ids
+            if edits:
+                t1e = edits.get('team1', {})
+                t2e = edits.get('team2', {})
+                if t1e.get('name'):  r['team1_name']  = t1e['name']
+                if t1e.get('score') is not None: r['team1_score'] = t1e['score']
+                if t2e.get('name'):  r['team2_name']  = t2e['name']
+                if t2e.get('score') is not None: r['team2_score'] = t2e['score']
+                if edits.get('map'):    r['mapname'] = edits['map']
+                if edits.get('winner'): r['winner']  = edits['winner']
 
-        return _json_response(results[:limit])
+        return _json_response(results)
     except Exception as e:
         return _json_response({"error": str(e)})
 
 
 async def handle_api_match(request):
-    """GET /api/match/{matchid} — fshost JSON merged with any DB edits."""
+    """GET /api/match/{matchid} — fshost JSON merged with any stored edits."""
     matchid = request.match_info.get('matchid', '')
     try:
         loop = asyncio.get_running_loop()
@@ -194,39 +238,55 @@ async def handle_api_match(request):
         if not data:
             return _json_response({"error": f"No fshost data found for match {matchid}"})
 
-        # Auto-save raw fshost JSON to DB (non-blocking, best-effort)
+        # Auto-save raw fshost JSON to DB (best-effort)
         asyncio.ensure_future(loop.run_in_executor(None, _save_raw_to_db, matchid, data))
 
-        # Apply any stored edits on top of raw data
-        edits = _get_edits(matchid)
-        if edits:
-            data = _deep_merge(data, edits)
+        # Load edits once
+        edits  = _get_edits(matchid)
+        t1e    = edits.get('team1', {})
+        t2e    = edits.get('team2', {})
 
         t1 = data.get('team1', {})
         t2 = data.get('team2', {})
+
+        t1name  = t1e.get('name')  or t1.get('name', 'Team 1')
+        t2name  = t2e.get('name')  or t2.get('name', 'Team 2')
+        t1score = t1e['score'] if 'score' in t1e else t1.get('score', 0)
+        t2score = t2e['score'] if 'score' in t2e else t2.get('score', 0)
+        mapname = edits.get('map') or data.get('map', 'unknown')
+        winner  = edits.get('winner') or data.get('winner', '')
+
         meta = {
             'matchid':     data.get('match_id') or matchid,
-            'team1_name':  t1.get('name', 'Team 1'),
-            'team2_name':  t2.get('name', 'Team 2'),
-            'team1_score': t1.get('score', 0),
-            'team2_score': t2.get('score', 0),
-            'winner':      data.get('winner', ''),
+            'team1_name':  t1name,
+            'team2_name':  t2name,
+            'team1_score': t1score,
+            'team2_score': t2score,
+            'winner':      winner,
             'end_time':    data.get('date'),
             'start_time':  data.get('date'),
-            'is_edited':   bool(edits),   # flag so frontend can show "Edited" badge
+            'is_edited':   bool(edits),
         }
         maps = [{
             'matchid':      matchid,
             'mapnumber':    1,
-            'mapname':      data.get('map', 'unknown'),
-            'team1_score':  t1.get('score', 0),
-            'team2_score':  t2.get('score', 0),
-            'winner':       data.get('winner', ''),
+            'mapname':      mapname,
+            'team1_score':  t1score,
+            'team2_score':  t2score,
+            'winner':       winner,
             'total_rounds': data.get('total_rounds'),
         }]
-        players = _players_from_fshost(data, matchid)
 
-        # Build demo info directly from the matchid cache
+        # Apply edits to fshost player list — also patch team_name on each player
+        players = _players_from_fshost(data, matchid)
+        players = _apply_match_player_edits(players, matchid)
+        # Patch team_name on players if team name was edited
+        for p in players:
+            if p.get('team') == 'team1' and t1e.get('name'):
+                p['team_name'] = t1e['name']
+            elif p.get('team') == 'team2' and t2e.get('name'):
+                p['team_name'] = t2e['name']
+
         matchid_map = build_matchid_to_demo_map()
         entry = matchid_map.get(str(matchid), {})
         demo = {
@@ -305,6 +365,230 @@ def _fetch_fshost_match_json(matchid: str) -> dict | None:
     except Exception as e:
         print(f"[fshost JSON] Error fetching match {matchid}: {e}")
         return None
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# EDIT OVERLAY HELPERS
+# Every API endpoint calls these to apply match_edits on top of raw data.
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _get_edits(matchid: str) -> dict:
+    """Load edit overrides for one match from DB. Returns {} if none."""
+    try:
+        conn = get_db()
+        c = conn.cursor(dictionary=True)
+        c.execute("SELECT edits_json FROM match_edits WHERE matchid = %s", (str(matchid),))
+        row = c.fetchone()
+        c.close(); conn.close()
+        if row and row['edits_json']:
+            return json.loads(row['edits_json'])
+    except Exception as e:
+        print(f"[edits] _get_edits error for {matchid}: {e}")
+    return {}
+
+
+def _get_all_edits() -> dict:
+    """
+    Load ALL match edits in one query. Returns { matchid: edits_dict }.
+    Simple 60-second in-process cache so hot endpoints don't hit the DB repeatedly.
+    """
+    import time as _time
+    now = _time.monotonic()
+    cache = _get_all_edits._cache
+    if cache and now - cache['ts'] < 60:
+        return cache['data']
+    try:
+        conn = get_db()
+        c = conn.cursor(dictionary=True)
+        c.execute("SELECT matchid, edits_json FROM match_edits")
+        rows = c.fetchall()
+        c.close(); conn.close()
+        data = {}
+        for row in rows:
+            try:
+                data[str(row['matchid'])] = json.loads(row['edits_json'])
+            except Exception:
+                pass
+        _get_all_edits._cache = {'ts': now, 'data': data}
+        return data
+    except Exception as e:
+        print(f"[edits] _get_all_edits error: {e}")
+        return {}
+_get_all_edits._cache = {}
+
+
+def _bust_edits_cache():
+    """Call this after saving edits so the cache refreshes immediately."""
+    _get_all_edits._cache = {}
+
+
+def _edited_name_map():
+    """
+    Returns name_map = { steamid64: latest_edited_name }.
+    Used to patch player names on leaderboard / specialists / career pages.
+    """
+    all_edits = _get_all_edits()
+    name_map = {}
+    for mid, edits in all_edits.items():
+        for sid, pe in edits.get('players', {}).items():
+            if 'name' in pe:
+                name_map[str(sid)] = pe['name']
+    return name_map
+
+
+def _apply_match_player_edits(players: list, matchid: str) -> list:
+    """
+    Patch a per-match player list with stored edits.
+    Recalculates kd / hs_pct / adr when base stats are edited.
+    """
+    edits = _get_edits(matchid)
+    if not edits:
+        return players
+    player_edits = edits.get('players', {})
+    if not player_edits:
+        return players
+    out = []
+    for p in players:
+        sid = str(p.get('steamid64') or p.get('steam_id') or '')
+        pe  = player_edits.get(sid, {})
+        if pe:
+            p = dict(p)
+            p.update(pe)
+            kills  = int(p.get('kills', 0) or 0)
+            deaths = int(p.get('deaths', 0) or 0)
+            hs     = int(p.get('head_shot_kills', 0) or 0)
+            dmg    = int(p.get('damage', 0) or 0)
+            if 'kills' in pe or 'deaths' in pe:
+                p['kd'] = round(kills / deaths, 2) if deaths else float(kills)
+            if 'kills' in pe or 'head_shot_kills' in pe:
+                p['hs_pct'] = round(hs / kills * 100, 1) if kills else 0.0
+            if 'damage' in pe:
+                p['adr'] = round(dmg / 30, 1)
+        out.append(p)
+    return out
+
+
+def _apply_meta_edits(meta: dict, matchid: str) -> dict:
+    """Patch match-level meta (team names, scores, map, winner) from edits."""
+    edits = _get_edits(matchid)
+    if not edits:
+        return meta
+    meta = dict(meta)
+    t1e = edits.get('team1', {})
+    t2e = edits.get('team2', {})
+    if t1e.get('name'):  meta['team1_name']  = t1e['name']
+    if t1e.get('score') is not None: meta['team1_score'] = t1e['score']
+    if t2e.get('name'):  meta['team2_name']  = t2e['name']
+    if t2e.get('score') is not None: meta['team2_score'] = t2e['score']
+    if edits.get('map'):    meta['mapname'] = edits['map']
+    if edits.get('winner'): meta['winner']  = edits['winner']
+    return meta
+
+
+def _patch_aggregate_rows(rows: list) -> list:
+    """
+    Patch leaderboard / specialists / career aggregate rows with edited player names.
+    Only names are patched here — aggregate stats (kills/deaths totals) stay as MatchZy
+    calculated them, because individual-match stat edits are already reflected in the
+    per-match scoreboard via _apply_match_player_edits.
+    """
+    name_map = _edited_name_map()
+    if not name_map:
+        return rows
+    out = []
+    for row in rows:
+        sid = str(row.get('steamid64') or '')
+        if sid in name_map:
+            row = dict(row)
+            row['name'] = name_map[sid]
+        out.append(row)
+    return out
+
+
+def _patch_recent_matches(rows: list) -> list:
+    """
+    Patch recent-match rows (from handle_api_player / team stats) with edited
+    team names, scores, mapname, winner, and the requesting player's own stats.
+    """
+    all_edits = _get_all_edits()
+    if not all_edits:
+        return rows
+    out = []
+    for row in rows:
+        mid   = str(row.get('matchid') or '')
+        edits = all_edits.get(mid, {})
+        if not edits:
+            out.append(row)
+            continue
+        row = dict(row)
+        t1e = edits.get('team1', {})
+        t2e = edits.get('team2', {})
+        if t1e.get('name'):  row['team1_name']  = t1e['name']
+        if t1e.get('score') is not None: row['team1_score'] = t1e['score']
+        if t2e.get('name'):  row['team2_name']  = t2e['name']
+        if t2e.get('score') is not None: row['team2_score'] = t2e['score']
+        if edits.get('map'):    row['mapname'] = edits['map']
+        if edits.get('winner'): row['winner']  = edits['winner']
+        # Patch this player's own stats if they were edited
+        sid = str(row.get('steamid64') or '')
+        pe  = edits.get('players', {}).get(sid, {})
+        if pe:
+            row.update(pe)
+            kills  = int(row.get('kills', 0) or 0)
+            deaths = int(row.get('deaths', 0) or 0)
+            hs     = int(row.get('head_shot_kills', 0) or 0)
+            dmg    = int(row.get('damage', 0) or 0)
+            row['kd']     = round(kills / deaths, 2) if deaths else float(kills)
+            row['hs_pct'] = round(hs / kills * 100, 1) if kills else 0.0
+            row['adr']    = round(dmg / 30, 1)
+        out.append(row)
+    return out
+
+
+def _deep_merge(base: dict, overrides: dict) -> dict:
+    """
+    Recursively merge overrides into base dict.
+    For team player lists: match by steam_id and merge per-player fields.
+    """
+    result = dict(base)
+    for key, val in overrides.items():
+        if key in ('team1', 'team2') and isinstance(val, dict) and isinstance(result.get(key), dict):
+            merged_team = dict(result[key])
+            for tk, tv in val.items():
+                if tk == 'players' and isinstance(tv, list):
+                    orig_players = {str(p.get('steam_id', p.get('steamid64', ''))): p
+                                    for p in merged_team.get('players', [])}
+                    for op in tv:
+                        pid = str(op.get('steam_id', op.get('steamid64', '')))
+                        if pid and pid in orig_players:
+                            orig_players[pid] = {**orig_players[pid], **op}
+                        elif pid:
+                            orig_players[pid] = op
+                    merged_team['players'] = list(orig_players.values())
+                else:
+                    merged_team[tk] = tv
+            result[key] = merged_team
+        elif isinstance(val, dict) and isinstance(result.get(key), dict):
+            result[key] = _deep_merge(result[key], val)
+        else:
+            result[key] = val
+    return result
+
+
+def _save_raw_to_db(matchid: str, raw: dict):
+    """Upsert the raw fshost JSON into fshost_matches table."""
+    try:
+        conn = get_db()
+        c = conn.cursor()
+        c.execute("""
+            INSERT INTO fshost_matches (matchid, raw_json, fetched_at)
+            VALUES (%s, %s, NOW())
+            ON DUPLICATE KEY UPDATE raw_json = VALUES(raw_json), updated_at = NOW()
+        """, (str(matchid), json.dumps(raw, default=str)))
+        conn.commit()
+        c.close(); conn.close()
+    except Exception as e:
+        print(f"[DB] Save raw error for {matchid}: {e}")
 
 
 def _parse_demo_filename(name: str) -> dict:
@@ -414,6 +698,7 @@ async def handle_api_leaderboard(request):
         """)
         rows = c.fetchall()
         c.close(); conn.close()
+        rows = _patch_aggregate_rows(rows)   # apply edited player names
         return _json_response(rows)
     except Exception as e:
         return _json_response({"error": str(e)})
@@ -447,6 +732,7 @@ async def handle_api_specialists(request):
         """)
         rows = c.fetchall()
         c.close(); conn.close()
+        rows = _patch_aggregate_rows(rows)   # apply edited player names
         return _json_response(rows)
     except Exception as e:
         return _json_response({"error": str(e)})
@@ -557,6 +843,16 @@ async def handle_api_h2h(request):
         r1 = fetch_player(p1)
         r2 = fetch_player(p2)
         c.close(); conn.close()
+        # Apply edited names
+        name_map = _edited_name_map()
+        if r1:
+            r1 = dict(r1)
+            sid = str(r1.get('steamid64') or '')
+            if sid in name_map: r1['name'] = name_map[sid]
+        if r2:
+            r2 = dict(r2)
+            sid = str(r2.get('steamid64') or '')
+            if sid in name_map: r2['name'] = name_map[sid]
         return _json_response({"p1": r1, "p2": r2})
     except Exception as e:
         return _json_response({"error": str(e)})
@@ -611,88 +907,34 @@ async def handle_api_status(request):
             "player_list": [],
         })
 
+async def handle_stats_page(request):
+    """GET /stats — serve stats.html as a static file"""
+    return web.FileResponse(HTML_PATH)
+
 # ─────────────────────────────────────────────────────────────────────────────
-# MATCH EDIT API — save fshost JSONs to DB, apply edits, serve merged result
+# MATCH EDIT API ENDPOINTS
 # ─────────────────────────────────────────────────────────────────────────────
 
-def _deep_merge(base: dict, overrides: dict) -> dict:
-    """
-    Recursively merge overrides into base dict.
-    For player lists: match by steamid64 and merge per-player fields.
-    For team dicts: merge nested keys.
-    """
-    result = dict(base)
-    for key, val in overrides.items():
-        if key in ('team1', 'team2') and isinstance(val, dict) and isinstance(result.get(key), dict):
-            # Merge team-level fields
-            merged_team = dict(result[key])
-            for tk, tv in val.items():
-                if tk == 'players' and isinstance(tv, list):
-                    # Merge player overrides by steamid64
-                    orig_players = {str(p.get('steam_id', p.get('steamid64', ''))): p
-                                    for p in merged_team.get('players', [])}
-                    for op in tv:
-                        pid = str(op.get('steam_id', op.get('steamid64', '')))
-                        if pid and pid in orig_players:
-                            orig_players[pid] = {**orig_players[pid], **op}
-                        elif pid:
-                            orig_players[pid] = op
-                    merged_team['players'] = list(orig_players.values())
-                else:
-                    merged_team[tk] = tv
-            result[key] = merged_team
-        elif isinstance(val, dict) and isinstance(result.get(key), dict):
-            result[key] = _deep_merge(result[key], val)
-        else:
-            result[key] = val
-    return result
-
-
-def _get_edits(matchid: str) -> dict:
-    """Load edit overrides for a match from DB. Returns {} if none."""
-    try:
-        conn = get_db()
-        c = conn.cursor(dictionary=True)
-        c.execute("SELECT edits_json FROM match_edits WHERE matchid = %s", (str(matchid),))
-        row = c.fetchone()
-        c.close(); conn.close()
-        if row and row['edits_json']:
-            return json.loads(row['edits_json'])
-    except Exception as e:
-        print(f"[edits] Load error for {matchid}: {e}")
-    return {}
-
-
-def _save_raw_to_db(matchid: str, raw: dict):
-    """Upsert the raw fshost JSON into fshost_matches table."""
-    try:
-        conn = get_db()
-        c = conn.cursor()
-        c.execute("""
-            INSERT INTO fshost_matches (matchid, raw_json, fetched_at)
-            VALUES (%s, %s, NOW())
-            ON DUPLICATE KEY UPDATE raw_json = VALUES(raw_json), updated_at = NOW()
-        """, (str(matchid), json.dumps(raw, default=str)))
-        conn.commit()
-        c.close(); conn.close()
-    except Exception as e:
-        print(f"[DB] Save raw error for {matchid}: {e}")
+async def handle_options(request):
+    """CORS preflight."""
+    return web.Response(status=204, headers={
+        "Access-Control-Allow-Origin":  "*",
+        "Access-Control-Allow-Methods": "GET, POST, PATCH, DELETE, OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type, Authorization",
+    })
 
 
 async def handle_api_auth_edit(request):
-    """POST /api/auth/edit — verify edit password, return simple token."""
+    """POST /api/auth/edit — verify EDIT_PASSWORD, return bearer token."""
     try:
         body = await request.json()
-        password = body.get('password', '')
-        if password == EDIT_PASSWORD:
-            # Simple token = base64(matchid:password) — stateless, good enough
+        if body.get('password') == EDIT_PASSWORD:
             import base64
             token = base64.b64encode(f"edit:{EDIT_PASSWORD}".encode()).decode()
             return _json_response({"ok": True, "token": token})
         return web.Response(
             text=json.dumps({"ok": False, "error": "Wrong password"}),
-            content_type='application/json',
-            status=401,
+            content_type='application/json', status=401,
             headers={"Access-Control-Allow-Origin": "*"},
         )
     except Exception as e:
@@ -700,46 +942,38 @@ async def handle_api_auth_edit(request):
 
 
 def _verify_edit_token(request) -> bool:
-    """Check Authorization header for a valid edit token."""
     import base64
     auth = request.headers.get('Authorization', '')
     if not auth.startswith('Bearer '):
         return False
     try:
-        token = auth[7:]
-        decoded = base64.b64decode(token.encode()).decode()
-        return decoded == f"edit:{EDIT_PASSWORD}"
+        return base64.b64decode(auth[7:].encode()).decode() == f"edit:{EDIT_PASSWORD}"
     except Exception:
         return False
 
 
 async def handle_api_save_match(request):
-    """
-    POST /api/match/{matchid}/save
-    Saves the raw fshost JSON for this match into fshost_matches table.
-    Called automatically by the frontend when it first fetches a match.
-    No auth required — it's just caching the public fshost data.
-    """
+    """POST /api/match/{matchid}/save — cache raw fshost JSON. No auth needed."""
     matchid = request.match_info.get('matchid', '')
     try:
         body = await request.json()
-        raw = body.get('raw_json') or body  # accept full body as raw or wrapped
-        if not raw or not isinstance(raw, dict):
+        raw  = body.get('raw_json') or body
+        if not isinstance(raw, dict):
             return _json_response({"ok": False, "error": "No JSON body"})
-        _save_raw_to_db(matchid, raw)
+        loop = asyncio.get_running_loop()
+        await loop.run_in_executor(None, _save_raw_to_db, matchid, raw)
         return _json_response({"ok": True, "matchid": matchid})
     except Exception as e:
         return _json_response({"ok": False, "error": str(e)})
 
 
 async def handle_api_get_edits(request):
-    """GET /api/match/{matchid}/edits — return the stored edits for a match (if any)."""
+    """GET /api/match/{matchid}/edits — return stored edits for a match."""
     matchid = request.match_info.get('matchid', '')
-    edits = _get_edits(matchid)
+    edits   = _get_edits(matchid)
     has_raw = False
     try:
-        conn = get_db()
-        c = conn.cursor()
+        conn = get_db(); c = conn.cursor()
         c.execute("SELECT 1 FROM fshost_matches WHERE matchid = %s", (str(matchid),))
         has_raw = c.fetchone() is not None
         c.close(); conn.close()
@@ -749,90 +983,50 @@ async def handle_api_get_edits(request):
 
 
 async def handle_api_patch_match(request):
-    """
-    PATCH /api/match/{matchid}/edit
-    Save edited fields for a match.
-    Requires Bearer token from /api/auth/edit.
-
-    Body: { "edits": { ...partial fshost JSON fields to override... } }
-
-    The edits are stored as a partial JSON overlay.
-    On GET /api/match/{matchid}, the backend merges raw + edits.
-    """
+    """PATCH /api/match/{matchid}/edit — save edits. Requires bearer token."""
     matchid = request.match_info.get('matchid', '')
-
     if not _verify_edit_token(request):
         return web.Response(
             text=json.dumps({"ok": False, "error": "Unauthorized"}),
-            content_type='application/json',
-            status=401,
+            content_type='application/json', status=401,
             headers={"Access-Control-Allow-Origin": "*"},
         )
     try:
-        body = await request.json()
+        body  = await request.json()
         edits = body.get('edits')
-        if edits is None or not isinstance(edits, dict):
-            return _json_response({"ok": False, "error": "Missing 'edits' object in body"})
-
-        conn = get_db()
-        c = conn.cursor()
+        if not isinstance(edits, dict):
+            return _json_response({"ok": False, "error": "Missing 'edits' object"})
+        conn = get_db(); c = conn.cursor()
         c.execute("""
             INSERT INTO match_edits (matchid, edits_json, edited_at)
             VALUES (%s, %s, NOW())
             ON DUPLICATE KEY UPDATE edits_json = VALUES(edits_json), edited_at = NOW()
         """, (str(matchid), json.dumps(edits, default=str)))
-        conn.commit()
-        c.close(); conn.close()
-
-        # Bust fshost cache so the next GET /api/match fetches fresh merged data
-        global _MATCHID_DEMO_CACHE
-        _MATCHID_DEMO_CACHE = None
-
+        conn.commit(); c.close(); conn.close()
+        _bust_edits_cache()
         return _json_response({"ok": True, "matchid": matchid})
     except Exception as e:
         return _json_response({"ok": False, "error": str(e)})
 
 
 async def handle_api_revert_match(request):
-    """
-    DELETE /api/match/{matchid}/edit
-    Remove all edits for a match, reverting to raw fshost data.
-    Requires Bearer token.
-    """
+    """DELETE /api/match/{matchid}/edit — remove edits, revert to fshost data."""
     matchid = request.match_info.get('matchid', '')
     if not _verify_edit_token(request):
         return web.Response(
             text=json.dumps({"ok": False, "error": "Unauthorized"}),
-            content_type='application/json',
-            status=401,
+            content_type='application/json', status=401,
             headers={"Access-Control-Allow-Origin": "*"},
         )
     try:
-        conn = get_db()
-        c = conn.cursor()
+        conn = get_db(); c = conn.cursor()
         c.execute("DELETE FROM match_edits WHERE matchid = %s", (str(matchid),))
-        conn.commit()
-        c.close(); conn.close()
+        conn.commit(); c.close(); conn.close()
+        _bust_edits_cache()
         return _json_response({"ok": True, "matchid": matchid, "reverted": True})
     except Exception as e:
         return _json_response({"ok": False, "error": str(e)})
 
-
-async def handle_options(request):
-    """Handle CORS preflight OPTIONS requests for edit endpoints."""
-    return web.Response(
-        status=204,
-        headers={
-            "Access-Control-Allow-Origin": "*",
-            "Access-Control-Allow-Methods": "GET, POST, PATCH, DELETE, OPTIONS",
-            "Access-Control-Allow-Headers": "Content-Type, Authorization",
-        }
-    )
-
-
-async def handle_stats_page(request):
-    """GET /stats — serve stats.html as a static file"""
-    return web.FileResponse(HTML_PATH)
 
 async def start_http_server():
     app = web.Application()
@@ -846,18 +1040,17 @@ async def start_http_server():
     app.router.add_get('/api/mapstats',                handle_api_mapstats)
     app.router.add_get('/api/h2h',                     handle_api_h2h)
     app.router.add_get('/api/status',                  handle_api_status)
-    # ── Match edit endpoints ──────────────────────────────────────────────────
+    # ── Edit endpoints ────────────────────────────────────────────────────────
     app.router.add_post('/api/auth/edit',              handle_api_auth_edit)
     app.router.add_post('/api/match/{matchid}/save',   handle_api_save_match)
     app.router.add_get('/api/match/{matchid}/edits',   handle_api_get_edits)
-    app.router.add_route('PATCH',  '/api/match/{matchid}/edit',  handle_api_patch_match)
-    app.router.add_route('DELETE', '/api/match/{matchid}/edit',  handle_api_revert_match)
-    # CORS preflight for edit endpoints
+    app.router.add_route('PATCH',  '/api/match/{matchid}/edit', handle_api_patch_match)
+    app.router.add_route('DELETE', '/api/match/{matchid}/edit', handle_api_revert_match)
     app.router.add_route('OPTIONS', '/api/auth/edit',             handle_options)
     app.router.add_route('OPTIONS', '/api/match/{matchid}/save',  handle_options)
     app.router.add_route('OPTIONS', '/api/match/{matchid}/edit',  handle_options)
     app.router.add_route('OPTIONS', '/api/match/{matchid}/edits', handle_options)
-    # ── Static pages ─────────────────────────────────────────────────────────
+    # ── Static ────────────────────────────────────────────────────────────────
     app.router.add_get('/stats',   handle_stats_page)
     app.router.add_get('/',        handle_stats_page)
     app.router.add_get('/health',  handle_health_check)
@@ -867,13 +1060,12 @@ async def start_http_server():
     await runner.setup()
     site = web.TCPSite(runner, '0.0.0.0', port)
     await site.start()
-
-    print(f"✓ HTTP log endpoint started on port {port}")
+    print(f"✓ HTTP server started on port {port}")
     return runner
 
 TOKEN = os.getenv("TOKEN")
-STEAM_API_KEY = os.getenv("STEAM_API_KEY", "")
-EDIT_PASSWORD = os.getenv("EDIT_PASSWORD", "changeme")   # set this in Railway env vars
+STEAM_API_KEY  = os.getenv("STEAM_API_KEY", "")
+EDIT_PASSWORD  = os.getenv("EDIT_PASSWORD", "changeme")   # set in Railway env vars
 SERVER_IP = os.getenv("SERVER_IP", "127.0.0.1")
 SERVER_PORT = int(os.getenv("SERVER_PORT", 27015))
 RCON_IP = os.getenv("RCON_IP", SERVER_IP)
@@ -938,27 +1130,22 @@ def init_database():
     conn = get_db()
     c = conn.cursor()
 
-    # Bot-managed tables (session tracking, snapshots)
-
-    # ── fshost match cache: stores the full parsed JSON from fshost ──────────
+    # ── fshost match cache ───────────────────────────────────────────────────
     c.execute("""
         CREATE TABLE IF NOT EXISTS fshost_matches (
-            matchid       VARCHAR(64)  PRIMARY KEY,
-            raw_json      LONGTEXT     NOT NULL,
-            fetched_at    DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
-            updated_at    DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+            matchid    VARCHAR(64) PRIMARY KEY,
+            raw_json   LONGTEXT    NOT NULL,
+            fetched_at DATETIME    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
         ) CHARACTER SET utf8mb4
     """)
 
-    # ── match_edits: override fields layered on top of raw fshost JSON ───────
-    # Stores a partial JSON object — only the fields the user changed.
-    # Backend merges: raw_json DEEP-MERGED WITH edits_json → final response.
+    # ── edit overlay: partial JSON diff stored per match ────────────────────
     c.execute("""
         CREATE TABLE IF NOT EXISTS match_edits (
-            matchid       VARCHAR(64)  PRIMARY KEY,
-            edits_json    LONGTEXT     NOT NULL,
-            edited_at     DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-            edited_by     VARCHAR(128) DEFAULT NULL
+            matchid    VARCHAR(64) PRIMARY KEY,
+            edits_json LONGTEXT    NOT NULL,
+            edited_at  DATETIME    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
         ) CHARACTER SET utf8mb4
     """)
 
@@ -1595,6 +1782,50 @@ async def get_enhanced_status_embed():
 
 
 # ========== BACKGROUND TASKS ==========
+
+def _sync_fshost_to_db_blocking():
+    """Pull every fshost JSON into fshost_matches. Runs in a thread executor."""
+    inserted = skipped = errors = 0
+    try:
+        matchid_map = build_matchid_to_demo_map(force_refresh=True)
+        if not matchid_map:
+            return 0, 0, 0
+        conn = get_db(); c = conn.cursor()
+        for matchid, entry in matchid_map.items():
+            metadata = entry.get('metadata')
+            if not metadata:
+                skipped += 1; continue
+            try:
+                c.execute("""
+                    INSERT INTO fshost_matches (matchid, raw_json, fetched_at)
+                    VALUES (%s, %s, NOW())
+                    ON DUPLICATE KEY UPDATE raw_json = VALUES(raw_json), updated_at = NOW()
+                """, (str(matchid), json.dumps(metadata, default=str)))
+                inserted += 1
+            except Exception as e:
+                print(f"[fshost-sync] match {matchid}: {e}"); errors += 1
+        conn.commit(); c.close(); conn.close()
+    except Exception as e:
+        print(f"[fshost-sync] fatal: {e}"); errors += 1
+    return inserted, skipped, errors
+
+
+@tasks.loop(minutes=30)
+async def sync_fshost_to_db():
+    """Sync all fshost JSONs into the DB every 30 min so edit modal always has raw data."""
+    try:
+        loop = asyncio.get_running_loop()
+        inserted, skipped, errors = await loop.run_in_executor(None, _sync_fshost_to_db_blocking)
+        print(f"[fshost-sync] {inserted} upserted, {skipped} skipped, {errors} errors")
+        _bust_edits_cache()  # also refresh edit cache after sync
+    except Exception as e:
+        print(f"[fshost-sync] task error: {e}")
+
+@sync_fshost_to_db.before_loop
+async def before_sync():
+    await bot.wait_until_ready()
+
+
 @tasks.loop(minutes=1)
 async def update_server_stats():
     try:
@@ -1662,6 +1893,8 @@ async def on_ready():
         print(f"⚠️ Could not check MatchZy tables: {e}")
     
     update_server_stats.start()
+    sync_fshost_to_db.start()
+    print("✓ fshost → DB sync started (runs now + every 30 min)")
 
 @bot.event
 async def on_message(message):
@@ -2103,6 +2336,25 @@ async def debugdemos_cmd(inter: discord.Interaction, refresh: bool = False):
             await inter.followup.send(chunk, ephemeral=True)
     else:
         await inter.followup.send(message, ephemeral=True)
+
+
+@bot.tree.command(name="syncdemos", description="Force re-sync all fshost JSONs into the database now")
+@owner_only()
+async def syncdemos_cmd(inter: discord.Interaction):
+    await inter.response.defer(ephemeral=True)
+    try:
+        loop = asyncio.get_running_loop()
+        inserted, skipped, errors = await loop.run_in_executor(None, _sync_fshost_to_db_blocking)
+        _bust_edits_cache()
+        await inter.followup.send(
+            f"✅ **fshost → DB sync complete**\n"
+            f"• `{inserted}` matches upserted\n"
+            f"• `{skipped}` skipped (no metadata)\n"
+            f"• `{errors}` errors",
+            ephemeral=True
+        )
+    except Exception as e:
+        await inter.followup.send(f"❌ Sync failed: {e}", ephemeral=True)
 
 
 if not TOKEN:
