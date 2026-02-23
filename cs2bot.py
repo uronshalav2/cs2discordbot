@@ -1062,12 +1062,22 @@ async def handle_api_revert_match(request):
 async def handle_api_matchzy_players(request):
     """
     GET /api/match/{matchid}/matchzy_players
-    Returns all players for this matchid from matchzy_stats_players DB,
-    including ones missing from the fshost JSON. Computes kd, hs_pct, adr.
-    Also returns which steamid64s are already present in the fshost JSON
-    so the frontend can highlight truly missing players.
+    
+    The fshost matchid and the MatchZy DB matchid are DIFFERENT ID systems.
+    We resolve the correct MatchZy matchid using a priority chain:
+    
+      1. steamids — find the matchid in matchzy_stats_players that contains
+                    the most steamid64s from the fshost player list (most reliable,
+                    immune to team name edits)
+      2. date     — find the matchzy_stats_matches row whose end_time is closest
+                    to the fshost match date (fallback when no steamids available)
+      3. raw id   — try the fshost matchid directly as a MatchZy matchid (last resort)
     """
-    matchid = request.match_info.get('matchid', '')
+    fshost_matchid = request.match_info.get('matchid', '')
+    # Optional: caller may pass known steamids as ?sids=sid1,sid2,...
+    sids_param = request.rel_url.query.get('sids', '').strip()
+    date_param = request.rel_url.query.get('date', '').strip()
+
     try:
         conn = get_db()
         if not matchzy_tables_exist(conn):
@@ -1075,6 +1085,75 @@ async def handle_api_matchzy_players(request):
             return _json_response({"error": "MatchZy tables not found"})
 
         c = conn.cursor(dictionary=True)
+        mz_matchid = None
+        resolve_method = None
+
+        # ── Strategy 1: match by steamids ─────────────────────────────────────
+        # Get steamids from fshost JSON (unaffected by team name edits)
+        fshost_sids = set()
+        fshost_data = None
+        try:
+            fshost_data = _fetch_fshost_match_json(fshost_matchid)
+            if fshost_data:
+                for tk in ('team1', 'team2'):
+                    for fp in fshost_data.get(tk, {}).get('players', []):
+                        sid = str(fp.get('steam_id', '') or '')
+                        if sid and sid != '0':
+                            fshost_sids.add(sid)
+        except Exception:
+            pass
+
+        # Supplement with any sids passed from frontend
+        if sids_param:
+            for s in sids_param.split(','):
+                s = s.strip()
+                if s and s != '0':
+                    fshost_sids.add(s)
+
+        if fshost_sids:
+            # Find which MatchZy matchid has the most overlap with our steamids
+            placeholders = ','.join(['%s'] * len(fshost_sids))
+            c.execute(f"""
+                SELECT matchid, COUNT(*) AS overlap
+                FROM {MATCHZY_TABLES['players']}
+                WHERE steamid64 IN ({placeholders})
+                GROUP BY matchid
+                ORDER BY overlap DESC, matchid DESC
+                LIMIT 1
+            """, list(fshost_sids))
+            row = c.fetchone()
+            if row and row['overlap'] >= 1:
+                mz_matchid = row['matchid']
+                resolve_method = f"steamids (overlap={row['overlap']})"
+
+        # ── Strategy 2: match by date proximity ───────────────────────────────
+        if mz_matchid is None and date_param:
+            try:
+                c.execute(f"""
+                    SELECT matchid,
+                           ABS(TIMESTAMPDIFF(SECOND, end_time, %s)) AS diff_secs
+                    FROM {MATCHZY_TABLES['matches']}
+                    WHERE end_time IS NOT NULL
+                    ORDER BY diff_secs ASC
+                    LIMIT 1
+                """, (date_param,))
+                row = c.fetchone()
+                # Accept if within 4 hours
+                if row and row['diff_secs'] is not None and row['diff_secs'] < 14400:
+                    mz_matchid = row['matchid']
+                    resolve_method = f"date (diff={row['diff_secs']}s)"
+            except Exception:
+                pass
+
+        # ── Strategy 3: raw matchid fallback ──────────────────────────────────
+        if mz_matchid is None:
+            try:
+                mz_matchid = int(fshost_matchid)
+            except (ValueError, TypeError):
+                mz_matchid = fshost_matchid
+            resolve_method = "raw_id_fallback"
+
+        # ── Fetch players for resolved matchid ────────────────────────────────
         c.execute(f"""
             SELECT
                 p.steamid64,
@@ -1098,37 +1177,23 @@ async def handle_api_matchzy_players(request):
                 p.flash_count,
                 p.flash_successes,
                 p.mapnumber,
-                ROUND(p.kills / NULLIF(p.deaths, 0), 2)                      AS kd,
-                ROUND(p.head_shot_kills / NULLIF(p.kills, 0) * 100, 1)       AS hs_pct,
-                ROUND(p.damage / 30.0, 1)                                     AS adr
+                ROUND(p.kills / NULLIF(p.deaths, 0), 2)             AS kd,
+                ROUND(p.head_shot_kills / NULLIF(p.kills,0)*100, 1) AS hs_pct,
+                ROUND(p.damage / 30.0, 1)                            AS adr
             FROM {MATCHZY_TABLES['players']} p
             WHERE p.matchid = %s
             ORDER BY p.team, p.kills DESC
-        """, (str(matchid),))
+        """, (mz_matchid,))
         rows = c.fetchall()
         c.close()
         conn.close()
 
-        # Also get the fshost player steamids so we can flag who's missing
-        try:
-            fshost_data = _fetch_fshost_match_json(matchid)
-            fshost_sids = set()
-            if fshost_data:
-                for tk in ('team1', 'team2'):
-                    for fp in fshost_data.get(tk, {}).get('players', []):
-                        sid = str(fp.get('steam_id', '') or '')
-                        if sid and sid != '0':
-                            fshost_sids.add(sid)
-        except Exception:
-            fshost_sids = set()
-
-        # Annotate each row
+        # ── Annotate rows ──────────────────────────────────────────────────────
         result = []
         for row in rows:
             sid = str(row.get('steamid64') or '')
-            row['in_fshost'] = sid in fshost_sids
+            row['in_fshost']  = sid in fshost_sids
             row['is_missing'] = sid not in fshost_sids
-            # Normalise None → 0 for numeric fields
             for field in ('kills','deaths','assists','damage','head_shot_kills',
                           'enemies5k','enemies4k','enemies3k','v1_wins','v2_wins',
                           'entry_wins','utility_damage','flash_successes'):
@@ -1136,7 +1201,12 @@ async def handle_api_matchzy_players(request):
                     row[field] = 0
             result.append(row)
 
-        return _json_response({"players": result, "fshost_sids": list(fshost_sids)})
+        return _json_response({
+            "players":        result,
+            "mz_matchid":     mz_matchid,
+            "resolve_method": resolve_method,
+            "fshost_sids":    list(fshost_sids),
+        })
     except Exception as e:
         return _json_response({"error": str(e)})
 
