@@ -15,13 +15,6 @@
   --card-bg:#0c0e10;--stat-box-bg:#0a0c0e;--stat-box-top-bg:rgba(var(--orange-rgb),.07);
   --table-head-bg:rgba(0,0,0,.5);--table-team-divider:rgba(0,0,0,.3);
 }
-[data-theme="light"]{
-  --bg:#f0f2f5;--surface:#ffffff;--surface2:#e8eaed;--border:#d1d5db;--border2:#9ca3af;
-  --text:#4b5563;--white:#111827;--muted:#d1d5db;--muted2:#6b7280;
-  --nav-bg:#ffffff;--nav-border:#e5e7eb;--subnav-bg:#f9fafb;
-  --card-bg:#ffffff;--stat-box-bg:#f9fafb;--stat-box-top-bg:rgba(var(--orange-rgb),.05);
-  --table-head-bg:rgba(0,0,0,.05);--table-team-divider:rgba(0,0,0,.04);
-}
 *{box-sizing:border-box;margin:0;padding:0}
 html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;font-size:13px}
 /* NAV */
@@ -35,12 +28,12 @@ nav{background:var(--nav-bg);border-bottom:2px solid var(--nav-border);display:f
 .tab-group-label:hover{color:var(--text);background:rgba(255,255,255,.03)}
 .tab-group-label.group-active{color:var(--orange)}
 .tab-group-label svg{transition:transform .2s}
-.tab-group:hover .tab-group-label svg,.tab-group-label.open svg{transform:rotate(180deg)}
+.tab-group.open .tab-group-label svg{transform:rotate(180deg)}
 .tab-group-arrow{opacity:.5;width:10px;height:10px}
 
 /* Dropdown sub-menu */
-.tab-dropdown{position:absolute;top:calc(100% + 2px);left:0;min-width:160px;background:var(--subnav-bg);border:1px solid var(--border);border-radius:6px;padding:4px;box-shadow:0 8px 24px rgba(0,0,0,.4);opacity:0;pointer-events:none;transform:translateY(-6px);transition:opacity .18s,transform .18s;z-index:300}
-.tab-group:hover .tab-dropdown{opacity:1;pointer-events:auto;transform:translateY(0)}
+.tab-dropdown{position:absolute;top:100%;left:0;min-width:160px;background:var(--subnav-bg);border:1px solid var(--border);border-radius:6px;padding:4px;box-shadow:0 8px 24px rgba(0,0,0,.4);opacity:0;pointer-events:none;transform:translateY(-4px);transition:opacity .18s,transform .18s;z-index:300}
+.tab-group.open .tab-dropdown{opacity:1;pointer-events:auto;transform:translateY(0)}
 .tab-dd-item{padding:9px 12px;border-radius:4px;font-family:'Rajdhani',sans-serif;font-weight:600;font-size:12px;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted2);cursor:pointer;transition:all .12s;white-space:nowrap}
 .tab-dd-item:hover{color:var(--text);background:rgba(255,255,255,.05)}
 .tab-dd-item.active{color:var(--orange);background:var(--orange-glow)}
@@ -53,16 +46,6 @@ nav{background:var(--nav-bg);border-bottom:2px solid var(--nav-border);display:f
 .tab-indicator{position:absolute;bottom:-2px;height:2px;background:var(--orange);transition:left .25s cubic-bezier(.4,0,.2,1),width .25s cubic-bezier(.4,0,.2,1),opacity .2s;pointer-events:none;box-shadow:0 0 8px rgba(var(--orange-rgb),.6);border-radius:1px}
 .nav-right{margin-left:auto;display:flex;gap:10px;align-items:center}
 
-/* Dark mode toggle */
-.theme-toggle{width:38px;height:22px;border-radius:11px;background:var(--border2);border:1px solid var(--border2);cursor:pointer;position:relative;transition:background .25s;flex-shrink:0}
-.theme-toggle.light{background:rgba(var(--orange-rgb),.3);border-color:var(--orange)}
-.theme-toggle-knob{position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:var(--muted2);transition:transform .25s,background .25s}
-.theme-toggle.light .theme-toggle-knob{transform:translateX(16px);background:var(--orange)}
-.theme-toggle-icon{position:absolute;inset:0;display:flex;align-items:center;font-size:10px;pointer-events:none}
-.theme-toggle-icon.moon{justify-content:flex-start;padding-left:4px}
-.theme-toggle-icon.sun{justify-content:flex-end;padding-right:4px;opacity:0;transition:opacity .2s}
-.theme-toggle.light .theme-toggle-icon.sun{opacity:1}
-.theme-toggle.light .theme-toggle-icon.moon{opacity:0}
 
 /* Hamburger */
 .hamburger{display:none;flex-direction:column;justify-content:center;gap:5px;width:36px;height:36px;cursor:pointer;padding:4px;border-radius:3px;margin-left:auto;flex-shrink:0}
@@ -79,8 +62,6 @@ nav{background:var(--nav-bg);border-bottom:2px solid var(--nav-border);display:f
 .mobile-tab{padding:11px 24px;font-family:'Rajdhani',sans-serif;font-weight:600;font-size:14px;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted2);cursor:pointer;border-left:3px solid transparent;transition:all .15s}
 .mobile-tab:hover{color:var(--text);background:rgba(255,255,255,.03)}
 .mobile-tab.active{color:var(--orange);border-left-color:var(--orange);background:var(--orange-glow)}
-.mobile-theme-row{padding:12px 24px;display:flex;align-items:center;justify-content:space-between;border-top:1px solid var(--border);margin-top:4px}
-.mobile-theme-label{font-family:'Rajdhani',sans-serif;font-weight:600;font-size:12px;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted2)}
 @media(max-width:768px){
   .tabs{display:none}
   .nav-right{display:none}
@@ -228,9 +209,9 @@ nav{background:var(--nav-bg);border-bottom:2px solid var(--nav-border);display:f
 .demo-hover-layer{position:absolute;inset:0;z-index:1;background:linear-gradient(90deg,rgba(var(--orange-rgb),.07) 0%,rgba(var(--orange-rgb),.03) 30%,transparent 70%);opacity:0;transition:opacity .22s ease;pointer-events:none}
 .demo-card:hover .demo-hover-layer{opacity:1}
 .demo-bg-img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:0.75;transition:transform .35s ease;will-change:transform}
-.demo-overlay{position:absolute;inset:0;background:linear-gradient(90deg,rgba(4,5,7,.95) 0%,rgba(4,5,7,.88) 35%,rgba(4,5,7,.55) 65%,rgba(4,5,7,.1) 100%)}
-.demo-content{position:relative;z-index:2;height:100%;display:flex;align-items:center;padding:0 22px;gap:18px}
-.demo-map-label{font-family:'Rajdhani',sans-serif;font-weight:800;font-size:12px;letter-spacing:3px;text-transform:uppercase;color:rgba(255,255,255,.45);margin-bottom:4px;text-shadow:0 1px 4px rgba(0,0,0,.8);transition:color .22s ease}
+.demo-overlay{position:absolute;inset:0;background:linear-gradient(to right,rgba(4,5,7,.97) 0%,rgba(4,5,7,.92) 30%,rgba(4,5,7,.7) 55%,rgba(4,5,7,.25) 75%,rgba(4,5,7,.0) 100%)}
+.demo-content{position:relative;z-index:2;height:100%;display:flex;align-items:center;justify-content:space-between;padding:0 20px;gap:16px}
+.demo-map-label{font-family:'Rajdhani',sans-serif;font-weight:800;font-size:11px;letter-spacing:3px;text-transform:uppercase;color:rgba(255,255,255,.5);margin-bottom:6px;text-shadow:0 1px 4px rgba(0,0,0,.8);transition:color .22s ease}
 
 /* PROFILE */
 .profile-top{--sx:50%;--sy:50%;background:linear-gradient(135deg,rgba(var(--orange-rgb),.11) 0%,rgba(10,12,14,.7) 50%,rgba(var(--orange-rgb),.05) 100%);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);border:1px solid rgba(var(--orange-rgb),.28);border-radius:10px;padding:22px 24px;margin-bottom:12px;display:flex;align-items:center;gap:20px;box-shadow:0 0 40px rgba(var(--orange-rgb),.12),0 8px 32px rgba(0,0,0,.55),inset 0 1px 0 rgba(255,255,255,.08);position:relative;overflow:hidden}
@@ -329,8 +310,9 @@ nav{background:var(--nav-bg);border-bottom:2px solid var(--nav-border);display:f
 
 /* UTIL */
 .loading{padding:48px;text-align:center;color:var(--muted2)}
-.spin{display:inline-block;width:160px;height:auto;margin-bottom:0;
-  filter:brightness(0) invert(1) sepia(1) saturate(5) hue-rotate(345deg) brightness(1);
+.spin{display:inline-block;width:160px;height:auto;margin-bottom:0}
+.spin svg,.spin svg *{fill:var(--orange)!important}
+.spin{
   -webkit-mask-image:linear-gradient(90deg,rgba(0,0,0,.5) 0%,rgba(0,0,0,.5) 25%,rgba(0,0,0,1) 50%,rgba(0,0,0,.5) 75%,rgba(0,0,0,.5) 100%);
   mask-image:linear-gradient(90deg,rgba(0,0,0,.5) 0%,rgba(0,0,0,.5) 25%,rgba(0,0,0,1) 50%,rgba(0,0,0,.5) 75%,rgba(0,0,0,.5) 100%);
   -webkit-mask-size:300% 100%;mask-size:300% 100%;
@@ -344,25 +326,7 @@ nav{background:var(--nav-bg);border-bottom:2px solid var(--nav-border);display:f
 .empty{padding:40px;text-align:center;color:var(--muted2)}
 .ovx{overflow-x:auto}
 
-/* ── Light-mode overrides for JS-generated hardcoded #fff text ─────────────── */
-[data-theme="light"] .podium-card [style*="color:#fff"],
-[data-theme="light"] .podium-card [style*="color: #fff"]{color:var(--white)!important}
-[data-theme="light"] .h2h-row [style*="color:#fff"],
-[data-theme="light"] .h2h-result-body [style*="color:#fff"],
-[data-theme="light"] .predict-slot [style*="color:#fff"],
-[data-theme="light"] #predict-picker-list [style*="color:#fff"]{color:var(--white)!important}
-[data-theme="light"] .demo-card [style*="color:rgba(255,255,255"]{color:var(--text)!important}
-[data-theme="light"] .h2h-top-card [style*="color:#fff"]{color:var(--white)!important}
-/* Demo overlay — hide in light mode */
-[data-theme="light"] .demo-overlay{opacity:0}
-[data-theme="light"] .demo-map-label{color:rgba(0,0,0,.6)!important;text-shadow:none!important}
-[data-theme="light"] .demo-card{border-left-color:rgba(var(--orange-rgb),.3)}
-[data-theme="light"] .demo-card .demo-bg-img{opacity:0.35}
-[data-theme="light"] .demo-content .demo-map-label{color:var(--muted2)!important}
 /* Leaderboard / specialists table head rows in light mode */
-[data-theme="light"] .lb-table thead tr,[data-theme="light"] .lb-table thead tr th{color:var(--muted2)}
-[data-theme="light"] .spec-rank-gold td:first-child,[data-theme="light"] .rank-gold td:first-child{background:linear-gradient(90deg,rgba(var(--orange-rgb),.10) 0%,transparent 100%)}
-[data-theme="light"] .spec-rank-gold td:nth-child(2),[data-theme="light"] .rank-gold td:nth-child(2){background:linear-gradient(90deg,rgba(var(--orange-rgb),.05) 0%,transparent 100%)}
 
 /* ── Settings icon ──────────────────────────────────────────────────────────── */
 .settings-btn{width:34px;height:34px;border-radius:6px;background:transparent;border:1px solid var(--border2);color:var(--muted2);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .18s;flex-shrink:0}
@@ -431,11 +395,6 @@ nav{background:var(--nav-bg);border-bottom:2px solid var(--nav-border);display:f
     <div class="tab-indicator" id="tab-indicator"></div>
   </div>
   <div class="nav-right">
-    <div class="theme-toggle" id="theme-toggle" onclick="toggleTheme()" title="Toggle light/dark mode">
-      <div class="theme-toggle-knob"></div>
-      <div class="theme-toggle-icon moon">🌙</div>
-      <div class="theme-toggle-icon sun">☀️</div>
-    </div>
     <button class="settings-btn" onclick="openSettings()" title="Settings" aria-label="Settings">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
@@ -463,14 +422,7 @@ nav{background:var(--nav-bg);border-bottom:2px solid var(--nav-border);display:f
     <div class="mobile-section">Files</div>
     <div class="mobile-tab" data-p="demos" onclick="_navStack=[];go('demos');closeMenu()">Demos</div>
 
-    <div class="mobile-theme-row">
-      <span class="mobile-theme-label">Dark Mode</span>
-      <div class="theme-toggle" id="theme-toggle-mobile" onclick="toggleTheme()" title="Toggle theme">
-        <div class="theme-toggle-knob"></div>
-        <div class="theme-toggle-icon moon">🌙</div>
-        <div class="theme-toggle-icon sun">☀️</div>
-      </div>
-    </div>
+
   </div>
 </div>
 
@@ -481,20 +433,6 @@ nav{background:var(--nav-bg);border-bottom:2px solid var(--nav-border);display:f
       <span>Appearance</span>
       <button class="settings-close" onclick="closeSettings()">✕</button>
     </div>
-
-    <!-- Dark Mode Toggle -->
-    <div class="settings-row">
-      <div class="settings-toggle-row">
-        <span class="settings-toggle-label">Dark Mode</span>
-        <div class="theme-toggle" id="theme-toggle-settings" onclick="toggleTheme()" title="Toggle theme">
-          <div class="theme-toggle-knob"></div>
-          <div class="theme-toggle-icon moon">🌙</div>
-          <div class="theme-toggle-icon sun">☀️</div>
-        </div>
-      </div>
-    </div>
-
-    <hr class="settings-divider">
 
     <!-- Accent Color -->
     <div class="settings-row">
@@ -689,35 +627,54 @@ function goBack(defaultPage) {
 }
 document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',()=>{ _navStack=[]; go(t.dataset.p); }));
 
-// ── Theme toggle ──────────────────────────────────────────────────────────────
-function toggleTheme() {
-  const isLight = document.documentElement.getAttribute('data-theme') === 'light';
-  const next = isLight ? null : 'light';
-  if (next) document.documentElement.setAttribute('data-theme', 'light');
-  else document.documentElement.removeAttribute('data-theme');
-  document.querySelectorAll('.theme-toggle').forEach(el => el.classList.toggle('light', !isLight));
-  try { localStorage.setItem('rg-theme', next || 'dark'); } catch(e){}
-  // Sync color pickers to new theme defaults if not customised
-  setTimeout(syncSettingsUI, 50);
-}
-// Restore saved theme
-try {
-  if (localStorage.getItem('rg-theme') === 'light') {
-    document.documentElement.setAttribute('data-theme','light');
-    document.querySelectorAll('.theme-toggle').forEach(el => el.classList.add('light'));
-  }
-} catch(e){}
+// ── Dropdown menus — JS-controlled so the gap between label and panel ─────────
+// doesn't accidentally close the menu while the mouse crosses it.
+(function initDropdowns() {
+  document.querySelectorAll('.tab-group').forEach(group => {
+    let closeTimer = null;
+
+    function openGroup() {
+      clearTimeout(closeTimer);
+      // Close all other groups first
+      document.querySelectorAll('.tab-group.open').forEach(g => {
+        if (g !== group) g.classList.remove('open');
+      });
+      group.classList.add('open');
+    }
+
+    function scheduleClose() {
+      closeTimer = setTimeout(() => group.classList.remove('open'), 120);
+    }
+
+    group.addEventListener('mouseenter', openGroup);
+    group.addEventListener('mouseleave', scheduleClose);
+
+    // Clicking the label also toggles (for keyboard/touch)
+    const label = group.querySelector('.tab-group-label');
+    if (label) {
+      label.addEventListener('click', e => {
+        e.stopPropagation();
+        group.classList.toggle('open');
+      });
+    }
+  });
+
+  // Close all dropdowns when clicking outside
+  document.addEventListener('click', () => {
+    document.querySelectorAll('.tab-group.open').forEach(g => g.classList.remove('open'));
+  });
+  document.querySelector('nav')?.addEventListener('click', e => e.stopPropagation());
+})();
+
+
+// Force dark mode always — clear any saved light-mode preference
+try { localStorage.removeItem('rg-theme'); } catch(e){}
 
 // ── Settings Modal ────────────────────────────────────────────────────────────
 const DEFAULTS = {
   accent: '#ff5500',
   text:   '#dde1e7',
   body:   '#a8b0b8',
-};
-const LIGHT_DEFAULTS = {
-  accent: '#ff5500',
-  text:   '#111827',
-  body:   '#4b5563',
 };
 
 function openSettings() {
@@ -733,10 +690,9 @@ function settingsOverlayClick(e) {
 }
 
 function syncSettingsUI() {
-  const isLight = document.documentElement.getAttribute('data-theme') === 'light';
   const accent = getComputedStyle(document.documentElement).getPropertyValue('--orange').trim() || DEFAULTS.accent;
-  const white  = getComputedStyle(document.documentElement).getPropertyValue('--white').trim() || (isLight ? LIGHT_DEFAULTS.text : DEFAULTS.text);
-  const text   = getComputedStyle(document.documentElement).getPropertyValue('--text').trim() || (isLight ? LIGHT_DEFAULTS.body : DEFAULTS.body);
+  const white  = getComputedStyle(document.documentElement).getPropertyValue('--white').trim() || DEFAULTS.text;
+  const text   = getComputedStyle(document.documentElement).getPropertyValue('--text').trim() || DEFAULTS.body;
 
   const accentHex = rgbToHex(accent);
   const whiteHex  = rgbToHex(white);
@@ -794,8 +750,6 @@ function applyBodyColor(hex) {
 }
 
 function resetColors() {
-  const isLight = document.documentElement.getAttribute('data-theme') === 'light';
-  const d = isLight ? LIGHT_DEFAULTS : DEFAULTS;
   document.documentElement.style.removeProperty('--orange');
   document.documentElement.style.removeProperty('--orange2');
   document.documentElement.style.removeProperty('--orange-rgb');
@@ -902,7 +856,40 @@ const fmtDate = s=>{
   return d.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});
 };
 const initials = n=>(n||'?').split(/[ _]/).slice(0,2).map(w=>w[0]||'').join('').toUpperCase().slice(0,2)||'?';
-function spin(id){document.getElementById(id).innerHTML='<div class="loading"><img class="spin" src="https://upload.wikimedia.org/wikipedia/commons/2/26/Counter-Strike_vertical_logo_%282023%29.svg" alt="CS2"></div>'}
+// ── Spinner: fetch SVG once, inline it so fill:var(--orange) works via CSS ────
+let _spinnerSvg = null;
+const _SPINNER_URL = 'https://upload.wikimedia.org/wikipedia/commons/2/26/Counter-Strike_vertical_logo_%282023%29.svg';
+
+async function _getSpinnerSvg() {
+  if (_spinnerSvg) return _spinnerSvg;
+  try {
+    const res = await fetch(_SPINNER_URL);
+    const text = await res.text();
+    // Strip XML declaration, DOCTYPE, and width/height attrs so it scales freely
+    let svg = text
+      .replace(/<\?xml[^?]*\?>/g, '')
+      .replace(/<!DOCTYPE[^>]*>/g, '')
+      .replace(/\s(width|height)="[^"]*"/g, '')
+      .trim();
+    // Force all fills to inherit so CSS can control via fill:var(--orange)
+    svg = svg.replace(/fill="[^"]*"/g, 'fill="inherit"');
+    _spinnerSvg = svg;
+  } catch(e) {
+    // Fallback: simple CSS ring spinner
+    _spinnerSvg = `<svg viewBox="0 0 60 60" xmlns="http://www.w3.org/2000/svg"><circle cx="30" cy="30" r="24" fill="none" stroke="inherit" stroke-width="4" stroke-dasharray="100 50" stroke-linecap="round"><animateTransform attributeName="transform" type="rotate" from="0 30 30" to="360 30 30" dur="1s" repeatCount="indefinite"/></circle></svg>`;
+  }
+  return _spinnerSvg;
+}
+
+function spin(id) {
+  const el = document.getElementById(id);
+  // Show a temporary placeholder immediately, then swap in the real SVG
+  el.innerHTML = '<div class="loading"><span class="spin" style="display:inline-flex;align-items:center;justify-content:center"></span></div>';
+  _getSpinnerSvg().then(svg => {
+    const wrap = el.querySelector('.spin');
+    if (wrap) { wrap.innerHTML = svg; wrap.style.color = 'var(--orange)'; }
+  });
+}
 
 // ── Demo helpers ─────────────────────────────────────────────────────────────
 let _demosCache = null;
@@ -1246,7 +1233,7 @@ async function loadPlayer(name) {
 // ── Map Stats ─────────────────────────────────────────────────────────────────
 async function loadMaps() {
   const el = document.getElementById('p-maps');
-  el.innerHTML = '<div class="loading"><img class="spin" src="https://upload.wikimedia.org/wikipedia/commons/2/26/Counter-Strike_vertical_logo_%282023%29.svg" alt="CS2"></div>';
+  el.innerHTML = _getSpinnerSvg().then(svg=>{el.innerHTML='<div class="loading"><span class="spin" style="display:inline-flex;align-items:center;justify-content:center;color:var(--orange)">'+svg+'</span></div>'});
   const [dbStats, demos] = await Promise.all([
     fetch('/api/mapstats').then(r=>r.json()).catch(()=>[]),
     fetch('/api/demos').then(r=>r.json()).catch(()=>[]),
@@ -1320,7 +1307,7 @@ let _h2hSel = [null, null]; // [player1, player2]
 
 async function loadH2H() {
   const el = document.getElementById('p-h2h');
-  el.innerHTML = '<div class="loading"><img class="spin" src="https://upload.wikimedia.org/wikipedia/commons/2/26/Counter-Strike_vertical_logo_%282023%29.svg" alt="CS2"></div>';
+  el.innerHTML = _getSpinnerSvg().then(svg=>{el.innerHTML='<div class="loading"><span class="spin" style="display:inline-flex;align-items:center;justify-content:center;color:var(--orange)">'+svg+'</span></div>'});
   if (!_h2hPlayers) {
     const data = await fetch('/api/leaderboard').then(r=>r.json()).catch(()=>[]);
     // Fetch Steam avatars for all
@@ -1419,7 +1406,7 @@ async function runH2H() {
   if (!p1 || !p2 || !body) return;
 
   // Show loading state inside the expanding body
-  body.innerHTML = '<div class="loading"><img class="spin" src="https://upload.wikimedia.org/wikipedia/commons/2/26/Counter-Strike_vertical_logo_%282023%29.svg" alt="CS2"></div>';
+  body.innerHTML = _getSpinnerSvg().then(svg=>{el.innerHTML='<div class="loading"><span class="spin" style="display:inline-flex;align-items:center;justify-content:center;color:var(--orange)">'+svg+'</span></div>'});
   body.classList.add('open');
 
   // Collapse picker
@@ -1503,7 +1490,7 @@ function h2hBack() {
 let _lbSort = 'kills';
 async function loadLeaderboard() {
   const el = document.getElementById('p-leaderboard');
-  el.innerHTML = '<div class="loading"><img class="spin" src="https://upload.wikimedia.org/wikipedia/commons/2/26/Counter-Strike_vertical_logo_%282023%29.svg" alt="CS2"></div>';
+  el.innerHTML = _getSpinnerSvg().then(svg=>{el.innerHTML='<div class="loading"><span class="spin" style="display:inline-flex;align-items:center;justify-content:center;color:var(--orange)">'+svg+'</span></div>'});
   const data = await fetch('/api/leaderboard').then(r=>r.json()).catch(()=>[]);
   if (!Array.isArray(data) || !data.length) {
     el.innerHTML = emptyState('leaderboard','No Player Data','Stats will appear after matches are completed');
@@ -1706,7 +1693,7 @@ let _specData = null;
 async function loadSpecialists() {
   const el = document.getElementById('p-specialists');
   if (_specData) { renderSpecialists(_specData, _specTab); return; }
-  el.innerHTML = '<div class="loading"><img class="spin" src="https://upload.wikimedia.org/wikipedia/commons/2/26/Counter-Strike_vertical_logo_%282023%29.svg" alt="CS2"></div>';
+  el.innerHTML = _getSpinnerSvg().then(svg=>{el.innerHTML='<div class="loading"><span class="spin" style="display:inline-flex;align-items:center;justify-content:center;color:var(--orange)">'+svg+'</span></div>'});
   const data = await fetch('/api/specialists').then(r=>r.json()).catch(()=>[]);
   if (!Array.isArray(data) || !data.length) {
     el.innerHTML = emptyState('specialists','No Specialist Data','Clutch kings, entry fraggers and more will appear here'); return;
@@ -1795,7 +1782,7 @@ let _demoFilters = {map:''};
 async function loadDemos() {
   const el = document.getElementById('p-demos');
   if (_demoData) { renderDemos(); return; }
-  el.innerHTML = '<div class="loading"><img class="spin" src="https://upload.wikimedia.org/wikipedia/commons/2/26/Counter-Strike_vertical_logo_%282023%29.svg" alt="CS2"></div>';
+  el.innerHTML = _getSpinnerSvg().then(svg=>{el.innerHTML='<div class="loading"><span class="spin" style="display:inline-flex;align-items:center;justify-content:center;color:var(--orange)">'+svg+'</span></div>'});
   const data = await fetch('/api/demos').then(r=>r.json()).catch(()=>[]);
   if (!Array.isArray(data) || !data.length) {
     el.innerHTML = emptyState('demos','No Demos Found','Demo files will appear here once uploaded'); return;
@@ -1825,16 +1812,10 @@ function renderDemos() {
     const mapImg = d.mapname && MAP_IMGS[d.mapname] ? MAP_IMGS[d.mapname] : null;
 
     const score = (d.team1_score !== '' && d.team1_score != null)
-      ? `<span style="color:var(--ct);font-family:'Rajdhani',sans-serif;font-weight:800;font-size:26px">${d.team1_score}</span><span style="color:rgba(255,255,255,.4);margin:0 8px;font-family:'Rajdhani',sans-serif;font-size:22px">:</span><span style="color:var(--t);font-family:'Rajdhani',sans-serif;font-weight:800;font-size:26px">${d.team2_score}</span>`
+      ? `<span style="font-family:'Rajdhani',sans-serif;font-weight:900;font-size:28px;color:var(--ct);line-height:1">${d.team1_score}</span><span style="font-family:'Rajdhani',sans-serif;font-size:22px;color:rgba(255,255,255,.35);margin:0 6px">:</span><span style="font-family:'Rajdhani',sans-serif;font-weight:900;font-size:28px;color:var(--t);line-height:1">${d.team2_score}</span>`
       : '';
 
-    const teamsLine = (d.team1_name || d.team2_name)
-      ? `<div style="font-size:13px;color:rgba(255,255,255,.7);margin-top:4px">
-           <span style="color:var(--ct)">${esc(d.team1_name||'?')}</span>
-           <span style="margin:0 6px;color:rgba(255,255,255,.35)">vs</span>
-           <span style="color:var(--t)">${esc(d.team2_name||'?')}</span>
-         </div>`
-      : '';
+    const teamsLine = ''; // inline in card now
 
     return `<div class="demo-card">
       ${mapImg
@@ -1843,15 +1824,19 @@ function renderDemos() {
       <div class="demo-overlay"></div>
       <div class="demo-hover-layer"></div>
       <div class="demo-content">
-        <div style="flex:1;min-width:0">
+        <div style="display:flex;flex-direction:column;justify-content:center;gap:2px;flex:1;min-width:0;overflow:hidden">
           <div class="demo-map-label">${esc(d.mapname||d.name)}</div>
-          <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:nowrap">
             ${score}
-            ${teamsLine}
+            <div style="font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
+              <span style="color:var(--ct)">${esc(d.team1_name||'?')}</span>
+              <span style="margin:0 5px;color:rgba(255,255,255,.3);font-size:10px">vs</span>
+              <span style="color:var(--t)">${esc(d.team2_name||'?')}</span>
+            </div>
           </div>
-          <div style="font-size:11px;color:rgba(255,255,255,.35);margin-top:5px;text-shadow:0 1px 3px rgba(0,0,0,.9)">${dateStr}${timeStr?' · '+timeStr:''} · ${esc(d.size_formatted||'')}</div>
+          <div style="font-size:10px;color:rgba(255,255,255,.3);margin-top:2px;letter-spacing:.3px;white-space:nowrap">${dateStr}${timeStr?' · '+timeStr:''} · ${esc(d.size_formatted||'')}</div>
         </div>
-        <a href="${esc(d.download_url)}" download style="text-decoration:none;flex-shrink:0">
+        <a href="${esc(d.download_url)}" download style="text-decoration:none;flex-shrink:0" onclick="event.stopPropagation()">
           <button class="demo-dl-btn">Download</button>
         </a>
       </div>
@@ -1965,7 +1950,7 @@ let _predictTeams   = [[], []];
 
 async function loadPredict() {
   const el = document.getElementById('p-predict');
-  el.innerHTML = '<div class="loading"><img class="spin" src="https://upload.wikimedia.org/wikipedia/commons/2/26/Counter-Strike_vertical_logo_%282023%29.svg" alt="CS2"></div>';
+  el.innerHTML = _getSpinnerSvg().then(svg=>{el.innerHTML='<div class="loading"><span class="spin" style="display:inline-flex;align-items:center;justify-content:center;color:var(--orange)">'+svg+'</span></div>'});
   if (!_predictPlayers) {
     const data = await fetch('/api/leaderboard').then(r=>r.json()).catch(()=>[]);
     await Promise.all(data.slice(0,40).map(async p => {
