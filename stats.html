@@ -3186,15 +3186,15 @@ async function _fetchMissingPlayers(teamKey) {
         <input type="number" data-field="deaths"  value="${v('deaths')}"  min="0"     placeholder="D">
         <input type="number" data-field="assists" value="${v('assists')}"  min="0"     placeholder="A">
         <input type="number" data-field="damage"  value="${v('damage')}"   min="0"     placeholder="DMG">
-        <input type="number" data-field="rating"  value="${v('rating')}"   step="0.01" placeholder="Rtg">
-        <input type="number" data-field="kast"    value="${v('kast')}"     step="0.1"  placeholder="KAST">
+        <input type="number" data-field="rating"  value="${v('rating')}"   step="0.01" placeholder="Rtg"  title="Estimated from K/D/A/DMG/rounds" style="${v('rating') ? 'border-color:rgba(var(--orange-rgb),.4)' : ''}">
+        <input type="number" data-field="kast"    value="${v('kast')}"     step="0.1"  placeholder="KAST" title="Estimated from K/D/A/rounds"      style="${v('kast')   ? 'border-color:rgba(var(--orange-rgb),.4)' : ''}">
         <button class="edit-remove-player-btn" title="Remove player" onclick="this.closest('.edit-player-row').remove()">✕</button>`;
       container.appendChild(row);
     });
 
-    btn.textContent = `✓ Added ${missing.length} player${missing.length > 1 ? 's' : ''}`;
+    btn.textContent = `✓ Added ${missing.length} player${missing.length > 1 ? 's' : ''} — Rating & KAST estimated, review before saving`;
     btn.style.color = 'var(--win)';
-    setTimeout(() => { btn.textContent = origText; btn.style.color = ''; btn.disabled = false; }, 2500);
+    setTimeout(() => { btn.textContent = origText; btn.style.color = ''; btn.disabled = false; }, 4000);
 
   } catch(e) {
     btn.textContent = '✕ ' + e.message;
