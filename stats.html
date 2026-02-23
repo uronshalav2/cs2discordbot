@@ -264,6 +264,11 @@ nav{background:var(--nav-bg);border-bottom:2px solid var(--nav-border);display:f
 .h2h-top-card::after{content:'';position:absolute;inset:0;background:radial-gradient(circle at var(--sx) var(--sy),rgba(255,140,60,.22) 0%,rgba(var(--orange-rgb),.08) 35%,transparent 65%);pointer-events:none;opacity:0;transition:opacity .4s ease}
 .h2h-top-card.shine-active::after{opacity:1}
 
+/* PREDICT RESULT CARD - glossy */
+.pred-result-card{--sx:50%;--sy:50%;background:linear-gradient(135deg,rgba(var(--orange-rgb),.12) 0%,rgba(10,12,14,.7) 50%,rgba(var(--orange-rgb),.06) 100%);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);border:1px solid rgba(var(--orange-rgb),.35);border-radius:10px;padding:20px;margin-bottom:10px;position:relative;overflow:hidden;box-shadow:0 0 40px rgba(var(--orange-rgb),.15),0 8px 32px rgba(0,0,0,.6),inset 0 1px 0 rgba(255,255,255,.08)}
+.pred-result-card::after{content:'';position:absolute;inset:0;background:radial-gradient(circle at var(--sx) var(--sy),rgba(255,140,60,.22) 0%,rgba(var(--orange-rgb),.08) 35%,transparent 65%);pointer-events:none;opacity:0;transition:opacity .4s ease}
+.pred-result-card.shine-active::after{opacity:1}
+
 /* H2H CLEAR BUTTON */
 .h2h-clear-btn{padding:3px 10px;background:transparent;border:1px solid var(--border);border-radius:3px;color:var(--muted2);font-size:11px;font-family:'Rajdhani',sans-serif;cursor:pointer;letter-spacing:1px;transition:all .2s;position:relative;overflow:hidden}
 .h2h-clear-btn::before{content:'';position:absolute;inset:0;background:linear-gradient(135deg,rgba(255,255,255,.07) 0%,transparent 60%);pointer-events:none}
@@ -298,8 +303,8 @@ nav{background:var(--nav-bg);border-bottom:2px solid var(--nav-border);display:f
 .predict-slot{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:5px;border:1px solid var(--border);background:var(--surface);margin-bottom:6px;cursor:pointer;transition:all .15s;min-height:48px}
 .predict-slot:hover{border-color:rgba(var(--orange-rgb),.4);background:rgba(var(--orange-rgb),.04)}
 .predict-slot.filled{border-color:rgba(var(--orange-rgb),.35);background:rgba(var(--orange-rgb),.06)}
-.predict-slot.empty-slot{border-style:dashed;border-color:var(--muted);justify-content:center;color:var(--muted2);font-size:12px;font-family:'Rajdhani',sans-serif;letter-spacing:1px}
-.predict-slot.empty-slot:hover{border-color:var(--orange);color:var(--orange)}
+.predict-slot.empty-slot{border:1px solid transparent;border-bottom:1px solid var(--border2);border-radius:0;background:transparent;justify-content:center;color:var(--muted2);font-size:12px;font-family:'Rajdhani',sans-serif;letter-spacing:1px;transition:border-bottom-color .15s,color .15s,background .15s}
+.predict-slot.empty-slot:hover{border-bottom-color:var(--orange);color:var(--orange);background:rgba(var(--orange-rgb),.03)}
 .predict-player-row{display:flex;align-items:center;gap:10px;padding:8px 10px;cursor:pointer;transition:background .12s;border-bottom:1px solid var(--border)}
 .predict-player-row:last-child{border-bottom:none}
 .predict-player-row:hover{background:rgba(var(--orange-rgb),.05)}
@@ -2004,6 +2009,7 @@ const _shineObs = new MutationObserver(() => {
   attachShine('.profile-top');
   attachShine('.podium-card');
   attachShine('.h2h-top-card');
+  attachShine('.pred-result-card');
 });
 _shineObs.observe(document.getElementById('app'), {childList:true, subtree:true});
 
@@ -2078,7 +2084,7 @@ function renderPredict() {
     </div>
     <div id="predict-result">${resultHtml}</div>
     <div id="predict-picker" style="display:none;margin-top:10px">
-      <div class="card" style="padding:0;max-height:360px;overflow-y:auto" id="predict-picker-list"></div>
+      <div class="card" style="padding:0;max-height:360px;overflow-y:auto;border-color:rgba(var(--orange-rgb),.3)" id="predict-picker-list"></div>
     </div>`;
 }
 
@@ -2188,22 +2194,22 @@ function buildPrediction(t1, t2) {
 
   const r1 = roles(t1), r2 = roles(t2);
   return `
-    <div class="card" style="padding:20px;margin-bottom:10px">
-      <div style="text-align:center;margin-bottom:12px">
+    <div class="pred-result-card">
+      <div style="text-align:center;margin-bottom:12px;position:relative;z-index:1">
         <div style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:18px;color:var(--white)">
           ${winner ? `<span style="color:${wColor}">Team ${winner}</span> predicted to win` : 'Even matchup'}
         </div>
         <div style="font-size:11px;color:var(--muted2);margin-top:3px">Based on K/D, ADR, HS%, KAST and Rating</div>
       </div>
-      <div style="display:flex;justify-content:space-between;margin-bottom:4px">
+      <div style="display:flex;justify-content:space-between;margin-bottom:4px;position:relative;z-index:1">
         <span style="font-family:'Rajdhani',sans-serif;font-weight:800;font-size:22px;color:var(--orange)">${pct1}%</span>
         <span style="font-family:'Rajdhani',sans-serif;font-weight:800;font-size:22px;color:var(--ct)">${pct2}%</span>
       </div>
-      <div class="pred-bar-wrap">
+      <div class="pred-bar-wrap" style="position:relative;z-index:1">
         <div class="pred-bar-t1" style="width:${pct1}%">A</div>
         <div class="pred-bar-t2" style="width:${pct2}%">B</div>
       </div>
-      <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--muted2)"><span>Team A</span><span>Team B</span></div>
+      <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--muted2);position:relative;z-index:1"><span>Team A</span><span>Team B</span></div>
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
       <div class="card" style="padding:14px">
