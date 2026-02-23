@@ -16,7 +16,7 @@
   --table-head-bg:linear-gradient(180deg,rgba(var(--orange-rgb),.18) 0%,rgba(var(--orange-rgb),.06) 100%);--table-team-divider:rgba(0,0,0,.3);
 }
 *{box-sizing:border-box;margin:0;padding:0}
-html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;font-size:13px}
+html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;font-size:13px;scroll-behavior:smooth}
 /* NAV */
 nav{background:var(--nav-bg);border-bottom:2px solid var(--nav-border);display:flex;align-items:center;padding:0 20px;height:50px;position:sticky;top:0;z-index:200;gap:0;transition:background .2s,border-color .2s}
 .logo{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:26px;letter-spacing:-2px;color:var(--orange);text-transform:uppercase;margin-right:20px;white-space:nowrap;display:flex;align-items:center;line-height:1}
@@ -148,7 +148,7 @@ nav{background:var(--nav-bg);border-bottom:2px solid var(--nav-border);display:f
 .award-lbl{font-size:10px;color:var(--muted2);text-align:right;margin-top:1px}
 
 /* MATCH SCOREBOARD */
-.match-header-card{background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:18px 22px;margin-bottom:12px}
+.match-header-card{background:var(--surface);border:1px solid rgba(var(--orange-rgb),.3);border-radius:4px;padding:18px 22px;margin-bottom:12px;box-shadow:0 0 20px rgba(var(--orange-rgb),.06),inset 0 1px 0 rgba(255,255,255,.04)}
 .match-score-row{display:flex;align-items:center;gap:12px;margin-bottom:6px}
 .team-block{flex:1}
 .team-nm{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:17px;letter-spacing:.5px;text-transform:uppercase}
@@ -182,7 +182,8 @@ nav{background:var(--nav-bg);border-bottom:2px solid var(--nav-border);display:f
 .adr-highlight{color:var(--orange)}
 
 /* MATCHES LIST */
-.matches-list .match-item{position:relative;overflow:hidden;display:flex;align-items:flex-end;padding:0;border-bottom:1px solid rgba(var(--orange-rgb),.15);cursor:pointer;transition:transform .22s ease,box-shadow .22s ease,border-color .22s ease;min-height:140px;border-left:none;border-right:1px solid rgba(var(--orange-rgb),.1);will-change:transform}
+.matches-list{scroll-snap-type:y proximity;overflow-y:auto;max-height:calc(100vh - 120px)}
+.matches-list .match-item{position:relative;overflow:hidden;display:flex;align-items:flex-end;padding:0;border-bottom:1px solid rgba(var(--orange-rgb),.15);cursor:pointer;transition:transform .22s ease,box-shadow .22s ease,border-color .22s ease;min-height:140px;border-left:none;border-right:1px solid rgba(var(--orange-rgb),.1);will-change:transform;scroll-snap-align:start}
 .matches-list .match-item:hover{transform:translateX(4px);border-color:rgba(var(--orange-rgb),.45);box-shadow:0 0 22px rgba(var(--orange-rgb),.18)}
 .matches-list .match-item:last-child{border-bottom:1px solid rgba(var(--orange-rgb),.15)}
 .match-item .m-bg{position:absolute;inset:0;background-size:cover;background-position:center;z-index:0;transition:transform .35s ease;will-change:transform}
@@ -979,7 +980,7 @@ async function loadMatches() {
     </div>`;
   }).join('');
   document.getElementById('p-matches').innerHTML = `
-    <div class="matches-list" style="border-radius:4px;overflow:hidden">${items}</div>`;
+    <div class="matches-list" style="border-radius:4px">${items}</div>`;
 }
 
 // ── Match Detail ──────────────────────────────────────────────────────────────
@@ -1057,7 +1058,7 @@ async function loadMatch(id) {
     const {t1, t2, n1, n2} = splitTeams(mapPlayers);
     return `
       <div style="margin-bottom:14px">
-        <div class="card ovx">
+        <div class="card ovx" style="border-color:rgba(var(--orange-rgb),.3);box-shadow:0 0 20px rgba(var(--orange-rgb),.06),inset 0 1px 0 rgba(255,255,255,.04)">
           <table class="sb-table">
             <thead><tr>
               <th>Player</th><th>K</th><th>D</th><th>A</th>
@@ -2212,16 +2213,16 @@ function buildPrediction(t1, t2) {
       <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--muted2);position:relative;z-index:1"><span>Team A</span><span>Team B</span></div>
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
-      <div class="card" style="padding:14px">
+      <div class="card" style="padding:14px;border-color:rgba(var(--orange-rgb),.3);box-shadow:0 0 16px rgba(var(--orange-rgb),.06),inset 0 1px 0 rgba(255,255,255,.04)">
         <div style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:11px;letter-spacing:2px;text-transform:uppercase;color:var(--orange);margin-bottom:10px">Team A Roles</div>
         ${r1.map(({label,p})=>roleCard(label,p,'var(--orange)')).join('')}
       </div>
-      <div class="card" style="padding:14px">
+      <div class="card" style="padding:14px;border-color:rgba(91,196,245,.25);box-shadow:0 0 16px rgba(91,196,245,.05),inset 0 1px 0 rgba(255,255,255,.04)">
         <div style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:11px;letter-spacing:2px;text-transform:uppercase;color:var(--ct);margin-bottom:10px">Team B Roles</div>
         ${r2.map(({label,p})=>roleCard(label,p,'var(--ct)')).join('')}
       </div>
     </div>
-    <div class="card" style="padding:14px">
+    <div class="card" style="padding:14px;border-color:rgba(var(--orange-rgb),.3);box-shadow:0 0 16px rgba(var(--orange-rgb),.06),inset 0 1px 0 rgba(255,255,255,.04)">
       <div style="display:flex;justify-content:space-between;padding:4px 0 8px;border-bottom:1px solid var(--border)">
         <span style="font-size:10px;font-family:'Rajdhani',sans-serif;font-weight:700;letter-spacing:1px;color:var(--orange)">TEAM A</span>
         <span style="font-size:10px;font-family:'Rajdhani',sans-serif;font-weight:700;letter-spacing:1px;color:var(--muted2)">STAT COMPARISON</span>
