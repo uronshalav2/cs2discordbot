@@ -195,8 +195,13 @@ nav{background:var(--nav-bg);border-bottom:2px solid var(--nav-border);display:f
 .edit-new-player-row{grid-template-columns:214px repeat(6,1fr) 24px;background:rgba(var(--orange-rgb),.03);border-radius:3px}
 .edit-player-new-cell{display:flex;gap:4px;align-items:center;overflow:hidden}
 .edit-player-new-cell input{flex:1;min-width:0}
-.edit-add-player-btn{margin-top:8px;padding:5px 12px;background:transparent;border:1px dashed rgba(var(--orange-rgb),.4);border-radius:4px;color:rgba(var(--orange-rgb),.7);font-family:'Rajdhani',sans-serif;font-weight:700;font-size:11px;letter-spacing:1.5px;text-transform:uppercase;cursor:pointer;transition:all .15s;width:100%}
+.edit-add-player-bar{display:flex;gap:8px;margin-top:8px}
+.edit-add-player-btn{flex:1;padding:5px 12px;background:transparent;border:1px dashed rgba(var(--orange-rgb),.4);border-radius:4px;color:rgba(var(--orange-rgb),.7);font-family:'Rajdhani',sans-serif;font-weight:700;font-size:11px;letter-spacing:1.5px;text-transform:uppercase;cursor:pointer;transition:all .15s}
 .edit-add-player-btn:hover{border-color:var(--orange);color:var(--orange);background:var(--orange-glow)}
+.edit-fetch-btn{flex:1;padding:5px 12px;background:transparent;border:1px dashed rgba(91,196,245,.35);border-radius:4px;color:rgba(91,196,245,.6);font-family:'Rajdhani',sans-serif;font-weight:700;font-size:11px;letter-spacing:1.5px;text-transform:uppercase;cursor:pointer;transition:all .15s}
+.edit-fetch-btn:hover:not(:disabled){border-color:var(--ct);color:var(--ct);background:rgba(91,196,245,.07)}
+.edit-fetch-btn:disabled{opacity:.5;cursor:not-allowed}
+.edit-new-player-prefilled{background:rgba(91,196,245,.04)!important}
 .edit-remove-player-btn{width:22px;height:22px;background:transparent;border:1px solid rgba(239,68,68,.3);border-radius:3px;color:rgba(239,68,68,.6);cursor:pointer;font-size:12px;line-height:1;display:flex;align-items:center;justify-content:center;transition:all .15s;padding:0;flex-shrink:0}
 .edit-remove-player-btn:hover{border-color:var(--loss);color:var(--loss);background:rgba(239,68,68,.1)}
 .edit-modal-footer{padding:14px 20px;border-top:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:10px}
@@ -3042,7 +3047,10 @@ async function _renderEditForm() {
           ${rows}
           ${newRows}
         </div>
-        <button class="edit-add-player-btn" onclick="_addPlayerRow('${teamKey}')">+ Add Player</button>
+        <div class="edit-add-player-bar">
+          <button class="edit-add-player-btn" onclick="_addPlayerRow('${teamKey}')">+ Add Player</button>
+          <button class="edit-fetch-btn" onclick="_fetchMissingPlayers('${teamKey}')" id="fetch-btn-${teamKey}">⬇ Fetch Missing from DB</button>
+        </div>
       </div>`;
   };
 
@@ -3089,6 +3097,87 @@ async function _renderEditForm() {
       <span class="edit-status" id="edit-status"></span>
       <button class="edit-save-btn" id="edit-save-btn" onclick="_saveEdits()">Save Changes</button>
     </div>`;
+}
+
+async function _fetchMissingPlayers(teamKey) {
+  const btn = document.getElementById(`fetch-btn-${teamKey}`);
+  if (!btn) return;
+  const origText = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = '⏳ Fetching…';
+
+  try {
+    const r = await fetch(`/api/match/${_editMatchId}/matchzy_players`);
+    const data = await r.json();
+    if (data.error) throw new Error(data.error);
+
+    const mzPlayers = (data.players || []).filter(p => {
+      // Only show players for this team
+      return String(p.team || '').toLowerCase() === teamKey;
+    });
+
+    if (!mzPlayers.length) {
+      btn.textContent = '✕ No DB data for this match';
+      btn.style.color = 'var(--loss)';
+      setTimeout(() => { btn.textContent = origText; btn.style.color = ''; btn.disabled = false; }, 2500);
+      return;
+    }
+
+    // Collect steamids already in the form (existing + already-added new rows)
+    const container = document.getElementById(`edit-players-${teamKey}`);
+    const existingSids = new Set();
+    container.querySelectorAll('.edit-player-row').forEach(row => {
+      // For existing players, data-sid is their steamid64
+      if (!row.dataset.isnew) existingSids.add(row.dataset.sid);
+      // For new rows already added, read the steamid64 input
+      else {
+        const inp = row.querySelector('input[data-field="steamid64"]');
+        if (inp && inp.value.trim()) existingSids.add(inp.value.trim());
+      }
+    });
+
+    const missing = mzPlayers.filter(p => !existingSids.has(String(p.steamid64 || '')));
+
+    if (!missing.length) {
+      btn.textContent = '✓ All DB players already present';
+      btn.style.color = 'var(--win)';
+      setTimeout(() => { btn.textContent = origText; btn.style.color = ''; btn.disabled = false; }, 2500);
+      return;
+    }
+
+    // Add a pre-filled row for each missing player
+    missing.forEach(mp => {
+      const tempId = `new_${teamKey}_${Date.now()}_${Math.random().toString(36).slice(2,6)}`;
+      const row = document.createElement('div');
+      row.className = 'edit-player-row edit-new-player-row edit-new-player-prefilled';
+      row.dataset.sid  = tempId;
+      row.dataset.team = teamKey;
+      row.dataset.isnew = '1';
+      const v = f => (mp[f] !== null && mp[f] !== undefined) ? mp[f] : '';
+      row.innerHTML = `
+        <div class="edit-player-new-cell">
+          <input type="text" data-field="steamid64" value="${esc(String(mp.steamid64||''))}" placeholder="SteamID64" style="width:110px;text-align:left;font-size:10px">
+          <input type="text" data-field="name"      value="${esc(mp.name||'')}"              placeholder="Name"       style="width:100px;text-align:left">
+        </div>
+        <input type="number" data-field="kills"   value="${v('kills')}"   min="0"     placeholder="K">
+        <input type="number" data-field="deaths"  value="${v('deaths')}"  min="0"     placeholder="D">
+        <input type="number" data-field="assists" value="${v('assists')}"  min="0"     placeholder="A">
+        <input type="number" data-field="damage"  value="${v('damage')}"   min="0"     placeholder="DMG">
+        <input type="number" data-field="rating"  value="${v('rating')}"   step="0.01" placeholder="Rtg">
+        <input type="number" data-field="kast"    value="${v('kast')}"     step="0.1"  placeholder="KAST">
+        <button class="edit-remove-player-btn" title="Remove player" onclick="this.closest('.edit-player-row').remove()">✕</button>`;
+      container.appendChild(row);
+    });
+
+    btn.textContent = `✓ Added ${missing.length} player${missing.length > 1 ? 's' : ''}`;
+    btn.style.color = 'var(--win)';
+    setTimeout(() => { btn.textContent = origText; btn.style.color = ''; btn.disabled = false; }, 2500);
+
+  } catch(e) {
+    btn.textContent = '✕ ' + e.message;
+    btn.style.color = 'var(--loss)';
+    setTimeout(() => { btn.textContent = origText; btn.style.color = ''; btn.disabled = false; }, 3000);
+  }
 }
 
 function _addPlayerRow(teamKey) {
