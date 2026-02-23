@@ -182,8 +182,8 @@ nav{background:var(--nav-bg);border-bottom:2px solid var(--nav-border);display:f
 .adr-highlight{color:var(--orange)}
 
 /* MATCHES LIST */
-.matches-list{scroll-snap-type:y proximity;overflow-y:auto;max-height:calc(100vh - 120px)}
-.matches-list .match-item{position:relative;overflow:hidden;display:flex;align-items:flex-end;padding:0;border-bottom:1px solid rgba(var(--orange-rgb),.15);cursor:pointer;transition:transform .22s ease,box-shadow .22s ease,border-color .22s ease;min-height:140px;border-left:none;border-right:1px solid rgba(var(--orange-rgb),.1);will-change:transform;scroll-snap-align:start}
+.matches-list{}
+.matches-list .match-item{position:relative;overflow:hidden;display:flex;align-items:flex-end;padding:0;border-bottom:1px solid rgba(var(--orange-rgb),.15);cursor:pointer;transition:transform .22s ease,box-shadow .22s ease,border-color .22s ease;min-height:140px;border-left:none;border-right:1px solid rgba(var(--orange-rgb),.1);will-change:transform}
 .matches-list .match-item:hover{transform:translateX(4px);border-color:rgba(var(--orange-rgb),.45);box-shadow:0 0 22px rgba(var(--orange-rgb),.18)}
 .matches-list .match-item:last-child{border-bottom:1px solid rgba(var(--orange-rgb),.15)}
 .match-item .m-bg{position:absolute;inset:0;background-size:cover;background-position:center;z-index:0;transition:transform .35s ease;will-change:transform}
@@ -301,6 +301,13 @@ nav{background:var(--nav-bg);border-bottom:2px solid var(--nav-border);display:f
 
 /* PREDICT PAGE */
 .predict-team-box{background:linear-gradient(135deg,rgba(var(--orange-rgb),.07) 0%,rgba(10,12,14,.8) 100%);border:1px solid rgba(var(--orange-rgb),.2);border-radius:8px;padding:14px}
+.predict-team-box.team-b{background:linear-gradient(135deg,rgba(91,196,245,.06) 0%,rgba(10,12,14,.8) 100%);border-color:rgba(91,196,245,.2)}
+.predict-slot{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:5px;border:1px solid var(--border);background:var(--surface);margin-bottom:6px;cursor:pointer;transition:all .15s;min-height:48px}
+.predict-slot:hover{border-color:rgba(var(--orange-rgb),.4);background:rgba(var(--orange-rgb),.04)}
+.predict-slot.filled{border-color:rgba(var(--orange-rgb),.35);background:rgba(var(--orange-rgb),.06)}
+.predict-team-box.team-b .predict-slot:hover{border-color:rgba(91,196,245,.45);background:rgba(91,196,245,.04)}
+.predict-team-box.team-b .predict-slot.filled{border-color:rgba(91,196,245,.35);background:rgba(91,196,245,.06)}
+.predict-team-box.team-b .predict-slot.empty-slot:hover{border-bottom-color:#5bc4f5;color:#5bc4f5;background:rgba(91,196,245,.03)}
 .predict-slot{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:5px;border:1px solid var(--border);background:var(--surface);margin-bottom:6px;cursor:pointer;transition:all .15s;min-height:48px}
 .predict-slot:hover{border-color:rgba(var(--orange-rgb),.4);background:rgba(var(--orange-rgb),.04)}
 .predict-slot.filled{border-color:rgba(var(--orange-rgb),.35);background:rgba(var(--orange-rgb),.06)}
@@ -2068,8 +2075,8 @@ function renderPredict() {
 
   const resultHtml = canPredict
     ? buildPrediction(t1, t2)
-    : `<div style="padding:28px;text-align:center;color:var(--muted2);font-size:12px;letter-spacing:.5px">
-        ${5-t1.length > 0 ? `Team A needs ${5-t1.length} more. ` : ''}${5-t2.length > 0 ? `Team B needs ${5-t2.length} more.` : ''}
+    : `<div style="padding:28px;text-align:center;font-size:12px;letter-spacing:.5px">
+        ${5-t1.length > 0 ? `<span style="color:var(--orange)">Team A needs ${5-t1.length} more.</span> ` : ''}${5-t2.length > 0 ? `<span style="color:#5bc4f5">Team B needs ${5-t2.length} more.</span>` : ''}
        </div>`;
 
   el.innerHTML = `
@@ -2078,7 +2085,7 @@ function renderPredict() {
         <div style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:11px;letter-spacing:2px;text-transform:uppercase;color:var(--orange);margin-bottom:10px">Team A</div>
         ${teamSlots(0)}
       </div>
-      <div class="predict-team-box" style="border-color:rgba(91,196,245,.2);background:linear-gradient(135deg,rgba(91,196,245,.06) 0%,rgba(10,12,14,.8) 100%)">
+      <div class="predict-team-box team-b">
         <div style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:11px;letter-spacing:2px;text-transform:uppercase;color:var(--ct);margin-bottom:10px">Team B</div>
         ${teamSlots(1)}
       </div>
@@ -2117,6 +2124,15 @@ function predictOpenPicker(teamIdx) {
       <span onclick="document.getElementById('predict-picker').style.display='none'" style="cursor:pointer;color:var(--muted2);font-size:18px;line-height:1">&times;</span>
     </div>
     ${rows}`;
+  const pickerCard = document.getElementById('predict-picker-list');
+  if (pickerCard) {
+    if (teamIdx === 0) {
+      const rgb = getComputedStyle(document.documentElement).getPropertyValue('--orange-rgb').trim();
+      pickerCard.style.borderColor = `rgba(${rgb},.3)`;
+    } else {
+      pickerCard.style.borderColor = 'rgba(91,196,245,.3)';
+    }
+  }
   pickerEl.style.display = 'block';
 }
 
