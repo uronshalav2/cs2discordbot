@@ -2261,9 +2261,9 @@ async function loadTeam() {
     el.innerHTML = emptyState('team','No Match Data','Team stats will appear after matches are completed'); return;
   }
 
-  // ── Aggregate lineups ──────────────────────────────────────────────────────
-  // key = sorted comma-separated player names of team1 (or whichever side won)
-  // We track each "team" as the team1 roster per match.
+  // ── Aggregate by team name ────────────────────────────────────────────────
+  // Key by team name so stats accumulate even when the roster changes.
+  // All unique players ever seen on that team are tracked separately.
   const lineupMap = {};
 
   matches.forEach(m => {
@@ -2272,18 +2272,21 @@ async function loadTeam() {
     const t2 = players.filter(p=>String(p.team||'').toLowerCase()==='team2');
     const s1 = parseInt(m.map_team1_score ?? m.team1_score ?? 0);
     const s2 = parseInt(m.map_team2_score ?? m.team2_score ?? 0);
+    const name1 = (m.team1_name||'').trim() || (t1[0]&&t1[0].team_name) || 'Team 1';
+    const name2 = (m.team2_name||'').trim() || (t2[0]&&t2[0].team_name) || 'Team 2';
 
     [
-      {roster: t1, score: s1, opponentScore: s2},
-      {roster: t2, score: s2, opponentScore: s1},
-    ].forEach(({roster, score, opponentScore}) => {
-      if (roster.length < 2) return; // skip empty sides
-      const names = roster.map(p=>p.name||'?').sort();
-      const key = names.join('|');
+      {roster: t1, teamName: name1, score: s1, opponentScore: s2},
+      {roster: t2, teamName: name2, score: s2, opponentScore: s1},
+    ].forEach(({roster, teamName, score, opponentScore}) => {
+      if (roster.length < 2) return;
+      const key = teamName.toLowerCase();
       if (!lineupMap[key]) {
-        lineupMap[key] = {names, wins:0, losses:0, draws:0, maps:{}, roundsFor:0, roundsAgainst:0};
+        lineupMap[key] = {teamName, playerSet: new Set(), names:[], wins:0, losses:0, draws:0, maps:{}, roundsFor:0, roundsAgainst:0};
       }
       const lu = lineupMap[key];
+      lu.teamName = teamName; // keep latest casing
+      roster.forEach(p => { if (p.name) lu.playerSet.add(p.name); });
       if (score > opponentScore) lu.wins++;
       else if (score < opponentScore) lu.losses++;
       else lu.draws++;
@@ -2296,6 +2299,9 @@ async function loadTeam() {
       }
     });
   });
+
+  // Flatten playerSet → sorted names array
+  Object.values(lineupMap).forEach(lu => { lu.names = [...lu.playerSet].sort(); });
 
   // Sort by total matches played desc
   const lineups = Object.values(lineupMap)
@@ -2357,7 +2363,7 @@ function renderTeam(lineups) {
 
     return `<div class="team-stat-card" style="margin-bottom:12px">
       <div class="team-stat-card-header">
-        <div style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:11px;letter-spacing:2px;text-transform:uppercase;color:rgba(var(--orange-rgb),.8)">Lineup #${idx+1} — ${lu.names.length} Players</div>
+        <div style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:13px;letter-spacing:1.5px;text-transform:uppercase;color:rgba(var(--orange-rgb),.9)">${esc(lu.teamName)}<span style="font-size:10px;font-weight:500;letter-spacing:1px;color:var(--muted2);text-transform:none;margin-left:8px">${lu.names.length} player${lu.names.length!==1?'s':''}</span></div>
         ${lu.bestMap ? `<span style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted2)">Best: ${lu.bestMap.map.replace('de_','').toUpperCase()}</span>` : ''}
       </div>
       <div style="display:flex">
@@ -2381,7 +2387,7 @@ function renderTeam(lineups) {
 
   el.innerHTML = `
     <div style="margin-bottom:16px;display:flex;align-items:center;justify-content:space-between">
-      <div class="page-title" style="margin:0">Team Stats <span class="sub">${lineups.length} lineup${lineups.length!==1?'s':''} tracked</span></div>
+      <div class="page-title" style="margin:0">Team Stats <span class="sub">${lineups.length} team${lineups.length!==1?'s':''} tracked</span></div>
       <button onclick="_teamCache=null;loadTeam()" style="padding:6px 14px;background:transparent;border:1px solid var(--border);border-radius:3px;color:var(--muted2);font-family:'Rajdhani',sans-serif;font-size:11px;letter-spacing:1px;cursor:pointer;text-transform:uppercase">Refresh</button>
     </div>
     ${cards}`;
