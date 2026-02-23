@@ -160,6 +160,54 @@ nav{background:var(--nav-bg);border-bottom:2px solid var(--nav-border);display:f
 .meta-chip strong{color:var(--text)}
 .winner-tag{display:inline-block;padding:2px 10px;border:1px solid var(--win);border-radius:2px;font-family:'Rajdhani',sans-serif;font-weight:600;font-size:11px;letter-spacing:1px;text-transform:uppercase;color:var(--win);background:rgba(34,197,94,.08)}
 
+/* EDITED BADGE */
+.edited-badge{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:2px;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:var(--ct);border:1px solid rgba(91,196,245,.4);background:rgba(91,196,245,.08)}
+
+/* EDIT BUTTON */
+.edit-match-btn{padding:5px 14px;border-radius:3px;border:1px solid var(--border2);background:transparent;color:var(--muted2);font-family:'Rajdhani',sans-serif;font-weight:700;font-size:11px;letter-spacing:1.5px;text-transform:uppercase;cursor:pointer;transition:all .15s;display:inline-flex;align-items:center;gap:6px}
+.edit-match-btn:hover{color:var(--orange);border-color:var(--orange);background:var(--orange-glow)}
+.edit-match-btn svg{width:12px;height:12px}
+
+/* EDIT MODAL */
+.edit-overlay{position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:600;display:flex;align-items:flex-start;justify-content:center;padding:40px 16px;backdrop-filter:blur(6px);opacity:0;pointer-events:none;transition:opacity .2s;overflow-y:auto}
+.edit-overlay.open{opacity:1;pointer-events:auto}
+.edit-modal{background:var(--nav-bg);border:1px solid rgba(var(--orange-rgb),.3);border-radius:10px;width:100%;max-width:680px;box-shadow:0 20px 80px rgba(0,0,0,.7),inset 0 1px 0 rgba(255,255,255,.05);transform:translateY(12px);transition:transform .2s;position:relative;flex-shrink:0}
+.edit-overlay.open .edit-modal{transform:translateY(0)}
+.edit-modal-header{padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;background:linear-gradient(180deg,rgba(var(--orange-rgb),.1) 0%,transparent 100%)}
+.edit-modal-title{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:15px;letter-spacing:1.5px;text-transform:uppercase;color:var(--orange)}
+.edit-modal-close{width:28px;height:28px;border-radius:4px;background:transparent;border:1px solid var(--border);color:var(--muted2);cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;transition:all .15s;line-height:1}
+.edit-modal-close:hover{color:var(--white);border-color:var(--border2)}
+.edit-modal-body{padding:20px}
+.edit-section{margin-bottom:20px}
+.edit-section-title{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:11px;letter-spacing:2px;text-transform:uppercase;color:var(--orange);margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid rgba(var(--orange-rgb),.2)}
+.edit-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.edit-field{display:flex;flex-direction:column;gap:4px}
+.edit-field label{font-family:'Rajdhani',sans-serif;font-weight:600;font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted2)}
+.edit-field input{padding:7px 10px;background:var(--surface2);border:1px solid var(--border2);border-radius:4px;color:var(--white);font-family:'Inter',sans-serif;font-size:13px;transition:border-color .15s;width:100%}
+.edit-field input:focus{outline:none;border-color:var(--orange);box-shadow:0 0 0 2px rgba(var(--orange-rgb),.12)}
+.edit-player-row{display:grid;grid-template-columns:140px repeat(6,1fr);gap:6px;align-items:center;padding:6px 0;border-bottom:1px solid var(--border)}
+.edit-player-row:last-child{border-bottom:none}
+.edit-player-name-cell{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:12px;color:var(--white);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.edit-player-row input{padding:4px 6px;background:var(--surface2);border:1px solid var(--border2);border-radius:3px;color:var(--white);font-size:12px;font-family:'Inter',sans-serif;text-align:center;transition:border-color .15s}
+.edit-player-row input:focus{outline:none;border-color:var(--orange)}
+.edit-player-hdr{display:grid;grid-template-columns:140px repeat(6,1fr);gap:6px;padding:4px 0 8px;font-family:'Rajdhani',sans-serif;font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:rgba(var(--orange-rgb),.7)}
+.edit-modal-footer{padding:14px 20px;border-top:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:10px}
+.edit-save-btn{padding:8px 24px;background:var(--orange);border:none;border-radius:4px;color:#000;font-family:'Rajdhani',sans-serif;font-weight:800;font-size:12px;letter-spacing:1.5px;text-transform:uppercase;cursor:pointer;transition:all .15s}
+.edit-save-btn:hover{background:var(--orange2);box-shadow:0 0 16px rgba(var(--orange-rgb),.4)}
+.edit-save-btn:disabled{opacity:.5;cursor:not-allowed}
+.edit-revert-btn{padding:8px 16px;background:transparent;border:1px solid var(--loss);border-radius:4px;color:var(--loss);font-family:'Rajdhani',sans-serif;font-weight:700;font-size:11px;letter-spacing:1.5px;text-transform:uppercase;cursor:pointer;transition:all .15s}
+.edit-revert-btn:hover{background:rgba(239,68,68,.1)}
+.edit-status{font-size:12px;color:var(--muted2);font-family:'Rajdhani',sans-serif}
+.edit-status.ok{color:var(--win)}
+.edit-status.err{color:var(--loss)}
+
+/* PASSWORD GATE */
+.edit-pw-gate{padding:32px 20px;display:flex;flex-direction:column;align-items:center;gap:14px}
+.edit-pw-gate input{padding:10px 14px;background:var(--surface2);border:1px solid var(--border2);border-radius:5px;color:var(--white);font-size:14px;width:100%;max-width:280px;text-align:center;letter-spacing:3px}
+.edit-pw-gate input:focus{outline:none;border-color:var(--orange)}
+.edit-pw-btn{padding:9px 28px;background:var(--orange);border:none;border-radius:4px;color:#000;font-family:'Rajdhani',sans-serif;font-weight:800;font-size:12px;letter-spacing:1.5px;text-transform:uppercase;cursor:pointer}
+.edit-pw-err{color:var(--loss);font-size:12px;font-family:'Rajdhani',sans-serif}
+
 /* TEAM TABLE FILTER */
 .filter-bar{display:flex;gap:6px;margin-bottom:10px;align-items:center}
 .f-btn{padding:4px 12px;border:1px solid var(--border2);border-radius:2px;font-size:11px;font-family:'Rajdhani',sans-serif;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:var(--muted2);cursor:pointer;transition:all .15s}
@@ -1082,11 +1130,15 @@ async function loadMatches() {
   }
   const items = data.map(m=>{
     const bgStyle = MAP_IMGS[m.mapname] ? `background-image:url('${MAP_IMGS[m.mapname]}')` : 'background:var(--surface2)';
+    const editedPill = m.is_edited
+      ? `<div class="edited-badge" style="position:absolute;top:10px;right:10px;z-index:3">✎ Edited</div>`
+      : '';
     return `
-    <div class="match-item" onclick="go('match',{id:'${m.matchid}'},'matches')">
+    <div class="match-item" onclick="go('match',{id:'${m.matchid}'},'matches')" style="position:relative">
       <div class="m-bg" style="${bgStyle}"></div>
       <div class="m-overlay"></div>
       <div class="m-hover-layer"></div>
+      ${editedPill}
       <div class="m-content">
         <div class="m-pill m-pill-info">
           <div class="m-score">${m.map_team1_score??m.team1_score??0} : ${m.map_team2_score??m.team2_score??0}</div>
@@ -1109,6 +1161,10 @@ async function loadMatch(id) {
   spin('p-match');
   const d = await apiFetch('/api/match/'+id, `matches/${id}.json`).then(d=>d&&!d.error?d:{error:'not found'});
   if(d.error){document.getElementById('p-match').innerHTML=`<div class="empty">${d.error}</div>`;return}
+
+  // Store for edit modal access
+  window._currentMatchId = id;
+  window._currentMatchData = d;
 
   const meta=d.meta||{}, maps=d.maps||[], players=d.players||[], demo=d.demo||{};
 
@@ -1209,8 +1265,28 @@ async function loadMatch(id) {
          Demo${demo.size?' ('+demo.size+')':''}</a></div>`
     : '';
 
+  // Auto-save raw fshost JSON to DB (fire-and-forget, best-effort)
+  fetch('/api/match/'+id+'/save', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({raw_json: d._raw || d})
+  }).catch(()=>{});
+
+  const isEdited = !!(meta.is_edited);
+  const editedBadge = isEdited
+    ? `<div class="edited-badge" style="margin-left:10px">✎ Edited</div>`
+    : '';
+
   document.getElementById('p-match').innerHTML = `
-    <div class="back-btn" onclick="goBack('matches')">← Back</div>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+      <div class="back-btn" onclick="goBack('matches')" style="margin-bottom:0">← Back</div>
+      <div style="display:flex;align-items:center;gap:8px">
+        ${editedBadge}
+        <button class="edit-match-btn" onclick="openEditModal('${id}')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+          Edit Match
+        </button>
+      </div>
+    </div>
     <div style="position:relative;border-radius:6px;overflow:hidden;margin-bottom:12px;min-height:200px">
       ${maps[0]?.mapname && MAP_IMGS[maps[0].mapname]
         ? `<img src="${MAP_IMGS[maps[0].mapname]}" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:0.85">`
@@ -2800,6 +2876,295 @@ if ('Notification' in window && Notification.permission === 'default') {
 const urlParams = new URLSearchParams(location.search);
 if(urlParams.get('match')) go('match',{id:urlParams.get('match')});
 else go('matches');
+
+// ── Match Edit Modal ──────────────────────────────────────────────────────────
+
+let _editToken = null;    // set after successful password auth
+let _editMatchId = null;  // current match being edited
+
+function openEditModal(matchId) {
+  _editMatchId = matchId || window._currentMatchId;
+  document.getElementById('edit-overlay').classList.add('open');
+  if (_editToken) {
+    _renderEditForm();
+  } else {
+    _renderPasswordGate();
+  }
+}
+
+function closeEditModal() {
+  document.getElementById('edit-overlay').classList.remove('open');
+}
+
+function editOverlayClick(e) {
+  if (e.target === document.getElementById('edit-overlay')) closeEditModal();
+}
+
+function _renderPasswordGate() {
+  document.getElementById('edit-modal-content').innerHTML = `
+    <div class="edit-pw-gate">
+      <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="var(--orange)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="opacity:.6">
+        <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+      </svg>
+      <div style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:13px;letter-spacing:1px;color:var(--muted2)">Enter Edit Password</div>
+      <input type="password" id="edit-pw-input" placeholder="••••••••" onkeydown="if(event.key==='Enter')_submitPassword()">
+      <div id="edit-pw-err" class="edit-pw-err" style="display:none"></div>
+      <button class="edit-pw-btn" onclick="_submitPassword()">Unlock</button>
+    </div>`;
+  setTimeout(()=>document.getElementById('edit-pw-input')?.focus(), 80);
+}
+
+async function _submitPassword() {
+  const pw = document.getElementById('edit-pw-input')?.value || '';
+  const errEl = document.getElementById('edit-pw-err');
+  errEl.style.display = 'none';
+  try {
+    const r = await fetch('/api/auth/edit', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({password: pw})
+    });
+    const data = await r.json();
+    if (data.ok && data.token) {
+      _editToken = data.token;
+      _renderEditForm();
+    } else {
+      errEl.textContent = '✕ Wrong password';
+      errEl.style.display = 'block';
+      document.getElementById('edit-pw-input').value = '';
+      document.getElementById('edit-pw-input').focus();
+    }
+  } catch(e) {
+    errEl.textContent = '✕ Connection error';
+    errEl.style.display = 'block';
+  }
+}
+
+async function _renderEditForm() {
+  const d = window._currentMatchData || {};
+  const meta    = d.meta    || {};
+  const players = d.players || [];
+  const maps    = d.maps    || [];
+
+  // Load any existing edits from DB
+  let existingEdits = {};
+  try {
+    const er = await fetch(`/api/match/${_editMatchId}/edits`);
+    const ed = await er.json();
+    existingEdits = ed.edits || {};
+  } catch(e) {}
+
+  // Helper: get edited value or fall back to current value
+  const ev = (editPath, currentVal) => {
+    // editPath like 'team1.name' or 'players.STEAMID.kills'
+    const parts = editPath.split('.');
+    let obj = existingEdits;
+    for (const p of parts) { obj = (obj||{})[p]; }
+    return obj !== undefined ? obj : (currentVal ?? '');
+  };
+
+  const t1name = ev('team1.name', meta.team1_name);
+  const t2name = ev('team2.name', meta.team2_name);
+  const t1score = ev('team1.score', meta.team1_score);
+  const t2score = ev('team2.score', meta.team2_score);
+  const mapname = ev('map', maps[0]?.mapname || '');
+  const winner  = ev('winner', meta.winner || '');
+
+  // Player rows — build from players array, supporting edits keyed by steamid64
+  const playerRows = players.map(p => {
+    const sid = String(p.steamid64 || p.steam_id || '');
+    const pe = (existingEdits.players || {})[sid] || {};
+    const gv = (field, fallback) => pe[field] !== undefined ? pe[field] : (p[field] ?? fallback ?? '');
+    return `<div class="edit-player-row" data-sid="${esc(sid)}" data-team="${esc(p.team||'')}">
+      <div class="edit-player-name-cell" title="${esc(p.name||'')}">
+        <input type="text" value="${esc(gv('name', p.name))}" data-field="name" placeholder="Name" style="width:100%;text-align:left">
+      </div>
+      <input type="number" value="${esc(gv('kills', p.kills))}"    data-field="kills"    min="0" placeholder="K">
+      <input type="number" value="${esc(gv('deaths', p.deaths))}"  data-field="deaths"   min="0" placeholder="D">
+      <input type="number" value="${esc(gv('assists', p.assists))}" data-field="assists"  min="0" placeholder="A">
+      <input type="number" value="${esc(gv('damage', p.damage))}"  data-field="damage"   min="0" placeholder="DMG">
+      <input type="number" value="${esc(gv('rating', p.rating))}"  data-field="rating"   step="0.01" placeholder="Rtg">
+      <input type="number" value="${esc(gv('kast', p.kast))}"      data-field="kast"     step="0.1"  placeholder="KAST">
+    </div>`;
+  }).join('');
+
+  const team1Players = players.filter(p=>String(p.team||'').toLowerCase()==='team1');
+  const team2Players = players.filter(p=>String(p.team||'').toLowerCase()==='team2');
+
+  const mkPlayerSection = (teamPlayers, teamLabel, teamColor) => {
+    if (!teamPlayers.length) return '';
+    const rows = teamPlayers.map(p => {
+      const sid = String(p.steamid64 || p.steam_id || '');
+      const pe = (existingEdits.players || {})[sid] || {};
+      const gv = (field, fallback) => pe[field] !== undefined ? pe[field] : (p[field] ?? fallback ?? '');
+      return `<div class="edit-player-row" data-sid="${esc(sid)}" data-team="${esc(p.team||'')}">
+        <div class="edit-player-name-cell">
+          <input type="text" value="${esc(gv('name', p.name))}" data-field="name" placeholder="Name" style="width:130px;text-align:left">
+        </div>
+        <input type="number" value="${esc(gv('kills', p.kills))}"    data-field="kills"    min="0" placeholder="K">
+        <input type="number" value="${esc(gv('deaths', p.deaths))}"  data-field="deaths"   min="0" placeholder="D">
+        <input type="number" value="${esc(gv('assists', p.assists))}" data-field="assists"  min="0" placeholder="A">
+        <input type="number" value="${esc(gv('damage', p.damage))}"  data-field="damage"   min="0" placeholder="DMG">
+        <input type="number" value="${esc(gv('rating', p.rating))}"  data-field="rating"   step="0.01" placeholder="Rtg">
+        <input type="number" value="${esc(gv('kast', p.kast))}"      data-field="kast"     step="0.1"  placeholder="KAST">
+      </div>`;
+    }).join('');
+    return `
+      <div class="edit-section">
+        <div class="edit-section-title" style="color:var(${teamColor})">${teamLabel}</div>
+        <div class="edit-player-hdr">
+          <div>Player</div><div>K</div><div>D</div><div>A</div><div>DMG</div><div>Rating</div><div>KAST</div>
+        </div>
+        ${rows}
+      </div>`;
+  };
+
+  document.getElementById('edit-modal-title').textContent = `Edit Match #${_editMatchId}`;
+  document.getElementById('edit-modal-content').innerHTML = `
+    <div class="edit-modal-body" style="max-height:calc(80vh - 120px);overflow-y:auto">
+
+      <div class="edit-section">
+        <div class="edit-section-title">Match Info</div>
+        <div class="edit-grid">
+          <div class="edit-field">
+            <label>Team 1 Name</label>
+            <input type="text" id="ef-t1name" value="${esc(t1name)}">
+          </div>
+          <div class="edit-field">
+            <label>Team 2 Name</label>
+            <input type="text" id="ef-t2name" value="${esc(t2name)}">
+          </div>
+          <div class="edit-field">
+            <label>Team 1 Score</label>
+            <input type="number" id="ef-t1score" value="${esc(t1score)}" min="0">
+          </div>
+          <div class="edit-field">
+            <label>Team 2 Score</label>
+            <input type="number" id="ef-t2score" value="${esc(t2score)}" min="0">
+          </div>
+          <div class="edit-field">
+            <label>Map</label>
+            <input type="text" id="ef-map" value="${esc(mapname)}">
+          </div>
+          <div class="edit-field">
+            <label>Winner</label>
+            <input type="text" id="ef-winner" value="${esc(winner)}">
+          </div>
+        </div>
+      </div>
+
+      ${mkPlayerSection(team1Players, t1name + ' Players', '--ct')}
+      ${mkPlayerSection(team2Players, t2name + ' Players', '--t')}
+
+    </div>
+    <div class="edit-modal-footer">
+      <button class="edit-revert-btn" onclick="_revertEdits()">↺ Revert to Original</button>
+      <span class="edit-status" id="edit-status"></span>
+      <button class="edit-save-btn" id="edit-save-btn" onclick="_saveEdits()">Save Changes</button>
+    </div>`;
+}
+
+async function _saveEdits() {
+  const btn = document.getElementById('edit-save-btn');
+  const statusEl = document.getElementById('edit-status');
+  btn.disabled = true;
+  statusEl.textContent = 'Saving…';
+  statusEl.className = 'edit-status';
+
+  try {
+    // Build edits object
+    const edits = {
+      team1: {
+        name:  document.getElementById('ef-t1name')?.value,
+        score: Number(document.getElementById('ef-t1score')?.value),
+      },
+      team2: {
+        name:  document.getElementById('ef-t2name')?.value,
+        score: Number(document.getElementById('ef-t2score')?.value),
+      },
+      map:    document.getElementById('ef-map')?.value,
+      winner: document.getElementById('ef-winner')?.value,
+      players: {},
+    };
+
+    // Collect player edits from all rows
+    document.querySelectorAll('#edit-modal-content .edit-player-row').forEach(row => {
+      const sid = row.dataset.sid;
+      if (!sid) return;
+      const pEdit = {};
+      row.querySelectorAll('input[data-field]').forEach(inp => {
+        const field = inp.dataset.field;
+        const val = inp.type === 'number' ? (inp.value !== '' ? Number(inp.value) : null) : inp.value;
+        if (val !== null && val !== '') pEdit[field] = val;
+      });
+      if (Object.keys(pEdit).length) edits.players[sid] = pEdit;
+    });
+
+    const r = await fetch(`/api/match/${_editMatchId}/edit`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${_editToken}`,
+      },
+      body: JSON.stringify({edits}),
+    });
+    const data = await r.json();
+    if (data.ok) {
+      statusEl.textContent = '✓ Saved!';
+      statusEl.className = 'edit-status ok';
+      // Reload match to show edited data
+      setTimeout(() => {
+        closeEditModal();
+        loadMatch(_editMatchId);
+      }, 800);
+    } else {
+      throw new Error(data.error || 'Save failed');
+    }
+  } catch(e) {
+    statusEl.textContent = '✕ ' + e.message;
+    statusEl.className = 'edit-status err';
+    btn.disabled = false;
+  }
+}
+
+async function _revertEdits() {
+  if (!confirm('Revert all edits to original fshost data? This cannot be undone.')) return;
+  const statusEl = document.getElementById('edit-status');
+  statusEl.textContent = 'Reverting…';
+  statusEl.className = 'edit-status';
+  try {
+    const r = await fetch(`/api/match/${_editMatchId}/edit`, {
+      method: 'DELETE',
+      headers: {'Authorization': `Bearer ${_editToken}`},
+    });
+    const data = await r.json();
+    if (data.ok) {
+      statusEl.textContent = '✓ Reverted!';
+      statusEl.className = 'edit-status ok';
+      setTimeout(() => {
+        closeEditModal();
+        loadMatch(_editMatchId);
+      }, 800);
+    } else {
+      throw new Error(data.error || 'Revert failed');
+    }
+  } catch(e) {
+    statusEl.textContent = '✕ ' + e.message;
+    statusEl.className = 'edit-status err';
+  }
+}
 </script>
+<!-- ── Match Edit Modal ────────────────────────────────────────────────────── -->
+<div class="edit-overlay" id="edit-overlay" onclick="editOverlayClick(event)">
+  <div class="edit-modal" id="edit-modal">
+    <div class="edit-modal-header">
+      <span class="edit-modal-title" id="edit-modal-title">Edit Match</span>
+      <button class="edit-modal-close" onclick="closeEditModal()">✕</button>
+    </div>
+    <div id="edit-modal-content">
+      <!-- Filled dynamically: password gate or edit form -->
+    </div>
+  </div>
+</div>
+
 </body>
 </html>
