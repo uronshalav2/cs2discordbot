@@ -191,6 +191,14 @@ nav{background:var(--nav-bg);border-bottom:2px solid var(--nav-border);display:f
 .edit-player-row input{padding:4px 6px;background:var(--surface2);border:1px solid var(--border2);border-radius:3px;color:var(--white);font-size:12px;font-family:'Inter',sans-serif;text-align:center;transition:border-color .15s}
 .edit-player-row input:focus{outline:none;border-color:var(--orange)}
 .edit-player-hdr{display:grid;grid-template-columns:140px repeat(6,1fr);gap:6px;padding:4px 0 8px;font-family:'Rajdhani',sans-serif;font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:rgba(var(--orange-rgb),.7)}
+.edit-player-hdr-new{grid-template-columns:214px repeat(6,1fr) 24px}
+.edit-new-player-row{grid-template-columns:214px repeat(6,1fr) 24px;background:rgba(var(--orange-rgb),.03);border-radius:3px}
+.edit-player-new-cell{display:flex;gap:4px;align-items:center;overflow:hidden}
+.edit-player-new-cell input{flex:1;min-width:0}
+.edit-add-player-btn{margin-top:8px;padding:5px 12px;background:transparent;border:1px dashed rgba(var(--orange-rgb),.4);border-radius:4px;color:rgba(var(--orange-rgb),.7);font-family:'Rajdhani',sans-serif;font-weight:700;font-size:11px;letter-spacing:1.5px;text-transform:uppercase;cursor:pointer;transition:all .15s;width:100%}
+.edit-add-player-btn:hover{border-color:var(--orange);color:var(--orange);background:var(--orange-glow)}
+.edit-remove-player-btn{width:22px;height:22px;background:transparent;border:1px solid rgba(239,68,68,.3);border-radius:3px;color:rgba(239,68,68,.6);cursor:pointer;font-size:12px;line-height:1;display:flex;align-items:center;justify-content:center;transition:all .15s;padding:0;flex-shrink:0}
+.edit-remove-player-btn:hover{border-color:var(--loss);color:var(--loss);background:rgba(239,68,68,.1)}
 .edit-modal-footer{padding:14px 20px;border-top:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:10px}
 .edit-save-btn{padding:8px 24px;background:var(--orange);border:none;border-radius:4px;color:#000;font-family:'Rajdhani',sans-serif;font-weight:800;font-size:12px;letter-spacing:1.5px;text-transform:uppercase;cursor:pointer;transition:all .15s}
 .edit-save-btn:hover{background:var(--orange2);box-shadow:0 0 16px rgba(var(--orange-rgb),.4)}
@@ -2990,8 +2998,8 @@ async function _renderEditForm() {
   const team1Players = players.filter(p=>String(p.team||'').toLowerCase()==='team1');
   const team2Players = players.filter(p=>String(p.team||'').toLowerCase()==='team2');
 
-  const mkPlayerSection = (teamPlayers, teamLabel, teamColor) => {
-    if (!teamPlayers.length) return '';
+  const mkPlayerSection = (teamPlayers, teamLabel, teamColor, teamKey) => {
+    const existingNewPlayers = (existingEdits.new_players || []).filter(np => np.team === teamKey);
     const rows = teamPlayers.map(p => {
       const sid = String(p.steamid64 || p.steam_id || '');
       const pe = (existingEdits.players || {})[sid] || {};
@@ -3008,13 +3016,33 @@ async function _renderEditForm() {
         <input type="number" value="${esc(gv('kast', p.kast))}"      data-field="kast"     step="0.1"  placeholder="KAST">
       </div>`;
     }).join('');
-    return `
-      <div class="edit-section">
-        <div class="edit-section-title" style="color:var(${teamColor})">${teamLabel}</div>
-        <div class="edit-player-hdr">
-          <div>Player</div><div>K</div><div>D</div><div>A</div><div>DMG</div><div>Rating</div><div>KAST</div>
+    const newRows = existingNewPlayers.map((np, i) => {
+      const tempId = `new_${teamKey}_${i}`;
+      return `<div class="edit-player-row edit-new-player-row" data-sid="${esc(tempId)}" data-team="${esc(teamKey)}" data-isnew="1">
+        <div class="edit-player-new-cell">
+          <input type="text"   value="${esc(np.steamid64||'')}" data-field="steamid64" placeholder="SteamID64" style="width:110px;text-align:left;font-size:10px">
+          <input type="text"   value="${esc(np.name||'')}"      data-field="name"      placeholder="Name"       style="width:100px;text-align:left">
         </div>
-        ${rows}
+        <input type="number" value="${esc(np.kills||'')}"    data-field="kills"    min="0" placeholder="K">
+        <input type="number" value="${esc(np.deaths||'')}"   data-field="deaths"   min="0" placeholder="D">
+        <input type="number" value="${esc(np.assists||'')}"  data-field="assists"  min="0" placeholder="A">
+        <input type="number" value="${esc(np.damage||'')}"   data-field="damage"   min="0" placeholder="DMG">
+        <input type="number" value="${esc(np.rating||'')}"   data-field="rating"   step="0.01" placeholder="Rtg">
+        <input type="number" value="${esc(np.kast||'')}"     data-field="kast"     step="0.1"  placeholder="KAST">
+        <button class="edit-remove-player-btn" title="Remove player" onclick="this.closest('.edit-player-row').remove()">✕</button>
+      </div>`;
+    }).join('');
+    return `
+      <div class="edit-section" id="edit-section-${teamKey}">
+        <div class="edit-section-title" style="color:var(${teamColor})">${teamLabel}</div>
+        <div class="edit-player-hdr edit-player-hdr-new">
+          <div>Player / SteamID</div><div>K</div><div>D</div><div>A</div><div>DMG</div><div>Rating</div><div>KAST</div><div></div>
+        </div>
+        <div id="edit-players-${teamKey}">
+          ${rows}
+          ${newRows}
+        </div>
+        <button class="edit-add-player-btn" onclick="_addPlayerRow('${teamKey}')">+ Add Player</button>
       </div>`;
   };
 
@@ -3052,8 +3080,8 @@ async function _renderEditForm() {
         </div>
       </div>
 
-      ${mkPlayerSection(team1Players, t1name + ' Players', '--ct')}
-      ${mkPlayerSection(team2Players, t2name + ' Players', '--t')}
+      ${mkPlayerSection(team1Players, t1name + ' Players', '--ct', 'team1')}
+      ${mkPlayerSection(team2Players, t2name + ' Players', '--t', 'team2')}
 
     </div>
     <div class="edit-modal-footer">
@@ -3061,6 +3089,32 @@ async function _renderEditForm() {
       <span class="edit-status" id="edit-status"></span>
       <button class="edit-save-btn" id="edit-save-btn" onclick="_saveEdits()">Save Changes</button>
     </div>`;
+}
+
+function _addPlayerRow(teamKey) {
+  const container = document.getElementById(`edit-players-${teamKey}`);
+  if (!container) return;
+  const idx = container.querySelectorAll('.edit-new-player-row').length;
+  const tempId = `new_${teamKey}_${Date.now()}`;
+  const row = document.createElement('div');
+  row.className = 'edit-player-row edit-new-player-row';
+  row.dataset.sid  = tempId;
+  row.dataset.team = teamKey;
+  row.dataset.isnew = '1';
+  row.innerHTML = `
+    <div class="edit-player-new-cell">
+      <input type="text" data-field="steamid64" placeholder="SteamID64" style="width:110px;text-align:left;font-size:10px">
+      <input type="text" data-field="name"      placeholder="Name"       style="width:100px;text-align:left">
+    </div>
+    <input type="number" data-field="kills"   min="0"    placeholder="K">
+    <input type="number" data-field="deaths"  min="0"    placeholder="D">
+    <input type="number" data-field="assists" min="0"    placeholder="A">
+    <input type="number" data-field="damage"  min="0"    placeholder="DMG">
+    <input type="number" data-field="rating"  step="0.01" placeholder="Rtg">
+    <input type="number" data-field="kast"    step="0.1"  placeholder="KAST">
+    <button class="edit-remove-player-btn" title="Remove player" onclick="this.closest('.edit-player-row').remove()">✕</button>`;
+  container.appendChild(row);
+  row.querySelector('input[data-field="steamid64"]').focus();
 }
 
 async function _saveEdits() {
@@ -3090,13 +3144,31 @@ async function _saveEdits() {
     document.querySelectorAll('#edit-modal-content .edit-player-row').forEach(row => {
       const sid = row.dataset.sid;
       if (!sid) return;
-      const pEdit = {};
-      row.querySelectorAll('input[data-field]').forEach(inp => {
-        const field = inp.dataset.field;
-        const val = inp.type === 'number' ? (inp.value !== '' ? Number(inp.value) : null) : inp.value;
-        if (val !== null && val !== '') pEdit[field] = val;
-      });
-      if (Object.keys(pEdit).length) edits.players[sid] = pEdit;
+
+      if (row.dataset.isnew) {
+        // New player row — collect steamid64 separately and add to new_players array
+        const steamidInp = row.querySelector('input[data-field="steamid64"]');
+        const steamid64 = steamidInp ? steamidInp.value.trim() : '';
+        if (!steamid64) return; // skip rows without a steamid
+        const team = row.dataset.team || '';
+        const npEntry = { steamid64, team };
+        row.querySelectorAll('input[data-field]').forEach(inp => {
+          const field = inp.dataset.field;
+          if (field === 'steamid64') return;
+          const val = inp.type === 'number' ? (inp.value !== '' ? Number(inp.value) : null) : inp.value;
+          if (val !== null && val !== '') npEntry[field] = val;
+        });
+        edits.new_players = edits.new_players || [];
+        edits.new_players.push(npEntry);
+      } else {
+        const pEdit = {};
+        row.querySelectorAll('input[data-field]').forEach(inp => {
+          const field = inp.dataset.field;
+          const val = inp.type === 'number' ? (inp.value !== '' ? Number(inp.value) : null) : inp.value;
+          if (val !== null && val !== '') pEdit[field] = val;
+        });
+        if (Object.keys(pEdit).length) edits.players[sid] = pEdit;
+      }
     });
 
     const r = await fetch(`/api/match/${_editMatchId}/edit`, {
