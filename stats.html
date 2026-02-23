@@ -3038,7 +3038,7 @@ async function _renderEditForm() {
       </div>`;
     }).join('');
     return `
-      <div class="edit-section" id="edit-section-${teamKey}">
+      <div class="edit-section" id="edit-section-${teamKey}" data-team-name="${esc(teamLabel.replace(/ Players$/,''))}">
         <div class="edit-section-title" style="color:var(${teamColor})">${teamLabel}</div>
         <div class="edit-player-hdr edit-player-hdr-new">
           <div>Player / SteamID</div><div>K</div><div>D</div><div>A</div><div>DMG</div><div>Rating</div><div>KAST</div><div></div>
@@ -3107,30 +3107,53 @@ async function _fetchMissingPlayers(teamKey) {
   btn.textContent = '⏳ Fetching…';
 
   try {
-    const r = await fetch(`/api/match/${_editMatchId}/matchzy_players`);
+    // Build lookup params from raw match data (unaffected by team name edits)
+    const rawMeta    = (window._currentMatchData || {}).meta || {};
+    const rawPlayers = (window._currentMatchData || {}).players || [];
+    const knownSids  = rawPlayers
+      .map(p => String(p.steamid64 || p.steam_id || ''))
+      .filter(s => s && s !== '0')
+      .join(',');
+    const matchDate  = rawMeta.end_time || rawMeta.start_time || '';
+    const qParams    = new URLSearchParams();
+    if (knownSids) qParams.set('sids', knownSids);
+    if (matchDate)  qParams.set('date', matchDate);
+
+    const r = await fetch(`/api/match/${_editMatchId}/matchzy_players?${qParams}`);
     const data = await r.json();
     if (data.error) throw new Error(data.error);
 
-    const mzPlayers = (data.players || []).filter(p => {
-      // Only show players for this team
-      return String(p.team || '').toLowerCase() === teamKey;
+    // Get the real team name from the section's data attribute (e.g. "DYJAJA")
+    const section = document.getElementById(`edit-section-${teamKey}`);
+    const dbTeamName = (section ? section.dataset.teamName : '') || '';
+
+    // The DB stores actual team names in the team column — match case-insensitively
+    const allPlayers = data.players || [];
+    const mzPlayers = allPlayers.filter(p => {
+      const pt = String(p.team || '').toLowerCase();
+      const tn = dbTeamName.toLowerCase();
+      return pt === tn;
     });
 
     if (!mzPlayers.length) {
-      btn.textContent = '✕ No DB data for this match';
+      // If team name match failed, log what we got so it's debuggable
+      const teams = [...new Set(allPlayers.map(p => p.team))].join(', ');
+      const msg = allPlayers.length
+        ? `✕ No players for "${dbTeamName}" (DB has: ${teams || '?'})`
+        : '✕ No DB data for this match';
+      btn.textContent = msg;
       btn.style.color = 'var(--loss)';
-      setTimeout(() => { btn.textContent = origText; btn.style.color = ''; btn.disabled = false; }, 2500);
+      setTimeout(() => { btn.textContent = origText; btn.style.color = ''; btn.disabled = false; }, 4000);
       return;
     }
 
-    // Collect steamids already in the form (existing + already-added new rows)
+    // Collect steamids already present in the form (existing + already-added new rows)
     const container = document.getElementById(`edit-players-${teamKey}`);
     const existingSids = new Set();
     container.querySelectorAll('.edit-player-row').forEach(row => {
-      // For existing players, data-sid is their steamid64
-      if (!row.dataset.isnew) existingSids.add(row.dataset.sid);
-      // For new rows already added, read the steamid64 input
-      else {
+      if (!row.dataset.isnew) {
+        existingSids.add(row.dataset.sid);
+      } else {
         const inp = row.querySelector('input[data-field="steamid64"]');
         if (inp && inp.value.trim()) existingSids.add(inp.value.trim());
       }
