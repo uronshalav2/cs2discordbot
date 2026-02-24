@@ -1454,20 +1454,24 @@ async function loadPlayer(name) {
   }).join('');
 
   const recentRows = recent.map(m => {
-    // Use server-normalized player_team ('team1'/'team2') when available,
-    // otherwise fall back to raw team field, then winner-name comparison
-    const slot = m.player_team || m.team || '';
-    const s1 = parseInt(m.team1_score ?? 0);
-    const s2 = parseInt(m.team2_score ?? 0);
+    // Use server-computed player_won (most reliable — pure SQL from matches table)
     let won = false;
-    if (s1 !== s2 && (slot === 'team1' || slot === 'team2')) {
-      won = slot === 'team1' ? s1 > s2 : s2 > s1;
+    if (m.player_won !== null && m.player_won !== undefined) {
+      won = m.player_won === 1 || m.player_won === true;
     } else {
-      // Fall back to case-insensitive winner name match
-      const playerTeamName = slot === 'team1' ? (m.team1_name ?? '') : slot === 'team2' ? (m.team2_name ?? '') : '';
-      const winnerLc = (m.winner ?? '').toLowerCase().trim();
-      const playerTeamLc = playerTeamName.toLowerCase().trim();
-      won = !!(winnerLc && playerTeamLc && winnerLc === playerTeamLc);
+      // Fallback: slot + map scores
+      const slot = m.player_team || '';
+      const s1 = parseInt(m.team1_score ?? 0);
+      const s2 = parseInt(m.team2_score ?? 0);
+      if (s1 !== s2 && (slot === 'team1' || slot === 'team2')) {
+        won = slot === 'team1' ? s1 > s2 : s2 > s1;
+      } else {
+        // Last resort: case-insensitive winner name
+        const playerTeamName = slot === 'team1' ? (m.team1_name ?? '') : slot === 'team2' ? (m.team2_name ?? '') : (m.team ?? '');
+        const winnerLc = (m.winner ?? '').toLowerCase().trim();
+        const playerTeamLc = playerTeamName.toLowerCase().trim();
+        won = !!(winnerLc && playerTeamLc && winnerLc === playerTeamLc);
+      }
     }
     const result = won ? `<span style="color:var(--win)">W</span>` : `<span style="color:var(--loss)">L</span>`;
     const kd2 = m.deaths>0?(m.kills/m.deaths).toFixed(2):parseFloat(m.kills||0).toFixed(2);
