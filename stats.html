@@ -1454,7 +1454,11 @@ async function loadPlayer(name) {
   }).join('');
 
   const recentRows = recent.map(m => {
-    const won = m.winner && (m.winner.toLowerCase().includes(m.team?.toLowerCase() ?? ''));
+    // Resolve the player's actual team name from their team slot (team1/team2)
+    const playerTeamName = m.team === 'team1' ? (m.team1_name ?? '') : m.team === 'team2' ? (m.team2_name ?? '') : (m.team ?? '');
+    const winnerLc = (m.winner ?? '').toLowerCase().trim();
+    const playerTeamLc = playerTeamName.toLowerCase().trim();
+    const won = winnerLc && playerTeamLc && winnerLc === playerTeamLc;
     const result = won ? `<span style="color:var(--win)">W</span>` : `<span style="color:var(--loss)">L</span>`;
     const kd2 = m.deaths>0?(m.kills/m.deaths).toFixed(2):parseFloat(m.kills||0).toFixed(2);
     return `<tr onclick="go('match',{id:'${m.matchid}'},'player')">
