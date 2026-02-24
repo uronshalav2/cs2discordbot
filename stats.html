@@ -191,19 +191,6 @@ nav{background:var(--nav-bg);border-bottom:2px solid var(--nav-border);display:f
 .edit-player-row input{padding:4px 6px;background:var(--surface2);border:1px solid var(--border2);border-radius:3px;color:var(--white);font-size:12px;font-family:'Inter',sans-serif;text-align:center;transition:border-color .15s}
 .edit-player-row input:focus{outline:none;border-color:var(--orange)}
 .edit-player-hdr{display:grid;grid-template-columns:140px repeat(6,1fr);gap:6px;padding:4px 0 8px;font-family:'Rajdhani',sans-serif;font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:rgba(var(--orange-rgb),.7)}
-.edit-player-hdr-new{grid-template-columns:214px repeat(6,1fr) 24px}
-.edit-new-player-row{grid-template-columns:214px repeat(6,1fr) 24px;background:rgba(var(--orange-rgb),.03);border-radius:3px}
-.edit-player-new-cell{display:flex;gap:4px;align-items:center;overflow:hidden}
-.edit-player-new-cell input{flex:1;min-width:0}
-.edit-add-player-bar{display:flex;gap:8px;margin-top:8px}
-.edit-add-player-btn{flex:1;padding:5px 12px;background:transparent;border:1px dashed rgba(var(--orange-rgb),.4);border-radius:4px;color:rgba(var(--orange-rgb),.7);font-family:'Rajdhani',sans-serif;font-weight:700;font-size:11px;letter-spacing:1.5px;text-transform:uppercase;cursor:pointer;transition:all .15s}
-.edit-add-player-btn:hover{border-color:var(--orange);color:var(--orange);background:var(--orange-glow)}
-.edit-fetch-btn{flex:1;padding:5px 12px;background:transparent;border:1px dashed rgba(91,196,245,.35);border-radius:4px;color:rgba(91,196,245,.6);font-family:'Rajdhani',sans-serif;font-weight:700;font-size:11px;letter-spacing:1.5px;text-transform:uppercase;cursor:pointer;transition:all .15s}
-.edit-fetch-btn:hover:not(:disabled){border-color:var(--ct);color:var(--ct);background:rgba(91,196,245,.07)}
-.edit-fetch-btn:disabled{opacity:.5;cursor:not-allowed}
-.edit-new-player-prefilled{background:rgba(91,196,245,.04)!important}
-.edit-remove-player-btn{width:22px;height:22px;background:transparent;border:1px solid rgba(239,68,68,.3);border-radius:3px;color:rgba(239,68,68,.6);cursor:pointer;font-size:12px;line-height:1;display:flex;align-items:center;justify-content:center;transition:all .15s;padding:0;flex-shrink:0}
-.edit-remove-player-btn:hover{border-color:var(--loss);color:var(--loss);background:rgba(239,68,68,.1)}
 .edit-modal-footer{padding:14px 20px;border-top:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:10px}
 .edit-save-btn{padding:8px 24px;background:var(--orange);border:none;border-radius:4px;color:#000;font-family:'Rajdhani',sans-serif;font-weight:800;font-size:12px;letter-spacing:1.5px;text-transform:uppercase;cursor:pointer;transition:all .15s}
 .edit-save-btn:hover{background:var(--orange2);box-shadow:0 0 16px rgba(var(--orange-rgb),.4)}
@@ -214,7 +201,33 @@ nav{background:var(--nav-bg);border-bottom:2px solid var(--nav-border);display:f
 .edit-status.ok{color:var(--win)}
 .edit-status.err{color:var(--loss)}
 
-/* PASSWORD GATE */
+/* MISSING PLAYERS PANEL */
+.missing-players-panel{margin-top:4px;border:1px dashed rgba(var(--orange-rgb),.35);border-radius:6px;overflow:hidden}
+.missing-players-header{padding:8px 14px;background:rgba(var(--orange-rgb),.06);display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none}
+.missing-players-header:hover{background:rgba(var(--orange-rgb),.1)}
+.missing-players-title{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:11px;letter-spacing:1.5px;text-transform:uppercase;color:var(--orange);display:flex;align-items:center;gap:7px}
+.missing-badge{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:50%;background:var(--orange);color:#000;font-size:10px;font-weight:800}
+.missing-players-list{padding:10px 14px;display:flex;flex-direction:column;gap:6px}
+.missing-player-row{display:flex;align-items:center;gap:10px;padding:7px 10px;border:1px solid var(--border);border-radius:4px;background:var(--surface2);transition:border-color .15s}
+.missing-player-row:hover{border-color:rgba(var(--orange-rgb),.4)}
+.missing-player-info{flex:1;min-width:0}
+.missing-player-name{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:13px;color:var(--white)}
+.missing-player-stats{font-size:11px;color:var(--muted2);margin-top:1px}
+.missing-player-team-select{padding:4px 8px;background:var(--surface);border:1px solid var(--border2);border-radius:3px;color:var(--white);font-family:'Rajdhani',sans-serif;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;cursor:pointer}
+.missing-player-team-select:focus{outline:none;border-color:var(--orange)}
+.add-player-btn{padding:5px 12px;background:transparent;border:1px solid var(--win);border-radius:3px;color:var(--win);font-family:'Rajdhani',sans-serif;font-weight:700;font-size:11px;letter-spacing:1px;text-transform:uppercase;cursor:pointer;transition:all .15s;white-space:nowrap}
+.add-player-btn:hover{background:rgba(34,197,94,.12)}
+.add-player-btn.added{border-color:var(--muted);color:var(--muted);cursor:default}
+.manual-add-row{display:grid;grid-template-columns:1fr 90px auto;gap:8px;align-items:center;padding:8px 14px;border-top:1px solid var(--border)}
+.manual-add-row input{padding:5px 8px;background:var(--surface2);border:1px solid var(--border2);border-radius:3px;color:var(--white);font-size:12px;font-family:'Inter',sans-serif}
+.manual-add-row input:focus{outline:none;border-color:var(--orange)}
+.manual-add-btn{padding:5px 12px;background:rgba(var(--orange-rgb),.15);border:1px solid var(--orange);border-radius:3px;color:var(--orange);font-family:'Rajdhani',sans-serif;font-weight:700;font-size:11px;letter-spacing:1px;text-transform:uppercase;cursor:pointer;white-space:nowrap}
+.manual-add-btn:hover{background:rgba(var(--orange-rgb),.25)}
+/* Added player row indicator */
+.edit-player-row.is-added{border-left:3px solid var(--win);padding-left:7px}
+.edit-player-row.is-added .edit-player-name-cell::before{content:'+ ';color:var(--win);font-weight:800;font-size:11px}
+.remove-player-btn{width:22px;height:22px;border-radius:3px;background:transparent;border:1px solid rgba(239,68,68,.4);color:rgba(239,68,68,.7);font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s;flex-shrink:0;line-height:1}
+.remove-player-btn:hover{background:rgba(239,68,68,.15);border-color:var(--loss);color:var(--loss)}
 .edit-pw-gate{padding:32px 20px;display:flex;flex-direction:column;align-items:center;gap:14px}
 .edit-pw-gate input{padding:10px 14px;background:var(--surface2);border:1px solid var(--border2);border-radius:5px;color:var(--white);font-size:14px;width:100%;max-width:280px;text-align:center;letter-spacing:3px}
 .edit-pw-gate input:focus{outline:none;border-color:var(--orange)}
@@ -2491,6 +2504,10 @@ async function loadTeam() {
     const players = Array.isArray(m.players) ? m.players : [];
     const mapsArr = Array.isArray(m.maps) ? m.maps : [];
 
+    // Use matchid + date as a stable match key — this is critical for the merge
+    // logic below: only team names from the SAME MATCH should ever be merged.
+    const matchKey = String(meta.matchid || meta.match_id || meta.end_time || '');
+
     const t1 = players.filter(p=>String(p.team||'').toLowerCase()==='team1');
     const t2 = players.filter(p=>String(p.team||'').toLowerCase()==='team2');
 
@@ -2507,7 +2524,7 @@ async function loadTeam() {
       {roster: t1, teamName: name1, score: s1, opponentScore: s2},
       {roster: t2, teamName: name2, score: s2, opponentScore: s1},
     ].forEach(({roster, teamName, score, opponentScore}) => {
-      if (roster.length < 1) return;
+      if (roster.length < 2) return;
       const key = teamName.toLowerCase();
       if (!lineupMap[key]) {
         lineupMap[key] = {teamName, aliases: new Set([teamName]), playerSet: new Set(), matchRosters:[], names:[], wins:0, losses:0, draws:0, maps:{}, roundsFor:0, roundsAgainst:0};
@@ -2516,8 +2533,12 @@ async function loadTeam() {
       lu.teamName = teamName;
       lu.aliases.add(teamName);
       roster.forEach(p => { if (p.name) lu.playerSet.add(p.name); });
-      // Store this match's exact roster as a signature for merge detection
-      const matchSig = roster.map(p=>p.name).filter(Boolean).sort().join('|');
+      // Roster signature is SCOPED TO THIS MATCH (matchKey prefix).
+      // This means: only two different team names that appear IN THE SAME MATCH
+      // with the same players will be merged. Teams from different matches
+      // that happen to share players will never incorrectly merge.
+      const playerSig = roster.map(p=>p.name).filter(Boolean).sort().join('|');
+      const matchSig  = matchKey ? `${matchKey}::${playerSig}` : null;
       if (matchSig && !lu.matchRosters.includes(matchSig)) lu.matchRosters.push(matchSig);
       if (score > opponentScore) lu.wins++;
       else if (score < opponentScore) lu.losses++;
@@ -2549,60 +2570,42 @@ async function loadTeam() {
   // Flatten playerSet → sorted names array (all players ever on this team)
   Object.values(lineupMap).forEach(lu => { lu.names = [...lu.playerSet].sort(); });
 
-  // ── Merge teams that share enough players across matches ──────────────────
-  // Strategy: two team entries belong to the same org if any of their per-match
-  // rosters share ≥ MIN_OVERLAP players. This handles:
-  //   • a player missing from the JSON (left early / added via edit later)
-  //   • a one-match sub filling in
-  // MIN_OVERLAP = rosterSize - 1, so a 5-man team needs 4 in common; a 4-man needs 3.
-  const keys = Object.keys(lineupMap);
-  let merged = true;
-  while (merged) {
-    merged = false;
-    outer: for (let i = 0; i < keys.length; i++) {
-      const ka = keys[i];
-      if (!lineupMap[ka]) continue;
-      const la = lineupMap[ka];
-      for (let j = i + 1; j < keys.length; j++) {
-        const kb = keys[j];
-        if (!lineupMap[kb]) continue;
-        const lb = lineupMap[kb];
-
-        // Check if any per-match roster pair from each team overlaps enough
-        const shouldMerge = la.matchRosters.some(sigA => {
-          const setA = new Set(sigA.split('|'));
-          return lb.matchRosters.some(sigB => {
-            const arrB = sigB.split('|');
-            const minOverlap = Math.max(2, Math.max(setA.size, arrB.length) - 1);
-            const overlap = arrB.filter(p => setA.has(p)).length;
-            return overlap >= minOverlap;
-          });
+  // ── Merge teams that share identical per-match lineups ────────────────────
+  // Strategy: two team names are the same org if they PLAYED IN THE SAME MATCH
+  // under the exact same player roster. The matchSig includes the matchid prefix
+  // so only same-match collisions trigger a merge. This prevents teams on
+  // different dates from incorrectly merging just because they share players.
+  const rosterSigMap = {}; // matchScoped rosterKey → primary lineupMap key
+  Object.entries(lineupMap).forEach(([key, lu]) => {
+    (lu.matchRosters || []).forEach(sig => {
+      if (!rosterSigMap[sig]) {
+        rosterSigMap[sig] = key;
+      } else if (rosterSigMap[sig] !== key) {
+        // Two different team names played the exact same lineup in the same match — merge
+        const primaryKey = rosterSigMap[sig];
+        if (!lineupMap[primaryKey] || !lineupMap[key]) return; // already merged
+        const primary   = lineupMap[primaryKey];
+        const secondary = lineupMap[key];
+        primary.wins          += secondary.wins;
+        primary.losses        += secondary.losses;
+        primary.draws         += secondary.draws;
+        primary.roundsFor     += secondary.roundsFor;
+        primary.roundsAgainst += secondary.roundsAgainst;
+        secondary.aliases.forEach(a => primary.aliases.add(a));
+        secondary.playerSet.forEach(p => primary.playerSet.add(p));
+        Object.entries(secondary.maps).forEach(([map, {w,l}]) => {
+          if (!primary.maps[map]) primary.maps[map] = {w:0, l:0};
+          primary.maps[map].w += w;
+          primary.maps[map].l += l;
         });
-
-        if (shouldMerge) {
-          la.wins          += lb.wins;
-          la.losses        += lb.losses;
-          la.draws         += lb.draws;
-          la.roundsFor     += lb.roundsFor;
-          la.roundsAgainst += lb.roundsAgainst;
-          lb.aliases.forEach(a => la.aliases.add(a));
-          lb.playerSet.forEach(p => la.playerSet.add(p));
-          lb.matchRosters.forEach(r => { if (!la.matchRosters.includes(r)) la.matchRosters.push(r); });
-          Object.entries(lb.maps).forEach(([map, {w,l}]) => {
-            if (!la.maps[map]) la.maps[map] = {w:0, l:0};
-            la.maps[map].w += w;
-            la.maps[map].l += l;
-          });
-          const at = la.wins + la.losses + la.draws;
-          const bt = lb.wins + lb.losses + lb.draws;
-          if (bt > at) la.teamName = lb.teamName;
-          delete lineupMap[kb];
-          merged = true;
-          break outer;
-        }
+        // Prefer the name with more matches as display name
+        const pt = primary.wins + primary.losses + primary.draws;
+        const st = secondary.wins + secondary.losses + secondary.draws;
+        if (st > pt) primary.teamName = secondary.teamName;
+        delete lineupMap[key];
       }
-    }
-  }
+    });
+  });
 
   // Re-flatten names after potential merges
   Object.values(lineupMap).forEach(lu => { lu.names = [...lu.playerSet].sort(); });
@@ -2971,11 +2974,12 @@ async function _submitPassword() {
 
 async function _renderEditForm() {
   const d = window._currentMatchData || {};
-  const meta    = d.meta    || {};
-  const players = d.players || [];
-  const maps    = d.maps    || [];
+  const meta           = d.meta    || {};
+  const players        = d.players || [];
+  const maps           = d.maps    || [];
+  const missingPlayers = d.missing_players || [];   // from backend: MatchZy-only rows
 
-  // Load any existing edits from DB
+  // Load existing edits from DB
   let existingEdits = {};
   try {
     const er = await fetch(`/api/match/${_editMatchId}/edits`);
@@ -2983,130 +2987,146 @@ async function _renderEditForm() {
     existingEdits = ed.edits || {};
   } catch(e) {}
 
-  // Helper: get edited value or fall back to current value
+  // Helper: navigate dotted path in existingEdits
   const ev = (editPath, currentVal) => {
-    // editPath like 'team1.name' or 'players.STEAMID.kills'
     const parts = editPath.split('.');
     let obj = existingEdits;
     for (const p of parts) { obj = (obj||{})[p]; }
     return obj !== undefined ? obj : (currentVal ?? '');
   };
 
-  const t1name = ev('team1.name', meta.team1_name);
-  const t2name = ev('team2.name', meta.team2_name);
+  const t1name  = ev('team1.name',  meta.team1_name);
+  const t2name  = ev('team2.name',  meta.team2_name);
   const t1score = ev('team1.score', meta.team1_score);
   const t2score = ev('team2.score', meta.team2_score);
-  const mapname = ev('map', maps[0]?.mapname || '');
-  const winner  = ev('winner', meta.winner || '');
+  const mapname = ev('map',         maps[0]?.mapname || '');
+  const winner  = ev('winner',      meta.winner || '');
 
-  // Player rows — build from players array, supporting edits keyed by steamid64
-  const playerRows = players.map(p => {
+  // Added players already in edits (persisted from previous save)
+  const alreadyAdded = existingEdits.added_players || [];
+  const alreadyAddedSids = new Set(alreadyAdded.map(p => String(p.steamid64 || '')));
+
+  // Build player section rows (existing + already-added players)
+  const mkPlayerRow = (p, isAdded = false) => {
     const sid = String(p.steamid64 || p.steam_id || '');
-    const pe = (existingEdits.players || {})[sid] || {};
-    const gv = (field, fallback) => pe[field] !== undefined ? pe[field] : (p[field] ?? fallback ?? '');
-    return `<div class="edit-player-row" data-sid="${esc(sid)}" data-team="${esc(p.team||'')}">
-      <div class="edit-player-name-cell" title="${esc(p.name||'')}">
-        <input type="text" value="${esc(gv('name', p.name))}" data-field="name" placeholder="Name" style="width:100%;text-align:left">
+    const pe  = (existingEdits.players || {})[sid] || {};
+    const gv  = (field, fallback) => pe[field] !== undefined ? pe[field] : (p[field] ?? fallback ?? '');
+    const addedClass = isAdded ? ' is-added' : '';
+    const removeBtn  = isAdded
+      ? `<button class="remove-player-btn" title="Remove from scoreboard"
+           onclick="_removeAddedPlayer('${sid}',this)" type="button">✕</button>`
+      : '';
+    return `<div class="edit-player-row${addedClass}" data-sid="${esc(sid)}" data-team="${esc(p.team||'')}" data-is-added="${isAdded}">
+      <div class="edit-player-name-cell">
+        <input type="text" value="${esc(gv('name', p.name))}" data-field="name" placeholder="Name" style="width:130px;text-align:left">
       </div>
-      <input type="number" value="${esc(gv('kills', p.kills))}"    data-field="kills"    min="0" placeholder="K">
-      <input type="number" value="${esc(gv('deaths', p.deaths))}"  data-field="deaths"   min="0" placeholder="D">
-      <input type="number" value="${esc(gv('assists', p.assists))}" data-field="assists"  min="0" placeholder="A">
-      <input type="number" value="${esc(gv('damage', p.damage))}"  data-field="damage"   min="0" placeholder="DMG">
-      <input type="number" value="${esc(gv('rating', p.rating))}"  data-field="rating"   step="0.01" placeholder="Rtg">
-      <input type="number" value="${esc(gv('kast', p.kast))}"      data-field="kast"     step="0.1"  placeholder="KAST">
+      <input type="number" value="${esc(gv('kills',          p.kills))}"          data-field="kills"    min="0" placeholder="K">
+      <input type="number" value="${esc(gv('deaths',         p.deaths))}"         data-field="deaths"   min="0" placeholder="D">
+      <input type="number" value="${esc(gv('assists',        p.assists))}"        data-field="assists"  min="0" placeholder="A">
+      <input type="number" value="${esc(gv('damage',         p.damage))}"         data-field="damage"   min="0" placeholder="DMG">
+      <input type="number" value="${esc(gv('rating',         p.rating))}"         data-field="rating"   step="0.01" placeholder="Rtg">
+      <input type="number" value="${esc(gv('kast',           p.kast))}"           data-field="kast"     step="0.1"  placeholder="KAST">
+      ${removeBtn}
     </div>`;
-  }).join('');
+  };
 
-  const team1Players = players.filter(p=>String(p.team||'').toLowerCase()==='team1');
-  const team2Players = players.filter(p=>String(p.team||'').toLowerCase()==='team2');
-
-  const mkPlayerSection = (teamPlayers, teamLabel, teamColor, teamKey) => {
-    const existingNewPlayers = (existingEdits.new_players || []).filter(np => np.team === teamKey);
-    const rows = teamPlayers.map(p => {
-      const sid = String(p.steamid64 || p.steam_id || '');
-      const pe = (existingEdits.players || {})[sid] || {};
-      const gv = (field, fallback) => pe[field] !== undefined ? pe[field] : (p[field] ?? fallback ?? '');
-      return `<div class="edit-player-row" data-sid="${esc(sid)}" data-team="${esc(p.team||'')}">
-        <div class="edit-player-name-cell">
-          <input type="text" value="${esc(gv('name', p.name))}" data-field="name" placeholder="Name" style="width:130px;text-align:left">
-        </div>
-        <input type="number" value="${esc(gv('kills', p.kills))}"    data-field="kills"    min="0" placeholder="K">
-        <input type="number" value="${esc(gv('deaths', p.deaths))}"  data-field="deaths"   min="0" placeholder="D">
-        <input type="number" value="${esc(gv('assists', p.assists))}" data-field="assists"  min="0" placeholder="A">
-        <input type="number" value="${esc(gv('damage', p.damage))}"  data-field="damage"   min="0" placeholder="DMG">
-        <input type="number" value="${esc(gv('rating', p.rating))}"  data-field="rating"   step="0.01" placeholder="Rtg">
-        <input type="number" value="${esc(gv('kast', p.kast))}"      data-field="kast"     step="0.1"  placeholder="KAST">
-      </div>`;
-    }).join('');
-    const newRows = existingNewPlayers.map((np, i) => {
-      const tempId = `new_${teamKey}_${i}`;
-      return `<div class="edit-player-row edit-new-player-row" data-sid="${esc(tempId)}" data-team="${esc(teamKey)}" data-isnew="1">
-        <div class="edit-player-new-cell">
-          <input type="text"   value="${esc(np.steamid64||'')}" data-field="steamid64" placeholder="SteamID64" style="width:110px;text-align:left;font-size:10px">
-          <input type="text"   value="${esc(np.name||'')}"      data-field="name"      placeholder="Name"       style="width:100px;text-align:left">
-        </div>
-        <input type="number" value="${esc(np.kills||'')}"    data-field="kills"    min="0" placeholder="K">
-        <input type="number" value="${esc(np.deaths||'')}"   data-field="deaths"   min="0" placeholder="D">
-        <input type="number" value="${esc(np.assists||'')}"  data-field="assists"  min="0" placeholder="A">
-        <input type="number" value="${esc(np.damage||'')}"   data-field="damage"   min="0" placeholder="DMG">
-        <input type="number" value="${esc(np.rating||'')}"   data-field="rating"   step="0.01" placeholder="Rtg">
-        <input type="number" value="${esc(np.kast||'')}"     data-field="kast"     step="0.1"  placeholder="KAST">
-        <button class="edit-remove-player-btn" title="Remove player" onclick="this.closest('.edit-player-row').remove()">✕</button>
-      </div>`;
-    }).join('');
+  const mkPlayerSection = (teamPlayers, addedForTeam, teamLabel, teamColor) => {
+    const allRows = [
+      ...teamPlayers.map(p => mkPlayerRow(p, false)),
+      ...addedForTeam.map(p => mkPlayerRow(p, true)),
+    ].join('');
+    if (!allRows) return '';
+    const colCount = teamPlayers.length || addedForTeam.length;
     return `
-      <div class="edit-section" id="edit-section-${teamKey}" data-team-name="${esc(teamLabel.replace(/ Players$/,''))}">
+      <div class="edit-section" id="section-${teamLabel.replace(/\s+/g,'-')}">
         <div class="edit-section-title" style="color:var(${teamColor})">${teamLabel}</div>
-        <div class="edit-player-hdr edit-player-hdr-new">
-          <div>Player / SteamID</div><div>K</div><div>D</div><div>A</div><div>DMG</div><div>Rating</div><div>KAST</div><div></div>
+        <div class="edit-player-hdr" style="grid-template-columns:140px repeat(6,1fr) 22px">
+          <div>Player</div><div>K</div><div>D</div><div>A</div><div>DMG</div><div>Rating</div><div>KAST</div><div></div>
         </div>
-        <div id="edit-players-${teamKey}">
-          ${rows}
-          ${newRows}
-        </div>
-        <div class="edit-add-player-bar">
-          <button class="edit-add-player-btn" onclick="_addPlayerRow('${teamKey}')">+ Add Player</button>
-          <button class="edit-fetch-btn" onclick="_fetchMissingPlayers('${teamKey}')" id="fetch-btn-${teamKey}">⬇ Fetch Missing from DB</button>
-        </div>
+        <div id="rows-${teamLabel.replace(/\s+/g,'-')}">${allRows}</div>
       </div>`;
   };
 
+  const team1Players   = players.filter(p => String(p.team||'').toLowerCase() === 'team1');
+  const team2Players   = players.filter(p => String(p.team||'').toLowerCase() === 'team2');
+  const added1         = alreadyAdded.filter(p => String(p.team||'').toLowerCase() === 'team1');
+  const added2         = alreadyAdded.filter(p => String(p.team||'').toLowerCase() === 'team2');
+
+  // Missing players panel — those MatchZy found but fshost missed, not yet added
+  const stillMissing = missingPlayers.filter(mp => !alreadyAddedSids.has(String(mp.steamid64 || '')));
+  const missingPanel = stillMissing.length ? `
+    <div class="edit-section">
+      <div class="edit-section-title" style="display:flex;align-items:center;gap:8px">
+        <span>Players Not in Scoreboard</span>
+        <span class="missing-badge">${stillMissing.length}</span>
+      </div>
+      <div style="font-size:11px;color:var(--muted2);margin-bottom:10px">
+        These players were found in MatchZy but not captured by fshost (disconnected early).
+        Click <strong style="color:var(--white)">Add</strong> to include them in the scoreboard.
+      </div>
+      <div class="missing-players-list">
+        ${stillMissing.map(mp => {
+          const sid  = String(mp.steamid64 || '');
+          const kd   = mp.deaths > 0 ? (mp.kills/mp.deaths).toFixed(2) : mp.kills;
+          const team = String(mp.team||'').toLowerCase();
+          return `<div class="missing-player-row" id="mpr-${esc(sid)}">
+            <div class="missing-player-info">
+              <div class="missing-player-name">${esc(mp.name||'Unknown')}</div>
+              <div class="missing-player-stats">
+                ${mp.kills}K / ${mp.deaths}D / ${mp.assists}A &nbsp;·&nbsp; KD ${kd}
+                &nbsp;·&nbsp; ${mp.damage} DMG
+                ${mp.adr ? '&nbsp;·&nbsp; ADR ' + mp.adr : ''}
+              </div>
+            </div>
+            <select class="missing-player-team-select" id="mpt-${esc(sid)}">
+              <option value="team1" ${team==='team1'?'selected':''}>${esc(t1name)}</option>
+              <option value="team2" ${team==='team2'?'selected':''}>${esc(t2name)}</option>
+            </select>
+            <button class="add-player-btn" onclick="_addMissingPlayer(${JSON.stringify(mp).replace(/"/g,'&quot;')}, '${esc(sid)}')" type="button">
+              + Add
+            </button>
+          </div>`;
+        }).join('')}
+      </div>
+      <div class="manual-add-row">
+        <input type="text" id="manual-name" placeholder="Or type player name manually…">
+        <select class="missing-player-team-select" id="manual-team">
+          <option value="team1">${esc(t1name)}</option>
+          <option value="team2">${esc(t2name)}</option>
+        </select>
+        <button class="manual-add-btn" onclick="_addManualPlayer()" type="button">+ Add Blank Row</button>
+      </div>
+    </div>` : `
+    <div class="edit-section">
+      <div class="manual-add-row" style="padding:0;border:none;margin-top:-8px">
+        <input type="text" id="manual-name" placeholder="Add player by name manually…">
+        <select class="missing-player-team-select" id="manual-team">
+          <option value="team1">${esc(t1name)}</option>
+          <option value="team2">${esc(t2name)}</option>
+        </select>
+        <button class="manual-add-btn" onclick="_addManualPlayer()" type="button">+ Add Row</button>
+      </div>
+    </div>`;
+
   document.getElementById('edit-modal-title').textContent = `Edit Match #${_editMatchId}`;
   document.getElementById('edit-modal-content').innerHTML = `
-    <div class="edit-modal-body" style="max-height:calc(80vh - 120px);overflow-y:auto">
+    <div class="edit-modal-body" id="edit-modal-body" style="max-height:calc(85vh - 120px);overflow-y:auto">
 
       <div class="edit-section">
         <div class="edit-section-title">Match Info</div>
         <div class="edit-grid">
-          <div class="edit-field">
-            <label>Team 1 Name</label>
-            <input type="text" id="ef-t1name" value="${esc(t1name)}">
-          </div>
-          <div class="edit-field">
-            <label>Team 2 Name</label>
-            <input type="text" id="ef-t2name" value="${esc(t2name)}">
-          </div>
-          <div class="edit-field">
-            <label>Team 1 Score</label>
-            <input type="number" id="ef-t1score" value="${esc(t1score)}" min="0">
-          </div>
-          <div class="edit-field">
-            <label>Team 2 Score</label>
-            <input type="number" id="ef-t2score" value="${esc(t2score)}" min="0">
-          </div>
-          <div class="edit-field">
-            <label>Map</label>
-            <input type="text" id="ef-map" value="${esc(mapname)}">
-          </div>
-          <div class="edit-field">
-            <label>Winner</label>
-            <input type="text" id="ef-winner" value="${esc(winner)}">
-          </div>
+          <div class="edit-field"><label>Team 1 Name</label><input type="text" id="ef-t1name" value="${esc(t1name)}"></div>
+          <div class="edit-field"><label>Team 2 Name</label><input type="text" id="ef-t2name" value="${esc(t2name)}"></div>
+          <div class="edit-field"><label>Team 1 Score</label><input type="number" id="ef-t1score" value="${esc(t1score)}" min="0"></div>
+          <div class="edit-field"><label>Team 2 Score</label><input type="number" id="ef-t2score" value="${esc(t2score)}" min="0"></div>
+          <div class="edit-field"><label>Map</label><input type="text" id="ef-map" value="${esc(mapname)}"></div>
+          <div class="edit-field"><label>Winner</label><input type="text" id="ef-winner" value="${esc(winner)}"></div>
         </div>
       </div>
 
-      ${mkPlayerSection(team1Players, t1name + ' Players', '--ct', 'team1')}
-      ${mkPlayerSection(team2Players, t2name + ' Players', '--t', 'team2')}
+      ${mkPlayerSection(team1Players, added1, t1name + ' Players', '--ct')}
+      ${mkPlayerSection(team2Players, added2, t2name + ' Players', '--t')}
+      ${missingPanel}
 
     </div>
     <div class="edit-modal-footer">
@@ -3114,215 +3134,174 @@ async function _renderEditForm() {
       <span class="edit-status" id="edit-status"></span>
       <button class="edit-save-btn" id="edit-save-btn" onclick="_saveEdits()">Save Changes</button>
     </div>`;
+
+  // Store added players state in memory for this session
+  window._pendingAddedPlayers = [...alreadyAdded];
 }
 
-async function _fetchMissingPlayers(teamKey) {
-  const btn = document.getElementById(`fetch-btn-${teamKey}`);
-  if (!btn) return;
-  const origText = btn.textContent;
-  btn.disabled = true;
-  btn.textContent = '⏳ Fetching…';
+// ── Add/remove player helpers ─────────────────────────────────────────────────
 
-  try {
-    // Build lookup params from raw match data (unaffected by team name edits)
-    const rawMeta    = (window._currentMatchData || {}).meta || {};
-    const rawPlayers = (window._currentMatchData || {}).players || [];
-    const knownSids  = rawPlayers
-      .map(p => String(p.steamid64 || p.steam_id || ''))
-      .filter(s => s && s !== '0')
-      .join(',');
-    const matchDate  = rawMeta.end_time || rawMeta.start_time || '';
-    const qParams    = new URLSearchParams();
-    if (knownSids) qParams.set('sids', knownSids);
-    if (matchDate)  qParams.set('date', matchDate);
+function _addMissingPlayer(mp, sid) {
+  const teamSel = document.getElementById(`mpt-${sid}`);
+  const team    = teamSel ? teamSel.value : (mp.team || 'team1');
+  const p       = { ...mp, team, steamid64: sid, source: 'added' };
+  _insertAddedPlayerRow(p);
+  // Hide the missing row
+  const mpr = document.getElementById(`mpr-${sid}`);
+  if (mpr) mpr.style.display = 'none';
+}
 
-    const r = await fetch(`/api/match/${_editMatchId}/matchzy_players?${qParams}`);
-    const data = await r.json();
-    if (data.error) throw new Error(data.error);
+function _addManualPlayer() {
+  const nameEl = document.getElementById('manual-name');
+  const teamEl = document.getElementById('manual-team');
+  const name   = nameEl?.value?.trim();
+  if (!name) { nameEl?.focus(); return; }
+  const team   = teamEl?.value || 'team1';
+  // Generate a temp fake steamid so the row has a unique key
+  const fakeSid = 'manual_' + Date.now();
+  const p = { steamid64: fakeSid, name, team, kills:0, deaths:0, assists:0, damage:0,
+               head_shot_kills:0, rating:null, kast:null, source:'added' };
+  _insertAddedPlayerRow(p);
+  if (nameEl) nameEl.value = '';
+}
 
-    // Get the real team name from the section's data attribute (e.g. "DYJAJA")
-    const section = document.getElementById(`edit-section-${teamKey}`);
-    const dbTeamName = (section ? section.dataset.teamName : '') || '';
+function _insertAddedPlayerRow(p) {
+  const sid     = String(p.steamid64 || '');
+  const team    = String(p.team || 'team1').toLowerCase();
+  const isTeam1 = team === 'team1';
 
-    // The DB stores actual team names in the team column — match case-insensitively
-    const allPlayers = data.players || [];
-    const mzPlayers = allPlayers.filter(p => {
-      const pt = String(p.team || '').toLowerCase();
-      const tn = dbTeamName.toLowerCase();
-      return pt === tn;
-    });
+  // Find the right section container
+  const d         = window._currentMatchData || {};
+  const meta      = d.meta || {};
+  const t1name    = document.getElementById('ef-t1name')?.value || meta.team1_name || 'Team 1';
+  const t2name    = document.getElementById('ef-t2name')?.value || meta.team2_name || 'Team 2';
+  const teamLabel = isTeam1 ? (t1name + ' Players') : (t2name + ' Players');
+  const sectionId = 'rows-' + teamLabel.replace(/\s+/g,'-');
+  let container   = document.getElementById(sectionId);
 
-    if (!mzPlayers.length) {
-      // If team name match failed, log what we got so it's debuggable
-      const teams = [...new Set(allPlayers.map(p => p.team))].join(', ');
-      const msg = allPlayers.length
-        ? `✕ No players for "${dbTeamName}" (DB has: ${teams || '?'})`
-        : '✕ No DB data for this match';
-      btn.textContent = msg;
-      btn.style.color = 'var(--loss)';
-      setTimeout(() => { btn.textContent = origText; btn.style.color = ''; btn.disabled = false; }, 4000);
-      return;
-    }
+  // If that section doesn't exist yet (team had 0 players), create it
+  if (!container) {
+    const color  = isTeam1 ? '--ct' : '--t';
+    const body   = document.getElementById('edit-modal-body');
+    const missSec = body?.querySelector('.missing-players-panel') || body?.lastElementChild;
+    const sec    = document.createElement('div');
+    sec.className = 'edit-section';
+    sec.innerHTML = `
+      <div class="edit-section-title" style="color:var(${color})">${teamLabel}</div>
+      <div class="edit-player-hdr" style="grid-template-columns:140px repeat(6,1fr) 22px">
+        <div>Player</div><div>K</div><div>D</div><div>A</div><div>DMG</div><div>Rating</div><div>KAST</div><div></div>
+      </div>
+      <div id="${sectionId}"></div>`;
+    body?.insertBefore(sec, missSec);
+    container = document.getElementById(sectionId);
+  }
 
-    // Collect steamids already present in the form (existing + already-added new rows)
-    const container = document.getElementById(`edit-players-${teamKey}`);
-    const existingSids = new Set();
-    container.querySelectorAll('.edit-player-row').forEach(row => {
-      if (!row.dataset.isnew) {
-        existingSids.add(row.dataset.sid);
-      } else {
-        const inp = row.querySelector('input[data-field="steamid64"]');
-        if (inp && inp.value.trim()) existingSids.add(inp.value.trim());
-      }
-    });
+  const gv = (field) => p[field] ?? '';
+  const row = document.createElement('div');
+  row.className  = 'edit-player-row is-added';
+  row.dataset.sid       = sid;
+  row.dataset.team      = team;
+  row.dataset.isAdded   = 'true';
+  row.innerHTML = `
+    <div class="edit-player-name-cell">
+      <input type="text" value="${esc(String(gv('name')))}" data-field="name" placeholder="Name" style="width:130px;text-align:left">
+    </div>
+    <input type="number" value="${esc(String(gv('kills')||0))}"    data-field="kills"    min="0" placeholder="K">
+    <input type="number" value="${esc(String(gv('deaths')||0))}"   data-field="deaths"   min="0" placeholder="D">
+    <input type="number" value="${esc(String(gv('assists')||0))}"  data-field="assists"  min="0" placeholder="A">
+    <input type="number" value="${esc(String(gv('damage')||0))}"   data-field="damage"   min="0" placeholder="DMG">
+    <input type="number" value="${esc(String(gv('rating')||''))}"  data-field="rating"   step="0.01" placeholder="Rtg">
+    <input type="number" value="${esc(String(gv('kast')||''))}"    data-field="kast"     step="0.1"  placeholder="KAST">
+    <button class="remove-player-btn" title="Remove" onclick="_removeAddedPlayer('${sid}',this)" type="button">✕</button>`;
+  container.appendChild(row);
 
-    const missing = mzPlayers.filter(p => !existingSids.has(String(p.steamid64 || '')));
+  // Track in pending state
+  if (!window._pendingAddedPlayers) window._pendingAddedPlayers = [];
+  window._pendingAddedPlayers = window._pendingAddedPlayers.filter(ap => String(ap.steamid64) !== sid);
+  window._pendingAddedPlayers.push({ ...p });
+}
 
-    if (!missing.length) {
-      btn.textContent = '✓ All DB players already present';
-      btn.style.color = 'var(--win)';
-      setTimeout(() => { btn.textContent = origText; btn.style.color = ''; btn.disabled = false; }, 2500);
-      return;
-    }
-
-    // Add a pre-filled row for each missing player
-    missing.forEach(mp => {
-      const tempId = `new_${teamKey}_${Date.now()}_${Math.random().toString(36).slice(2,6)}`;
-      const row = document.createElement('div');
-      row.className = 'edit-player-row edit-new-player-row edit-new-player-prefilled';
-      row.dataset.sid  = tempId;
-      row.dataset.team = teamKey;
-      row.dataset.isnew = '1';
-      const v = f => (mp[f] !== null && mp[f] !== undefined) ? mp[f] : '';
-      row.innerHTML = `
-        <div class="edit-player-new-cell">
-          <input type="text" data-field="steamid64" value="${esc(String(mp.steamid64||''))}" placeholder="SteamID64" style="width:110px;text-align:left;font-size:10px">
-          <input type="text" data-field="name"      value="${esc(mp.name||'')}"              placeholder="Name"       style="width:100px;text-align:left">
-        </div>
-        <input type="number" data-field="kills"   value="${v('kills')}"   min="0"     placeholder="K">
-        <input type="number" data-field="deaths"  value="${v('deaths')}"  min="0"     placeholder="D">
-        <input type="number" data-field="assists" value="${v('assists')}"  min="0"     placeholder="A">
-        <input type="number" data-field="damage"  value="${v('damage')}"   min="0"     placeholder="DMG">
-        <input type="number" data-field="rating"  value="${v('rating')}"   step="0.01" placeholder="Rtg"  title="Estimated from K/D/A/DMG/rounds" style="${v('rating') ? 'border-color:rgba(var(--orange-rgb),.4)' : ''}">
-        <input type="number" data-field="kast"    value="${v('kast')}"     step="0.1"  placeholder="KAST" title="Estimated from K/D/A/rounds"      style="${v('kast')   ? 'border-color:rgba(var(--orange-rgb),.4)' : ''}">
-        <button class="edit-remove-player-btn" title="Remove player" onclick="this.closest('.edit-player-row').remove()">✕</button>`;
-      container.appendChild(row);
-    });
-
-    btn.textContent = `✓ Added ${missing.length} player${missing.length > 1 ? 's' : ''} — Rating & KAST estimated, review before saving`;
-    btn.style.color = 'var(--win)';
-    setTimeout(() => { btn.textContent = origText; btn.style.color = ''; btn.disabled = false; }, 4000);
-
-  } catch(e) {
-    btn.textContent = '✕ ' + e.message;
-    btn.style.color = 'var(--loss)';
-    setTimeout(() => { btn.textContent = origText; btn.style.color = ''; btn.disabled = false; }, 3000);
+function _removeAddedPlayer(sid, btn) {
+  const row = btn.closest('.edit-player-row');
+  if (row) row.remove();
+  // Re-show in missing panel if applicable
+  const mpr = document.getElementById(`mpr-${sid}`);
+  if (mpr) mpr.style.display = '';
+  // Remove from pending
+  if (window._pendingAddedPlayers) {
+    window._pendingAddedPlayers = window._pendingAddedPlayers.filter(
+      ap => String(ap.steamid64) !== sid
+    );
   }
 }
 
-function _addPlayerRow(teamKey) {
-  const container = document.getElementById(`edit-players-${teamKey}`);
-  if (!container) return;
-  const idx = container.querySelectorAll('.edit-new-player-row').length;
-  const tempId = `new_${teamKey}_${Date.now()}`;
-  const row = document.createElement('div');
-  row.className = 'edit-player-row edit-new-player-row';
-  row.dataset.sid  = tempId;
-  row.dataset.team = teamKey;
-  row.dataset.isnew = '1';
-  row.innerHTML = `
-    <div class="edit-player-new-cell">
-      <input type="text" data-field="steamid64" placeholder="SteamID64" style="width:110px;text-align:left;font-size:10px">
-      <input type="text" data-field="name"      placeholder="Name"       style="width:100px;text-align:left">
-    </div>
-    <input type="number" data-field="kills"   min="0"    placeholder="K">
-    <input type="number" data-field="deaths"  min="0"    placeholder="D">
-    <input type="number" data-field="assists" min="0"    placeholder="A">
-    <input type="number" data-field="damage"  min="0"    placeholder="DMG">
-    <input type="number" data-field="rating"  step="0.01" placeholder="Rtg">
-    <input type="number" data-field="kast"    step="0.1"  placeholder="KAST">
-    <button class="edit-remove-player-btn" title="Remove player" onclick="this.closest('.edit-player-row').remove()">✕</button>`;
-  container.appendChild(row);
-  row.querySelector('input[data-field="steamid64"]').focus();
-}
-
 async function _saveEdits() {
-  const btn = document.getElementById('edit-save-btn');
+  const btn      = document.getElementById('edit-save-btn');
   const statusEl = document.getElementById('edit-status');
-  btn.disabled = true;
+  btn.disabled   = true;
   statusEl.textContent = 'Saving…';
-  statusEl.className = 'edit-status';
+  statusEl.className   = 'edit-status';
 
   try {
-    // Build edits object
     const edits = {
-      team1: {
-        name:  document.getElementById('ef-t1name')?.value,
-        score: Number(document.getElementById('ef-t1score')?.value),
-      },
-      team2: {
-        name:  document.getElementById('ef-t2name')?.value,
-        score: Number(document.getElementById('ef-t2score')?.value),
-      },
+      team1:  { name: document.getElementById('ef-t1name')?.value,
+                score: Number(document.getElementById('ef-t1score')?.value) },
+      team2:  { name: document.getElementById('ef-t2name')?.value,
+                score: Number(document.getElementById('ef-t2score')?.value) },
       map:    document.getElementById('ef-map')?.value,
       winner: document.getElementById('ef-winner')?.value,
       players: {},
+      added_players: [],
     };
 
-    // Collect player edits from all rows
+    // Collect edits from ALL player rows (existing + added)
     document.querySelectorAll('#edit-modal-content .edit-player-row').forEach(row => {
-      const sid = row.dataset.sid;
+      const sid     = row.dataset.sid;
+      const isAdded = row.dataset.isAdded === 'true';
       if (!sid) return;
 
-      if (row.dataset.isnew) {
-        // New player row — collect steamid64 separately and add to new_players array
-        const steamidInp = row.querySelector('input[data-field="steamid64"]');
-        const steamid64 = steamidInp ? steamidInp.value.trim() : '';
-        if (!steamid64) return; // skip rows without a steamid
-        const team = row.dataset.team || '';
-        const npEntry = { steamid64, team };
-        row.querySelectorAll('input[data-field]').forEach(inp => {
-          const field = inp.dataset.field;
-          if (field === 'steamid64') return;
-          const val = inp.type === 'number' ? (inp.value !== '' ? Number(inp.value) : null) : inp.value;
-          if (val !== null && val !== '') npEntry[field] = val;
+      const pEdit = {};
+      row.querySelectorAll('input[data-field]').forEach(inp => {
+        const field = inp.dataset.field;
+        const val   = inp.type === 'number'
+          ? (inp.value !== '' ? Number(inp.value) : null)
+          : inp.value;
+        if (val !== null && val !== '') pEdit[field] = val;
+      });
+
+      if (isAdded) {
+        // Build the full added_player object
+        const basePlayer = (window._pendingAddedPlayers || []).find(
+          ap => String(ap.steamid64) === sid
+        ) || {};
+        edits.added_players.push({
+          ...basePlayer,
+          ...pEdit,
+          steamid64: sid,
+          team:      row.dataset.team,
+          source:    'added',
         });
-        edits.new_players = edits.new_players || [];
-        edits.new_players.push(npEntry);
       } else {
-        const pEdit = {};
-        row.querySelectorAll('input[data-field]').forEach(inp => {
-          const field = inp.dataset.field;
-          const val = inp.type === 'number' ? (inp.value !== '' ? Number(inp.value) : null) : inp.value;
-          if (val !== null && val !== '') pEdit[field] = val;
-        });
         if (Object.keys(pEdit).length) edits.players[sid] = pEdit;
       }
     });
 
     const r = await fetch(`/api/match/${_editMatchId}/edit`, {
       method: 'PATCH',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${_editToken}`,
-      },
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${_editToken}` },
       body: JSON.stringify({edits}),
     });
     const data = await r.json();
     if (data.ok) {
       statusEl.textContent = '✓ Saved!';
-      statusEl.className = 'edit-status ok';
-      // Reload match to show edited data
-      setTimeout(() => {
-        closeEditModal();
-        loadMatch(_editMatchId);
-      }, 800);
+      statusEl.className   = 'edit-status ok';
+      setTimeout(() => { closeEditModal(); loadMatch(_editMatchId); }, 800);
     } else {
       throw new Error(data.error || 'Save failed');
     }
   } catch(e) {
     statusEl.textContent = '✕ ' + e.message;
-    statusEl.className = 'edit-status err';
+    statusEl.className   = 'edit-status err';
     btn.disabled = false;
   }
 }
