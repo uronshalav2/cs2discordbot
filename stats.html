@@ -530,6 +530,32 @@ nav{background:var(--nav-bg);border-bottom:2px solid var(--nav-border);display:f
 .win-rate-ring{position:relative;width:46px;height:46px;flex-shrink:0}
 .win-rate-ring svg{transform:rotate(-90deg)}
 .win-rate-ring-label{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:'Rajdhani',sans-serif;font-weight:800;font-size:11px;color:var(--white)}
+
+/* ── Search bar ──────────────────────────────────────────────────────────── */
+.search-wrap{position:relative;margin-bottom:16px}
+.search-input{width:100%;box-sizing:border-box;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:10px 16px 10px 40px;font-family:'Rajdhani',sans-serif;font-size:15px;color:var(--white);outline:none;transition:border-color .2s,box-shadow .2s}
+.search-input:focus{border-color:rgba(var(--orange-rgb),.5);box-shadow:0 0 0 3px rgba(var(--orange-rgb),.08)}
+.search-icon{position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--muted2);pointer-events:none;width:16px;height:16px}
+.search-results{position:absolute;top:calc(100% + 4px);left:0;right:0;background:var(--card-bg);border:1px solid rgba(var(--orange-rgb),.3);border-radius:6px;z-index:200;max-height:400px;overflow-y:auto;box-shadow:0 8px 32px rgba(0,0,0,.5)}
+.search-section-hd{padding:6px 14px;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--orange);background:var(--table-head-bg);border-bottom:1px solid var(--border)}
+.search-row{display:flex;align-items:center;gap:10px;padding:9px 14px;cursor:pointer;border-bottom:1px solid var(--border);transition:background .12s}
+.search-row:last-child{border-bottom:none}
+.search-row:hover{background:rgba(var(--orange-rgb),.06)}
+.search-row-title{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:14px;color:#fff}
+.search-row-sub{font-size:11px;color:var(--muted2)}
+/* ── Team H2H ─────────────────────────────────────────────────────────────── */
+.th2h-team-btn{flex:1;padding:10px 14px;background:var(--surface);border:1px solid var(--border);border-radius:5px;cursor:pointer;transition:all .15s;min-width:0}
+.th2h-team-btn:hover,.th2h-team-btn.active{border-color:rgba(var(--orange-rgb),.5);background:rgba(var(--orange-rgb),.06)}
+.th2h-slot{flex:1;display:flex;flex-direction:column;align-items:center;gap:8px;padding:14px}
+.th2h-score-box{background:var(--surface2);border-radius:8px;padding:12px 24px;text-align:center;border:1px solid var(--border)}
+.th2h-match-row{display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .12s}
+.th2h-match-row:hover{background:rgba(var(--orange-rgb),.04)}
+.th2h-match-row:last-child{border-bottom:none}
+/* ── Player map stats ─────────────────────────────────────────────────────── */
+.map-stat-row{display:flex;align-items:center;gap:12px;padding:10px 14px;border-bottom:1px solid var(--border);position:relative;overflow:hidden}
+.map-stat-row:last-child{border-bottom:none}
+.map-stat-bg{position:absolute;inset:0;object-fit:cover;opacity:.07;width:100%;height:100%;pointer-events:none}
+.map-stat-content{position:relative;z-index:1;display:flex;align-items:center;gap:12px;width:100%}
 </style>
 </head>
 <body>
@@ -561,6 +587,7 @@ nav{background:var(--nav-bg);border-bottom:2px solid var(--nav-border);display:f
       </div>
       <div class="tab-dropdown">
         <div class="tab-dd-item" data-p="h2h" onclick="_navStack=[];go('h2h')">Head-to-Head</div>
+        <div class="tab-dd-item" data-p="teamh2h" onclick="_navStack=[];go('teamh2h')">Team vs Team</div>
         <div class="tab-dd-item" data-p="predict" onclick="_navStack=[];go('predict')">Predict</div>
       </div>
     </div>
@@ -571,6 +598,12 @@ nav{background:var(--nav-bg);border-bottom:2px solid var(--nav-border);display:f
     <div class="tab-indicator" id="tab-indicator"></div>
   </div>
   <div class="nav-right">
+    <!-- Search -->
+    <div style="position:relative" id="search-wrap-nav">
+      <button onclick="toggleSearchOverlay()" title="Search" style="background:transparent;border:none;cursor:pointer;padding:6px;color:var(--muted2);display:flex;align-items:center;transition:color .2s" onmouseover="this.style.color='var(--orange)'" onmouseout="this.style.color='var(--muted2)'">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      </button>
+    </div>
     <!-- Notification Bell -->
     <div style="position:relative" id="notif-wrap">
       <button class="notif-btn" id="notif-btn" onclick="toggleNotifDropdown()" title="Notifications" aria-label="Notifications">
@@ -613,6 +646,7 @@ nav{background:var(--nav-bg);border-bottom:2px solid var(--nav-border);display:f
 
     <div class="mobile-section">Players</div>
     <div class="mobile-tab" data-p="h2h" onclick="_navStack=[];go('h2h');closeMenu()">Head-to-Head</div>
+    <div class="mobile-tab" data-p="teamh2h" onclick="_navStack=[];go('teamh2h');closeMenu()">Team vs Team</div>
     <div class="mobile-tab" data-p="predict" onclick="_navStack=[];go('predict');closeMenu()">Predict</div>
 
     <div class="mobile-section">Files</div>
@@ -668,6 +702,19 @@ nav{background:var(--nav-bg);border-bottom:2px solid var(--nav-border);display:f
   </div>
 </div>
 
+<!-- ── Search Overlay ─────────────────────────────────────────────────────── -->
+<div id="search-overlay" style="display:none;position:fixed;inset:0;z-index:500;background:rgba(0,0,0,.7);backdrop-filter:blur(4px)" onclick="closeSearchOverlay()">
+  <div onclick="event.stopPropagation()" style="max-width:560px;margin:80px auto 0;padding:0 16px">
+    <div class="search-wrap" style="margin-bottom:0">
+      <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <input id="search-input-overlay" class="search-input" placeholder="Search players, teams, match #..." autocomplete="off"
+        oninput="onSearchInput(this.value)" onkeydown="onSearchKey(event)">
+      <div id="search-results-overlay" class="search-results" style="display:none"></div>
+    </div>
+    <div style="text-align:center;margin-top:10px;font-size:11px;color:var(--muted2);font-family:'Rajdhani',sans-serif;letter-spacing:1px">ESC to close</div>
+  </div>
+</div>
+
 <div id="app">
   <div id="p-matches" class="page-panel"></div>
   <div id="p-leaderboard" class="page-panel" style="display:none"></div>
@@ -679,6 +726,7 @@ nav{background:var(--nav-bg);border-bottom:2px solid var(--nav-border);display:f
   <div id="p-predict" class="page-panel" style="display:none"></div>
   <div id="p-player" class="page-panel" style="display:none"></div>
   <div id="p-match" class="page-panel" style="display:none"></div>
+  <div id="p-teamh2h" class="page-panel" style="display:none"></div>
 </div>
 
 <script>
@@ -732,7 +780,7 @@ function moveTabIndicator(page) {
 
   // For group pages (leaderboard, maps, specialists, h2h, predict)
   // position the indicator under the parent group label
-  const groupMap = {leaderboard:'stats',maps:'stats',specialists:'stats',team:'stats',h2h:'players',predict:'players'};
+  const groupMap = {leaderboard:'stats',maps:'stats',specialists:'stats',team:'stats',h2h:'players',predict:'players',teamh2h:'players'};
   const groupId = groupMap[page];
   if (groupId) {
     const groupLabel = document.getElementById('tgl-' + groupId);
@@ -787,7 +835,7 @@ async function apiFetch(endpoint, ghFile) {
   return ghFile && ghFile.startsWith('matches/') ? {} : [];
 }
 
-const _pages = ['matches','leaderboard','maps','h2h','specialists','demos','player','match','predict','team'];
+const _pages = ['matches','leaderboard','maps','h2h','specialists','demos','player','match','predict','team','teamh2h'];
 
 // Navigation stack — each entry is {page, params}
 let _navStack = [];
@@ -818,7 +866,7 @@ function go(page, params, back) {
     // Update dropdown items active state
     document.querySelectorAll('.tab-dd-item').forEach(function(t){ t.classList.toggle('active', t.dataset.p===page); });
     // Update group label active state
-    const groupMap = {leaderboard:'stats',maps:'stats',specialists:'stats',team:'stats',h2h:'players',predict:'players'};
+    const groupMap = {leaderboard:'stats',maps:'stats',specialists:'stats',team:'stats',h2h:'players',predict:'players',teamh2h:'players'};
     document.querySelectorAll('.tab-group-label').forEach(function(l){ l.classList.remove('group-active'); });
     if (groupMap[page]) {
       const gl = document.getElementById('tgl-'+groupMap[page]);
@@ -837,6 +885,7 @@ function go(page, params, back) {
     if(page==='match')       loadMatch(params.id);
     if(page==='predict')     loadPredict();
     if(page==='team')        loadTeam();
+    if(page==='teamh2h')    loadTeamH2H();
   }
 
   if (current && current !== page) {
@@ -1509,7 +1558,12 @@ async function loadPlayer(name) {
         </tr></thead>
         <tbody>${recentRows}</tbody>
       </table>
-    </div>` : ''}`;
+    </div>` : ''}
+    <div id="player-mapstats-section" style="display:none"></div>`;
+
+  // Load map stats async after profile renders
+  const mapStatsEl = document.getElementById('player-mapstats-section');
+  if (mapStatsEl) loadPlayerMapStats(name, mapStatsEl);
 }
 
 // ── Map Stats ─────────────────────────────────────────────────────────────────
@@ -3419,6 +3473,263 @@ async function _revertEdits() {
     statusEl.textContent = '✕ ' + e.message;
     statusEl.className = 'edit-status err';
   }
+}
+
+
+// ── SEARCH ────────────────────────────────────────────────────────────────────
+let _searchTimer = null;
+function toggleSearchOverlay() {
+  const ov = document.getElementById('search-overlay');
+  if (ov.style.display === 'none') {
+    ov.style.display = 'block';
+    setTimeout(() => document.getElementById('search-input-overlay')?.focus(), 50);
+  } else {
+    closeSearchOverlay();
+  }
+}
+function closeSearchOverlay() {
+  document.getElementById('search-overlay').style.display = 'none';
+  const inp = document.getElementById('search-input-overlay');
+  if (inp) inp.value = '';
+  const res = document.getElementById('search-results-overlay');
+  if (res) res.style.display = 'none';
+}
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeSearchOverlay(); if ((e.ctrlKey||e.metaKey) && e.key === 'k') { e.preventDefault(); toggleSearchOverlay(); } });
+
+function onSearchKey(e) {
+  if (e.key === 'Escape') closeSearchOverlay();
+}
+
+function onSearchInput(val) {
+  clearTimeout(_searchTimer);
+  const res = document.getElementById('search-results-overlay');
+  if (!val || val.trim().length < 2) { if (res) res.style.display = 'none'; return; }
+  _searchTimer = setTimeout(() => runSearch(val.trim()), 220);
+}
+
+async function runSearch(q) {
+  const res = document.getElementById('search-results-overlay');
+  if (!res) return;
+  res.style.display = 'block';
+  res.innerHTML = '<div style="padding:12px 14px;color:var(--muted2);font-size:12px">Searching...</div>';
+  try {
+    const data = await fetch('/api/search?q=' + encodeURIComponent(q)).then(r => r.json());
+    let html = '';
+    if (data.players && data.players.length) {
+      html += '<div class="search-section-hd">Players</div>';
+      html += data.players.map(p => `
+        <div class="search-row" onclick="closeSearchOverlay();go('player',{name:'${esc(p.name)}'})">
+          <div style="width:32px;height:32px;border-radius:50%;background:var(--surface2);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:11px;color:var(--muted2)">${initials(p.name)}</div>
+          <div style="flex:1;min-width:0">
+            <div class="search-row-title">${esc(p.name)}</div>
+            <div class="search-row-sub">${p.matches} matches · ${parseFloat(p.kd??0).toFixed(2)} K/D · ${parseFloat(p.adr??0).toFixed(0)} ADR</div>
+          </div>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--muted2)" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+        </div>`).join('');
+    }
+    if (data.matches && data.matches.length) {
+      html += '<div class="search-section-hd">Matches</div>';
+      html += data.matches.map(m => {
+        const map = (m.mapname||'?').replace('de_','').toUpperCase();
+        const s1 = m.team1_score ?? '?'; const s2 = m.team2_score ?? '?';
+        return `<div class="search-row" onclick="closeSearchOverlay();go('match',{id:'${m.matchid}'})">
+          <div style="font-family:'Rajdhani',sans-serif;font-weight:800;font-size:13px;color:var(--orange);flex-shrink:0;width:28px">#${m.matchid}</div>
+          <div style="flex:1;min-width:0">
+            <div class="search-row-title">${esc(m.team1_name||'?')} vs ${esc(m.team2_name||'?')}</div>
+            <div class="search-row-sub">${map} · ${s1}–${s2}</div>
+          </div>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--muted2)" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+        </div>`;
+      }).join('');
+    }
+    if (!html) html = '<div style="padding:16px 14px;text-align:center;color:var(--muted2);font-size:12px">No results for "' + esc(q) + '"</div>';
+    res.innerHTML = html;
+  } catch(e) {
+    res.innerHTML = '<div style="padding:12px 14px;color:var(--loss);font-size:12px">Search failed</div>';
+  }
+}
+
+// ── TEAM VS TEAM ──────────────────────────────────────────────────────────────
+let _teamH2HTeams = null;
+let _th2hSel = [null, null];
+
+async function loadTeamH2H() {
+  const el = document.getElementById('p-teamh2h');
+  _getSpinnerSvg().then(svg => { el.innerHTML = '<div class="loading"><span class="spin" style="display:inline-flex;align-items:center;justify-content:center;color:var(--orange)">' + svg + '</span></div>'; });
+  if (!_teamH2HTeams) {
+    _teamH2HTeams = await fetch('/api/teams').then(r => r.json()).catch(() => []);
+  }
+  renderTeamH2HPicker();
+}
+
+function renderTeamH2HPicker() {
+  const el = document.getElementById('p-teamh2h');
+  const [t1, t2] = _th2hSel;
+  const teams = _teamH2HTeams || [];
+  const canCompare = t1 && t2 && t1 !== t2;
+
+  const slotHtml = (slot, val, color) => {
+    if (val) return `<div class="th2h-slot">
+      <div style="font-size:10px;color:var(--muted2);letter-spacing:1.5px;text-transform:uppercase">Team ${slot+1}</div>
+      <div style="font-family:'Rajdhani',sans-serif;font-weight:800;font-size:18px;color:${color}">${esc(val)}</div>
+      <button onclick="_th2hSel[${slot}]=null;renderTeamH2HPicker()" class="h2h-clear-btn">✕ Clear</button>
+    </div>`;
+    return `<div class="th2h-slot">
+      <div style="font-size:10px;color:var(--muted2);letter-spacing:1.5px;text-transform:uppercase">Team ${slot+1}</div>
+      <div style="width:56px;height:56px;border-radius:8px;border:2px dashed ${color.replace(')',', .4)')};display:flex;align-items:center;justify-content:center;font-size:28px;color:var(--muted2)">?</div>
+      <div style="font-size:12px;color:var(--muted2)">Select below</div>
+    </div>`;
+  };
+
+  const teamBtns = teams.map((t, i) => {
+    const isSel0 = _th2hSel[0] === t; const isSel1 = _th2hSel[1] === t;
+    const badge = isSel0 ? `<span style="font-size:9px;padding:1px 6px;border-radius:2px;background:rgba(var(--orange-rgb),.2);border:1px solid rgba(var(--orange-rgb),.4);color:var(--orange);font-family:'Rajdhani',sans-serif;font-weight:700">T1</span>`
+      : isSel1 ? `<span style="font-size:9px;padding:1px 6px;border-radius:2px;background:rgba(91,196,245,.2);border:1px solid rgba(91,196,245,.4);color:#5bc4f5;font-family:'Rajdhani',sans-serif;font-weight:700">T2</span>` : '';
+    return `<div class="th2h-team-btn${isSel0||isSel1?' active':''}" onclick="th2hSelect('${esc(t)}')">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:6px">
+        <span style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:14px;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(t)}</span>
+        ${badge}
+      </div>
+    </div>`;
+  }).join('');
+
+  el.innerHTML = `
+    <div class="h2h-top-card" style="margin-bottom:12px">
+      <div style="display:grid;grid-template-columns:1fr 48px 1fr;align-items:center;margin-bottom:16px">
+        ${slotHtml(0, t1, 'var(--orange)')}
+        <div style="font-family:'Rajdhani',sans-serif;font-weight:800;font-size:20px;color:var(--muted);text-align:center">VS</div>
+        ${slotHtml(1, t2, '#5bc4f5')}
+      </div>
+      <button onclick="runTeamH2H()" ${canCompare?'':'disabled'} class="compare-btn ${canCompare?'active':'inactive'}">
+        ${canCompare ? 'Compare Teams' : 'Select 2 teams to compare'}
+      </button>
+      <div class="h2h-result-body" id="th2h-result-body"></div>
+    </div>
+    <div class="card" style="padding:8px;display:flex;flex-wrap:wrap;gap:6px">${teamBtns}</div>`;
+}
+
+function th2hSelect(name) {
+  if (_th2hSel[0] === name) { _th2hSel[0] = null; }
+  else if (_th2hSel[1] === name) { _th2hSel[1] = null; }
+  else if (!_th2hSel[0]) { _th2hSel[0] = name; }
+  else if (!_th2hSel[1]) { _th2hSel[1] = name; }
+  else { _th2hSel[0] = _th2hSel[1]; _th2hSel[1] = name; }
+  renderTeamH2HPicker();
+}
+
+async function runTeamH2H() {
+  const [t1, t2] = _th2hSel;
+  const body = document.getElementById('th2h-result-body');
+  if (!t1 || !t2 || !body) return;
+  _getSpinnerSvg().then(svg => { body.innerHTML = '<div class="loading"><span class="spin" style="display:inline-flex;align-items:center;justify-content:center;color:var(--orange)">' + svg + '</span></div>'; });
+  body.classList.add('open');
+  const data = await fetch(`/api/teamh2h?t1=${encodeURIComponent(t1)}&t2=${encodeURIComponent(t2)}`).then(r => r.json()).catch(() => ({}));
+  if (data.error || !data.matches) { body.innerHTML = '<div style="padding:16px;color:var(--loss)">No data found</div>'; return; }
+
+  const { t1_wins, t2_wins, total, matches } = data;
+  const maxW = Math.max(t1_wins, t2_wins, 1);
+  const t1Bar = Math.round(t1_wins / maxW * 100);
+  const t2Bar = Math.round(t2_wins / maxW * 100);
+
+  const matchRows = matches.map(m => {
+    const wl1 = (m.winner||'').toLowerCase() === t1.toLowerCase();
+    const wl2 = (m.winner||'').toLowerCase() === t2.toLowerCase();
+    const mapLabel = (m.mapname||'?').replace('de_','').toUpperCase();
+    const s1 = m.team1_score ?? '?'; const s2 = m.team2_score ?? '?';
+    // Make sure scores are shown from perspective of t1 vs t2
+    const isFlipped = (m.team2_name||'').toLowerCase() === t1.toLowerCase();
+    const [ds1, ds2, dn1, dn2] = isFlipped ? [s2,s1,m.team2_name,m.team1_name] : [s1,s2,m.team1_name,m.team2_name];
+    return `<div class="th2h-match-row" onclick="go('match',{id:'${m.matchid}'})">
+      <span style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:11px;color:var(--muted2);width:28px;flex-shrink:0">#${m.matchid}</span>
+      <span style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:11px;letter-spacing:1.5px;color:var(--muted2);width:52px;flex-shrink:0">${mapLabel}</span>
+      <div style="flex:1;display:flex;align-items:center;gap:8px;justify-content:center">
+        <span style="font-family:'Rajdhani',sans-serif;font-weight:800;font-size:16px;color:${wl1?'var(--win)':'var(--loss)'}">${ds1}</span>
+        <span style="color:var(--muted2);font-size:12px">–</span>
+        <span style="font-family:'Rajdhani',sans-serif;font-weight:800;font-size:16px;color:${wl2?'var(--win)':'var(--loss)'}">${ds2}</span>
+      </div>
+      <span style="font-size:11px;color:${(m.winner||'').toLowerCase() === t1.toLowerCase() ? 'var(--orange)' : '#5bc4f5'};font-family:'Rajdhani',sans-serif;font-weight:700;text-align:right;min-width:80px">
+        ${esc(m.winner||'?')} wins
+      </span>
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--muted2)" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+    </div>`;
+  }).join('');
+
+  body.innerHTML = `
+    <div style="border-top:1px solid var(--border);margin-top:16px;padding-top:16px">
+      <div style="display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:12px;margin-bottom:20px">
+        <div style="text-align:center">
+          <div style="font-family:'Rajdhani',sans-serif;font-weight:800;font-size:42px;color:var(--orange);line-height:1">${t1_wins}</div>
+          <div style="font-size:11px;color:var(--muted2);letter-spacing:1px;text-transform:uppercase;margin-top:2px">Wins</div>
+          <div style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:13px;color:rgba(var(--orange-rgb),.9);margin-top:4px">${esc(t1)}</div>
+        </div>
+        <div style="text-align:center">
+          <div class="th2h-score-box">
+            <div style="font-size:10px;color:var(--muted2);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:4px">${total} Match${total!==1?'es':''}</div>
+            <div style="height:6px;border-radius:3px;background:var(--border2);overflow:hidden;margin-bottom:4px;position:relative">
+              <div style="position:absolute;left:0;top:0;height:100%;width:${t1Bar}%;background:var(--orange);border-radius:3px;transition:width .6s"></div>
+            </div>
+            <div style="height:6px;border-radius:3px;background:var(--border2);overflow:hidden;position:relative">
+              <div style="position:absolute;left:0;top:0;height:100%;width:${t2Bar}%;background:#5bc4f5;border-radius:3px;transition:width .6s"></div>
+            </div>
+          </div>
+        </div>
+        <div style="text-align:center">
+          <div style="font-family:'Rajdhani',sans-serif;font-weight:800;font-size:42px;color:#5bc4f5;line-height:1">${t2_wins}</div>
+          <div style="font-size:11px;color:var(--muted2);letter-spacing:1px;text-transform:uppercase;margin-top:2px">Wins</div>
+          <div style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:13px;color:#5bc4f5;margin-top:4px">${esc(t2)}</div>
+        </div>
+      </div>
+      <div style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:11px;letter-spacing:2px;text-transform:uppercase;color:var(--muted2);padding:0 14px 8px">Match History</div>
+      <div class="card" style="padding:0">${matchRows || '<div style="padding:16px;color:var(--muted2);font-size:12px;text-align:center">No matches found</div>'}</div>
+    </div>`;
+}
+
+// ── PLAYER MAP STATS (appended to player profile) ─────────────────────────────
+async function loadPlayerMapStats(name, containerEl) {
+  const rows = await fetch('/api/player/' + encodeURIComponent(name) + '/mapstats').then(r => r.json()).catch(() => []);
+  if (!Array.isArray(rows) || !rows.length) { containerEl.style.display = 'none'; return; }
+
+  const best = rows.reduce((a, b) => parseFloat(a.kd??0) >= parseFloat(b.kd??0) ? a : b, rows[0]);
+  const worst = rows.reduce((a, b) => parseFloat(a.kd??0) <= parseFloat(b.kd??0) ? a : b, rows[0]);
+
+  const mapRows = rows.map(r => {
+    const isBest  = r.mapname === best.mapname;
+    const isWorst = r.mapname === worst.mapname && rows.length > 1;
+    const wr = r.matches > 0 ? Math.round(r.wins / r.matches * 100) : 0;
+    const kdVal = parseFloat(r.kd ?? 0);
+    const kdCls = kdVal >= 1.3 ? 'var(--win)' : kdVal >= 0.9 ? 'var(--white)' : 'var(--loss)';
+    const imgUrl = MAP_IMGS[r.mapname] || '';
+    const badge = isBest
+      ? `<span style="font-size:9px;padding:1px 6px;border-radius:2px;background:rgba(34,197,94,.15);border:1px solid rgba(34,197,94,.35);color:var(--win);font-family:'Rajdhani',sans-serif;font-weight:700;letter-spacing:1px">BEST</span>`
+      : isWorst
+      ? `<span style="font-size:9px;padding:1px 6px;border-radius:2px;background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.3);color:var(--loss);font-family:'Rajdhani',sans-serif;font-weight:700;letter-spacing:1px">WORST</span>`
+      : '';
+    return `<div class="map-stat-row">
+      ${imgUrl ? `<img class="map-stat-bg" src="${imgUrl}" alt="">` : ''}
+      <div class="map-stat-content">
+        <div style="width:64px;font-family:'Rajdhani',sans-serif;font-weight:800;font-size:11px;letter-spacing:1.5px;text-transform:uppercase;color:rgba(255,255,255,.9);flex-shrink:0">${(r.mapname||'?').replace('de_','').toUpperCase()}</div>
+        <div style="flex:1;min-width:0">
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
+            <div style="height:4px;border-radius:2px;background:var(--border2);flex:1;overflow:hidden">
+              <div style="height:100%;width:${wr}%;background:${wr>=60?'var(--win)':wr>=40?'var(--orange)':'var(--loss)'};border-radius:2px;transition:width .6s"></div>
+            </div>
+            <span style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:11px;color:var(--muted2);flex-shrink:0;width:32px;text-align:right">${wr}%</span>
+          </div>
+          <div style="font-size:10px;color:var(--muted2)">${r.wins}W ${r.matches-r.wins}L · ${r.matches} match${r.matches!==1?'es':''}</div>
+        </div>
+        <div style="display:flex;gap:16px;flex-shrink:0;text-align:right">
+          <div><div style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:14px;color:${kdCls}">${parseFloat(r.kd??0).toFixed(2)}</div><div style="font-size:9px;color:var(--muted2);letter-spacing:.5px">K/D</div></div>
+          <div><div style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:14px;color:var(--orange)">${parseFloat(r.adr??0).toFixed(0)}</div><div style="font-size:9px;color:var(--muted2);letter-spacing:.5px">ADR</div></div>
+          <div style="width:48px;text-align:right">${badge}</div>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+
+  containerEl.innerHTML = `
+    <div class="page-title" style="font-size:16px;margin-bottom:10px">Map Breakdown</div>
+    <div class="card" style="padding:0;margin-bottom:12px">${mapRows}</div>`;
+  containerEl.style.display = '';
 }
 </script>
 <!-- ── Match Edit Modal ────────────────────────────────────────────────────── -->
