@@ -2503,10 +2503,17 @@ async function loadTeam() {
     const meta    = m.meta || m;
     const players = Array.isArray(m.players) ? m.players : [];
     const mapsArr = Array.isArray(m.maps) ? m.maps : [];
+    const demo    = m.demo || {};
 
-    // Use matchid + date as a stable match key — this is critical for the merge
-    // logic below: only team names from the SAME MATCH should ever be merged.
-    const matchKey = String(meta.matchid || meta.match_id || meta.end_time || '');
+    // Use the JSON filename as the unique match key — it contains the exact
+    // timestamp and is guaranteed unique per match:
+    //   "2026-02-23_20-11-44_29_de_ancient_DYJAJA_vs_HOXHAVIT_stats.json"
+    // This is the safest key: even if matchids collide or dates are equal,
+    // the filename never will be. Falls back to matchid then end_time.
+    const filename = meta.filename || demo.name || '';
+    const matchKey = filename
+      ? filename.replace(/\.(json|dem)$/i, '')   // strip extension
+      : String(meta.matchid || meta.match_id || meta.end_time || '');
 
     const t1 = players.filter(p=>String(p.team||'').toLowerCase()==='team1');
     const t2 = players.filter(p=>String(p.team||'').toLowerCase()==='team2');
