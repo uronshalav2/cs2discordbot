@@ -4,7 +4,15 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Reshtan Gaming</title>
-<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+@font-face { font-family: 'Rajdhani'; font-weight: 400; font-display: swap; src: url('assets/fonts/Rajdhani-Regular.ttf') format('truetype'); }
+@font-face { font-family: 'Rajdhani'; font-weight: 500; font-display: swap; src: url('assets/fonts/Rajdhani-Medium.ttf') format('truetype'); }
+@font-face { font-family: 'Rajdhani'; font-weight: 600; font-display: swap; src: url('assets/fonts/Rajdhani-SemiBold.ttf') format('truetype'); }
+@font-face { font-family: 'Rajdhani'; font-weight: 700; font-display: swap; src: url('assets/fonts/Rajdhani-Bold.ttf') format('truetype'); }
+@font-face { font-family: 'Inter'; font-weight: 400; font-display: swap; src: url('assets/fonts/Inter-Regular.ttf') format('truetype'); }
+@font-face { font-family: 'Inter'; font-weight: 500; font-display: swap; src: url('assets/fonts/Inter-Medium.ttf') format('truetype'); }
+@font-face { font-family: 'Inter'; font-weight: 600; font-display: swap; src: url('assets/fonts/Inter-SemiBold.ttf') format('truetype'); }
+</style>
 <style>
 :root{
   --bg:#080a0c;--surface:#0f1012;--surface2:#141618;--border:#1c1e21;--border2:#252729;
@@ -756,7 +764,7 @@ nav{background:var(--nav-bg);border-bottom:2px solid var(--nav-border);display:f
 <script>
 // ── Router ────────────────────────────────────────────────────────────────────
 // Shared CS2 map image URLs (Steam CDN)
-const MAP_IMG_BASE = 'https://raw.githubusercontent.com/ghostcap-gaming/cs2-map-images/refs/heads/main/cs2';
+const MAP_IMG_BASE = 'assets/maps';
 const MAP_IMGS = {
   'de_mirage':   `${MAP_IMG_BASE}/de_mirage.png`,
   'de_dust2':    `${MAP_IMG_BASE}/de_dust2.png`,
@@ -1167,7 +1175,7 @@ const fmtDate = s=>{
 const initials = n=>(n||'?').split(/[ _]/).slice(0,2).map(w=>w[0]||'').join('').toUpperCase().slice(0,2)||'?';
 // ── Spinner: fetch SVG once, inline it so fill:var(--orange) works via CSS ────
 let _spinnerSvg = null;
-const _SPINNER_URL = 'https://upload.wikimedia.org/wikipedia/commons/2/26/Counter-Strike_vertical_logo_%282023%29.svg';
+const _SPINNER_URL = 'assets/spinner/cs2-logo.svg';
 
 async function _getSpinnerSvg() {
   if (_spinnerSvg) return _spinnerSvg;
@@ -1502,9 +1510,7 @@ async function loadPlayer(name) {
     ? `<a href="${steam.profile_url}" target="_blank" style="color:var(--orange);text-decoration:none;font-size:11px">View Steam Profile ↗</a>`
     : '';
 
-  const countryFlag = steam.country
-    ? `<img src="https://flagcdn.com/24x18/${steam.country.toLowerCase()}.png" style="border-radius:2px;vertical-align:middle;margin-right:6px;height:16px" onerror="this.style.display='none'" title="${steam.country}"> `
-    : '';
+  const countryFlag = '';
 
   const statsGrid = [
     {label:'Kills',     raw: c.kills,         dec:0},
