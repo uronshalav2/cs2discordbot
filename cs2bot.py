@@ -1349,6 +1349,173 @@ async def handle_api_revert_match(request):
         return _json_response({"ok": False, "error": str(e)})
 
 
+
+async def handle_api_team_h2h(request):
+    """GET /api/teamh2h?t1=name&t2=name — head-to-head history between two teams"""
+    t1 = request.rel_url.query.get('t1', '').strip()
+    t2 = request.rel_url.query.get('t2', '').strip()
+    if not t1 or not t2:
+        return _json_response({"error": "Need t1 and t2 query params"})
+    try:
+        conn = get_db()
+        c = conn.cursor(dictionary=True)
+        c.execute(f"""
+            SELECT mm.matchid, mm.team1_name, mm.team2_name, mm.winner,
+                   m.mapname, m.team1_score, m.team2_score, mm.end_time
+            FROM {MATCHZY_TABLES['matches']} mm
+            LEFT JOIN {MATCHZY_TABLES['maps']} m ON mm.matchid = m.matchid
+            WHERE (LOWER(mm.team1_name) = LOWER(%s) AND LOWER(mm.team2_name) = LOWER(%s))
+               OR (LOWER(mm.team1_name) = LOWER(%s) AND LOWER(mm.team2_name) = LOWER(%s))
+            ORDER BY mm.matchid DESC
+        """, (t1, t2, t2, t1))
+        rows = [dict(r) for r in c.fetchall()]
+        c.close(); conn.close()
+        all_edits = _get_all_edits()
+        for r in rows:
+            mid = str(r['matchid'])
+            edits = all_edits.get(mid, {})
+            if edits:
+                t1e = edits.get('team1', {}); t2e = edits.get('team2', {})
+                if t1e.get('name'):  r['team1_name']  = t1e['name']
+                if t2e.get('name'):  r['team2_name']  = t2e['name']
+                if t1e.get('score') is not None: r['team1_score'] = t1e['score']
+                if t2e.get('score') is not None: r['team2_score'] = t2e['score']
+                if edits.get('map'):    r['mapname'] = edits['map']
+                if edits.get('winner'): r['winner']  = edits['winner']
+        t1_wins = sum(1 for r in rows if (r.get('winner') or '').lower().strip() == t1.lower())
+        t2_wins = sum(1 for r in rows if (r.get('winner') or '').lower().strip() == t2.lower())
+        return _json_response({"t1": t1, "t2": t2, "t1_wins": t1_wins, "t2_wins": t2_wins,
+                                "total": len(rows), "matches": rows})
+    except Exception as e:
+        return _json_response({"error": str(e)})
+
+
+async def handle_api_teams(request):
+    """GET /api/teams — distinct team names from matches table"""
+    try:
+        conn = get_db()
+        c = conn.cursor(dictionary=True)
+        c.execute(f"""
+            SELECT DISTINCT team1_name AS name FROM {MATCHZY_TABLES['matches']}
+            WHERE team1_name IS NOT NULL AND team1_name != ''
+            UNION
+            SELECT DISTINCT team2_name AS name FROM {MATCHZY_TABLES['matches']}
+            WHERE team2_name IS NOT NULL AND team2_name != ''
+            ORDER BY name
+        """)
+        rows = [r['name'] for r in c.fetchall()]
+        c.close(); conn.close()
+        return _json_response(rows)
+    except Exception as e:
+        return _json_response({"error": str(e)})
+
+
+async def handle_api_search(request):
+    """GET /api/search?q=query — search players and matches"""
+    q = request.rel_url.query.get('q', '').strip()
+    if not q or len(q) < 2:
+        return _json_response({"players": [], "matches": []})
+    try:
+        conn = get_db()
+        c = conn.cursor(dictionary=True)
+        like = f"%{q}%"
+        c.execute(f"""
+            SELECT steamid64,
+                SUBSTRING_INDEX(GROUP_CONCAT(name ORDER BY matchid DESC), ',', 1) AS name,
+                COUNT(DISTINCT matchid) AS matches,
+                ROUND(SUM(kills)/NULLIF(SUM(deaths),0),2) AS kd,
+                ROUND(SUM(damage)/NULLIF(COUNT(DISTINCT CONCAT(matchid,'_',mapnumber)),0)/30,1) AS adr
+            FROM {MATCHZY_TABLES['players']}
+            WHERE name LIKE %s AND steamid64 != '0'
+            GROUP BY steamid64
+            ORDER BY matches DESC
+            LIMIT 8
+        """, (like,))
+        players = [dict(r) for r in c.fetchall()]
+        name_map = _edited_name_map()
+        for p in players:
+            sid = str(p.get('steamid64') or '')
+            if sid in name_map:
+                p['name'] = name_map[sid]
+        for sid, edited_name in [(s, n) for s, n in name_map.items() if q.lower() in n.lower()]:
+            if not any(p['steamid64'] == sid for p in players):
+                c.execute(f"""
+                    SELECT steamid64, COUNT(DISTINCT matchid) AS matches,
+                        ROUND(SUM(kills)/NULLIF(SUM(deaths),0),2) AS kd,
+                        ROUND(SUM(damage)/NULLIF(COUNT(DISTINCT CONCAT(matchid,'_',mapnumber)),0)/30,1) AS adr
+                    FROM {MATCHZY_TABLES['players']} WHERE steamid64 = %s GROUP BY steamid64 LIMIT 1
+                """, (sid,))
+                row = c.fetchone()
+                if row:
+                    row = dict(row); row['name'] = edited_name; players.append(row)
+        c.execute(f"""
+            SELECT mm.matchid, mm.team1_name, mm.team2_name, mm.winner, mm.end_time,
+                   m.mapname, m.team1_score, m.team2_score
+            FROM {MATCHZY_TABLES['matches']} mm
+            LEFT JOIN {MATCHZY_TABLES['maps']} m ON mm.matchid = m.matchid
+            WHERE mm.team1_name LIKE %s OR mm.team2_name LIKE %s
+               OR CAST(mm.matchid AS CHAR) LIKE %s
+            ORDER BY mm.matchid DESC
+            LIMIT 8
+        """, (like, like, like))
+        matches = [dict(r) for r in c.fetchall()]
+        c.close(); conn.close()
+        all_edits = _get_all_edits()
+        for r in matches:
+            mid = str(r['matchid'])
+            edits = all_edits.get(mid, {})
+            if edits:
+                t1e = edits.get('team1', {}); t2e = edits.get('team2', {})
+                if t1e.get('name'):  r['team1_name']  = t1e['name']
+                if t2e.get('name'):  r['team2_name']  = t2e['name']
+                if edits.get('map'):    r['mapname'] = edits['map']
+                if edits.get('winner'): r['winner']  = edits['winner']
+        return _json_response({"players": players, "matches": matches})
+    except Exception as e:
+        return _json_response({"error": str(e)})
+
+
+async def handle_api_player_mapstats(request):
+    """GET /api/player/{name}/mapstats — per-map career breakdown for a player"""
+    name = request.match_info.get('name', '')
+    try:
+        conn = get_db()
+        c = conn.cursor(dictionary=True)
+        sid = None
+        c.execute(f"SELECT steamid64 FROM {MATCHZY_TABLES['players']} WHERE name = %s AND steamid64 != '0' LIMIT 1", (name,))
+        row = c.fetchone()
+        if row:
+            sid = str(row['steamid64'])
+        else:
+            name_map = _edited_name_map()
+            sid = next((s for s, n in name_map.items() if n == name), None)
+        if not sid:
+            return _json_response([])
+        c.execute(f"""
+            SELECT m.mapname,
+                COUNT(DISTINCT p.matchid)                                           AS matches,
+                SUM(p.kills) AS kills, SUM(p.deaths) AS deaths,
+                SUM(p.assists) AS assists, SUM(p.damage) AS damage,
+                SUM(p.head_shot_kills) AS headshots,
+                ROUND(SUM(p.kills)/NULLIF(SUM(p.deaths),0),2)                      AS kd,
+                ROUND(SUM(p.head_shot_kills)/NULLIF(SUM(p.kills),0)*100,1)         AS hs_pct,
+                ROUND(SUM(p.damage)/NULLIF(COUNT(DISTINCT p.matchid),0)/30,1)      AS adr,
+                SUM(CASE WHEN LOWER(mm.winner) = LOWER(p.team) THEN 1 ELSE 0 END) AS wins
+            FROM {MATCHZY_TABLES['players']} p
+            LEFT JOIN {MATCHZY_TABLES['maps']} m  ON p.matchid=m.matchid AND p.mapnumber=m.mapnumber
+            LEFT JOIN {MATCHZY_TABLES['matches']} mm ON p.matchid=mm.matchid
+            WHERE p.steamid64 = %s AND p.steamid64 != '0'
+              AND m.mapname IS NOT NULL AND m.mapname != ''
+            GROUP BY m.mapname
+            ORDER BY matches DESC
+        """, (sid,))
+        rows = [dict(r) for r in c.fetchall()]
+        c.close(); conn.close()
+        return _json_response(rows)
+    except Exception as e:
+        return _json_response({"error": str(e)})
+
+
 async def start_http_server():
     app = web.Application()
     app.router.add_get('/api/specialists',             handle_api_specialists)
@@ -1360,6 +1527,10 @@ async def start_http_server():
     app.router.add_get('/api/leaderboard',             handle_api_leaderboard)
     app.router.add_get('/api/mapstats',                handle_api_mapstats)
     app.router.add_get('/api/h2h',                     handle_api_h2h)
+    app.router.add_get('/api/teamh2h',                 handle_api_team_h2h)
+    app.router.add_get('/api/teams',                   handle_api_teams)
+    app.router.add_get('/api/search',                  handle_api_search)
+    app.router.add_get('/api/player/{name}/mapstats',  handle_api_player_mapstats)
     app.router.add_get('/api/status',                  handle_api_status)
     # ── Edit endpoints ────────────────────────────────────────────────────────
     app.router.add_post('/api/auth/edit',              handle_api_auth_edit)
