@@ -552,10 +552,10 @@ nav{background:var(--nav-bg);border-bottom:2px solid var(--nav-border);display:f
 .th2h-match-row:hover{background:rgba(var(--orange-rgb),.04)}
 .th2h-match-row:last-child{border-bottom:none}
 /* ── Player map stats ─────────────────────────────────────────────────────── */
-.map-stat-row{display:flex;align-items:center;gap:12px;padding:10px 14px;border-bottom:1px solid var(--border);position:relative;overflow:hidden}
+.map-stat-row{position:relative;overflow:hidden;border-bottom:1px solid var(--border);padding:0}
 .map-stat-row:last-child{border-bottom:none}
-.map-stat-bg{position:absolute;inset:0;object-fit:cover;opacity:.07;width:100%;height:100%;pointer-events:none}
-.map-stat-content{position:relative;z-index:1;display:flex;align-items:center;gap:12px;width:100%}
+.map-stat-bg{position:absolute;inset:0;object-fit:cover;object-position:center 30%;opacity:.1;width:100%;height:100%;pointer-events:none;display:block}
+.map-stat-content{position:relative;z-index:1;display:flex;align-items:center;gap:12px;padding:10px 14px;width:100%;box-sizing:border-box}
 </style>
 </head>
 <body>
@@ -1550,7 +1550,6 @@ async function loadPlayer(name) {
       <div class="stats-grid">${statsGrid}</div>
     </div>
     ${recent.length ? `
-    <div class="page-title" style="font-size:16px;margin-bottom:10px">Match History</div>
     <div class="card ovx">
       <table class="ph-table">
         <thead><tr>
@@ -3707,27 +3706,26 @@ async function loadPlayerMapStats(name, containerEl) {
     return `<div class="map-stat-row">
       ${imgUrl ? `<img class="map-stat-bg" src="${imgUrl}" alt="">` : ''}
       <div class="map-stat-content">
-        <div style="width:64px;font-family:'Rajdhani',sans-serif;font-weight:800;font-size:11px;letter-spacing:1.5px;text-transform:uppercase;color:rgba(255,255,255,.9);flex-shrink:0">${(r.mapname||'?').replace('de_','').toUpperCase()}</div>
+        <div style="width:60px;font-family:'Rajdhani',sans-serif;font-weight:800;font-size:11px;letter-spacing:1.5px;text-transform:uppercase;color:rgba(255,255,255,.9);flex-shrink:0">${(r.mapname||'?').replace('de_','').toUpperCase()}</div>
         <div style="flex:1;min-width:0">
-          <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
-            <div style="height:4px;border-radius:2px;background:var(--border2);flex:1;overflow:hidden">
+          <div style="display:flex;align-items:center;gap:8px">
+            <div style="flex:1;height:4px;border-radius:2px;background:var(--border2);overflow:hidden">
               <div style="height:100%;width:${wr}%;background:${wr>=60?'var(--win)':wr>=40?'var(--orange)':'var(--loss)'};border-radius:2px;transition:width .6s"></div>
             </div>
-            <span style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:11px;color:var(--muted2);flex-shrink:0;width:32px;text-align:right">${wr}%</span>
+            <span style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:11px;color:var(--muted2);flex-shrink:0;width:28px;text-align:right">${wr}%</span>
           </div>
-          <div style="font-size:10px;color:var(--muted2)">${r.wins}W ${r.matches-r.wins}L · ${r.matches} match${r.matches!==1?'es':''}</div>
+          <div style="font-size:10px;color:var(--muted2);margin-top:3px">${r.wins}W ${r.matches-r.wins}L · ${r.matches} match${r.matches!==1?'es':''}</div>
         </div>
-        <div style="display:flex;gap:16px;flex-shrink:0;text-align:right">
-          <div><div style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:14px;color:${kdCls}">${parseFloat(r.kd??0).toFixed(2)}</div><div style="font-size:9px;color:var(--muted2);letter-spacing:.5px">K/D</div></div>
-          <div><div style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:14px;color:var(--orange)">${parseFloat(r.adr??0).toFixed(0)}</div><div style="font-size:9px;color:var(--muted2);letter-spacing:.5px">ADR</div></div>
-          <div style="width:48px;text-align:right">${badge}</div>
+        <div style="display:flex;align-items:center;gap:14px;flex-shrink:0">
+          <div style="text-align:center"><div style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:14px;color:${kdCls}">${parseFloat(r.kd??0).toFixed(2)}</div><div style="font-size:9px;color:var(--muted2);letter-spacing:.5px">K/D</div></div>
+          <div style="text-align:center"><div style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:14px;color:var(--orange)">${parseFloat(r.adr??0).toFixed(0)}</div><div style="font-size:9px;color:var(--muted2);letter-spacing:.5px">ADR</div></div>
+          <div style="width:44px;text-align:right">${badge}</div>
         </div>
       </div>
     </div>`;
   }).join('');
 
   containerEl.innerHTML = `
-    <div class="page-title" style="font-size:16px;margin-bottom:10px">Map Breakdown</div>
     <div class="card" style="padding:0;margin-bottom:12px">${mapRows}</div>`;
   containerEl.style.display = '';
 }
