@@ -43,13 +43,90 @@ def _json_response(data):
     )
 
 async def handle_api_player(request):
-    """GET /api/player/{name} — full career stats for a player"""
+    """GET /api/player/{name} — full career stats, MatchZy primary / fshost fallback"""
     name = request.match_info.get('name', '')
+    loop = asyncio.get_running_loop()
+
+    # ── Helper: build career + recent from fshost data ────────────────────────
+    def _fshost_career_for(lookup_name):
+        all_rows = _aggregate_stats_from_fshost()
+        # Find by name or edited name
+        name_map = _edited_name_map()
+        # reverse edited map: edited_name -> steamid
+        edited_sid = next((s for s, n in name_map.items() if n == lookup_name), None)
+        row = next((r for r in all_rows if r['name'] == lookup_name
+                    or r['steamid64'] == edited_sid), None)
+        if not row:
+            return None, []
+        career = {
+            'name':           name_map.get(row['steamid64'], row['name']),
+            'steamid64':      row['steamid64'],
+            'matches':        row['matches'],
+            'kills':          row['kills'],
+            'deaths':         row['deaths'],
+            'assists':        row['assists'],
+            'headshots':      row['headshots'],
+            'total_damage':   row['damage'],
+            'aces':           row['aces'],
+            'quads':          row['quads'],
+            'clutch_1v1':     row['clutch_1v1'],
+            'clutch_1v2':     row['clutch_1v2'],
+            'entry_wins':     row['entry_wins'],
+            'kd':             row['kd'],
+            'hs_pct':         row['hs_pct'],
+            'adr':            row['adr'],
+        }
+        # Build recent matches from fshost
+        recent = []
+        matchid_map = build_matchid_to_demo_map()
+        sid = row['steamid64']
+        for mid, entry in matchid_map.items():
+            meta = entry.get('metadata')
+            if not meta:
+                continue
+            for team_key in ('team1', 'team2'):
+                team = meta.get(team_key, {})
+                for fp in team.get('players', []):
+                    fp_sid = str(fp.get('steam_id') or fp.get('steamid64') or '0')
+                    if fp_sid != sid:
+                        continue
+                    k = int(fp.get('kills',0) or 0)
+                    d = int(fp.get('deaths',0) or 0)
+                    hs = int(fp.get('headshot_kills',0) or fp.get('head_shot_kills',0) or 0)
+                    dmg = int(fp.get('damage',0) or 0)
+                    t1 = meta.get('team1', {})
+                    t2 = meta.get('team2', {})
+                    recent.append({
+                        'matchid':    str(mid),
+                        'mapnumber':  1,
+                        'team':       team_key,
+                        'steamid64':  sid,
+                        'kills':      k,
+                        'deaths':     d,
+                        'assists':    int(fp.get('assists',0) or 0),
+                        'damage':     dmg,
+                        'head_shot_kills': hs,
+                        'enemies5k':  int(fp.get('5k',0) or 0),
+                        'v1_wins':    0,
+                        'mapname':    meta.get('map','?'),
+                        'winner':     meta.get('winner',''),
+                        'team1_score': t1.get('score',0),
+                        'team2_score': t2.get('score',0),
+                        'team1_name':  t1.get('name','Team 1'),
+                        'team2_name':  t2.get('name','Team 2'),
+                        'adr':        round(dmg/30, 1),
+                        'hs_pct':     round(hs/k*100,1) if k else 0.0,
+                    })
+        recent = _patch_recent_matches(recent)
+        recent.sort(key=lambda r: str(r.get('matchid','')), reverse=True)
+        return career, recent[:20]
+
+    # ── Try MatchZy first ─────────────────────────────────────────────────────
+    career = None
+    recent = []
     try:
         conn = get_db()
         c = conn.cursor(dictionary=True)
-        # Career totals — also search by edited name
-        # First try exact name, then see if any steamid has this as an edited name
         c.execute(f"""
             SELECT name, steamid64,
                 COUNT(DISTINCT matchid) AS matches,
@@ -68,10 +145,8 @@ async def handle_api_player(request):
         """, (name,))
         career = c.fetchone()
 
-        # If not found by DB name, check if it's an edited name and look up by steamid
         if not career:
             name_map = _edited_name_map()
-            # reverse: find which steamid has this edited name
             sid_for_edited = next((sid for sid, n in name_map.items() if n == name), None)
             if sid_for_edited:
                 c.execute(f"""
@@ -92,42 +167,40 @@ async def handle_api_player(request):
                 """, (sid_for_edited,))
                 career = c.fetchone()
 
-        if not career:
-            c.close(); conn.close()
-            return _json_response({"error": "Player not found"})
-
-        # Apply edited name to career row
-        career = dict(career)
-        name_map = _edited_name_map()
-        sid = str(career.get('steamid64') or '')
-        if sid in name_map:
-            career['name'] = name_map[sid]
-
-        # Recent matches
-        c.execute(f"""
-            SELECT p.matchid, p.mapnumber, p.team, p.steamid64,
-                p.kills, p.deaths, p.assists, p.damage, p.head_shot_kills,
-                p.enemies5k, p.v1_wins,
-                m.mapname, m.winner, m.team1_score, m.team2_score,
-                mm.team1_name, mm.team2_name,
-                ROUND(p.damage/30,1) AS adr,
-                ROUND(p.head_shot_kills/NULLIF(p.kills,0)*100,1) AS hs_pct
-            FROM {MATCHZY_TABLES['players']} p
-            LEFT JOIN {MATCHZY_TABLES['maps']} m ON p.matchid=m.matchid AND p.mapnumber=m.mapnumber
-            LEFT JOIN {MATCHZY_TABLES['matches']} mm ON p.matchid=mm.matchid
-            WHERE p.steamid64 = %s AND p.steamid64 != '0'
-            ORDER BY p.matchid DESC, p.mapnumber DESC
-            LIMIT 20
-        """, (sid,))
-        recent = c.fetchall()
+        if career:
+            career = dict(career)
+            name_map = _edited_name_map()
+            sid = str(career.get('steamid64') or '')
+            if sid in name_map:
+                career['name'] = name_map[sid]
+            c.execute(f"""
+                SELECT p.matchid, p.mapnumber, p.team, p.steamid64,
+                    p.kills, p.deaths, p.assists, p.damage, p.head_shot_kills,
+                    p.enemies5k, p.v1_wins,
+                    m.mapname, m.winner, m.team1_score, m.team2_score,
+                    mm.team1_name, mm.team2_name,
+                    ROUND(p.damage/30,1) AS adr,
+                    ROUND(p.head_shot_kills/NULLIF(p.kills,0)*100,1) AS hs_pct
+                FROM {MATCHZY_TABLES['players']} p
+                LEFT JOIN {MATCHZY_TABLES['maps']} m ON p.matchid=m.matchid AND p.mapnumber=m.mapnumber
+                LEFT JOIN {MATCHZY_TABLES['matches']} mm ON p.matchid=mm.matchid
+                WHERE p.steamid64 = %s AND p.steamid64 != '0'
+                ORDER BY p.matchid DESC, p.mapnumber DESC
+                LIMIT 20
+            """, (sid,))
+            recent = _patch_recent_matches(c.fetchall())
         c.close(); conn.close()
+    except Exception:
+        pass
 
-        # Apply match-level and player-level edits to recent matches
-        recent = _patch_recent_matches(recent)
+    # ── Fallback to fshost ────────────────────────────────────────────────────
+    if not career:
+        career, recent = await loop.run_in_executor(None, _fshost_career_for, name)
 
-        return _json_response({"career": career, "recent_matches": recent})
-    except Exception as e:
-        return _json_response({"error": str(e)})
+    if not career:
+        return _json_response({"error": "Player not found"})
+
+    return _json_response({"career": career, "recent_matches": recent})
 
 async def handle_api_matches(request):
     """
@@ -781,8 +854,99 @@ async def handle_api_demos(request):
     result.sort(key=lambda x: x.get('filename_ts') or x.get('modified_at') or '', reverse=True)
     return _json_response(result)
 
+def _aggregate_stats_from_fshost() -> list:
+    """
+    Aggregate per-player career stats from ALL fshost JSONs.
+    Used as fallback when MatchZy tables are empty or missing.
+    Returns a list of dicts with the same fields as matchzy_stats_players aggregations.
+    """
+    try:
+        matchid_map = build_matchid_to_demo_map()
+        players_agg = {}   # steamid64 -> aggregated dict
+
+        for mid, entry in matchid_map.items():
+            meta = entry.get('metadata')
+            if not meta:
+                continue
+            # Apply any edits so aggregates use the edited data
+            edits = _get_edits(str(mid))
+            if edits:
+                meta = _deep_merge(meta, edits)
+
+            for team_key in ('team1', 'team2'):
+                team_data = meta.get(team_key, {})
+                for fp in team_data.get('players', []):
+                    sid = str(fp.get('steam_id') or fp.get('steamid64') or '0')
+                    if sid == '0' or not sid:
+                        continue
+                    name = fp.get('name') or '?'
+
+                    kills   = int(fp.get('kills', 0) or 0)
+                    deaths  = int(fp.get('deaths', 0) or 0)
+                    assists = int(fp.get('assists', 0) or 0)
+                    damage  = int(fp.get('damage', 0) or 0)
+                    hs      = int(fp.get('headshot_kills', 0) or fp.get('head_shot_kills', 0) or 0)
+
+                    def cw(s):
+                        try: return int(str(s).split('/')[0])
+                        except: return 0
+
+                    if sid not in players_agg:
+                        players_agg[sid] = {
+                            'steamid64':   sid,
+                            'name':        name,
+                            'matches':     0,
+                            'kills':       0, 'deaths':    0, 'assists':    0,
+                            'damage':      0, 'headshots': 0,
+                            'aces':        0, 'quads':     0, 'triples':    0,
+                            'clutch_wins': 0, 'clutch_1v1': 0, 'clutch_1v2': 0,
+                            'entry_wins':  0, 'entry_attempts': 0,
+                            'flash_successes': 0, 'utility_damage': 0,
+                        }
+                    p = players_agg[sid]
+                    p['name']    = name   # keep most recent name
+                    p['matches'] += 1
+                    p['kills']   += kills
+                    p['deaths']  += deaths
+                    p['assists'] += assists
+                    p['damage']  += damage
+                    p['headshots'] += hs
+                    p['aces']    += int(fp.get('5k', 0) or 0)
+                    p['quads']   += int(fp.get('4k', 0) or 0)
+                    p['triples'] += int(fp.get('3k', 0) or 0)
+                    p['clutch_wins']  += cw(fp.get('1v1', 0)) + cw(fp.get('1v2', 0))
+                    p['clutch_1v1']   += cw(fp.get('1v1', 0))
+                    p['clutch_1v2']   += cw(fp.get('1v2', 0))
+                    p['entry_wins']   += int(fp.get('entry_kills', 0) or fp.get('entry_wins', 0) or 0)
+                    p['flash_successes'] += int(fp.get('flash_assists', 0) or 0)
+                    p['utility_damage']  += int(fp.get('utility_damage', 0) or 0)
+
+        rows = []
+        for p in players_agg.values():
+            k, d = p['kills'], p['deaths']
+            hs   = p['headshots']
+            m    = p['matches']
+            rows.append({
+                **p,
+                'kd':     round(k / d, 2) if d else float(k),
+                'hs_pct': round(hs / k * 100, 1) if k else 0.0,
+                'adr':    round(p['damage'] / max(m, 1) / 30, 1),
+                # Specialists fields
+                'clutch_total':    p['clutch_wins'],
+                'entry_rate':      round(p['entry_wins'] / p['entry_attempts'] * 100, 1)
+                                   if p.get('entry_attempts') else 0.0,
+                'flashes_per_map': round(p['flash_successes'] / max(m, 1), 1),
+                'util_dmg_per_map':round(p['utility_damage']  / max(m, 1), 1),
+            })
+
+        return rows
+    except Exception as e:
+        print(f"[fshost-agg] Error: {e}")
+        return []
+
+
 async def handle_api_leaderboard(request):
-    """GET /api/leaderboard — career stats aggregated from matchzy_stats_players"""
+    """GET /api/leaderboard — career stats, MatchZy primary / fshost fallback"""
     try:
         conn = get_db()
         c = conn.cursor(dictionary=True)
@@ -813,13 +977,29 @@ async def handle_api_leaderboard(request):
         """)
         rows = c.fetchall()
         c.close(); conn.close()
-        rows = _patch_aggregate_rows(rows)   # apply edited player names
+
+        # Fallback to fshost aggregation if MatchZy has no data
+        if not rows:
+            loop = asyncio.get_running_loop()
+            rows = await loop.run_in_executor(None, _aggregate_stats_from_fshost)
+            rows.sort(key=lambda r: int(r.get('kills') or 0), reverse=True)
+
+        rows = _patch_aggregate_rows(rows)
         return _json_response(rows)
     except Exception as e:
-        return _json_response({"error": str(e)})
+        # MatchZy tables may not exist at all — go straight to fshost
+        try:
+            loop = asyncio.get_running_loop()
+            rows = await loop.run_in_executor(None, _aggregate_stats_from_fshost)
+            rows.sort(key=lambda r: int(r.get('kills') or 0), reverse=True)
+            rows = _patch_aggregate_rows(rows)
+            return _json_response(rows)
+        except Exception as e2:
+            return _json_response({"error": str(e2)})
+
 
 async def handle_api_specialists(request):
-    """GET /api/specialists — specialist stat boards: clutch, entry, flash, utility"""
+    """GET /api/specialists — specialist stat boards, MatchZy primary / fshost fallback"""
     try:
         conn = get_db()
         c = conn.cursor(dictionary=True)
@@ -847,10 +1027,23 @@ async def handle_api_specialists(request):
         """)
         rows = c.fetchall()
         c.close(); conn.close()
-        rows = _patch_aggregate_rows(rows)   # apply edited player names
+
+        if not rows:
+            loop = asyncio.get_running_loop()
+            rows = await loop.run_in_executor(None, _aggregate_stats_from_fshost)
+            rows.sort(key=lambda r: int(r.get('clutch_total') or r.get('clutch_wins') or 0), reverse=True)
+
+        rows = _patch_aggregate_rows(rows)
         return _json_response(rows)
     except Exception as e:
-        return _json_response({"error": str(e)})
+        try:
+            loop = asyncio.get_running_loop()
+            rows = await loop.run_in_executor(None, _aggregate_stats_from_fshost)
+            rows.sort(key=lambda r: int(r.get('clutch_total') or r.get('clutch_wins') or 0), reverse=True)
+            rows = _patch_aggregate_rows(rows)
+            return _json_response(rows)
+        except Exception as e2:
+            return _json_response({"error": str(e2)})
 
 STEAMID64_BASE = 76561197960265728
 
@@ -924,11 +1117,28 @@ async def handle_api_mapstats(request):
         return _json_response({"error": str(e)})
 
 async def handle_api_h2h(request):
-    """GET /api/h2h?p1=name&p2=name — head to head career stats for two players"""
+    """GET /api/h2h?p1=name&p2=name — head to head career stats, MatchZy primary / fshost fallback"""
     p1 = request.rel_url.query.get('p1', '')
     p2 = request.rel_url.query.get('p2', '')
     if not p1 or not p2:
         return _json_response({"error": "Need p1 and p2 query params"})
+
+    loop = asyncio.get_running_loop()
+
+    def _find_in_fshost(name):
+        rows = _aggregate_stats_from_fshost()
+        name_map = _edited_name_map()
+        edited_sid = next((s for s, n in name_map.items() if n == name), None)
+        row = next((r for r in rows if r['name'] == name
+                    or r['steamid64'] == edited_sid), None)
+        if not row:
+            return None
+        r = dict(row)
+        if r['steamid64'] in name_map:
+            r['name'] = name_map[r['steamid64']]
+        return r
+
+    r1 = r2 = None
     try:
         conn = get_db()
         c = conn.cursor(dictionary=True)
@@ -958,19 +1168,22 @@ async def handle_api_h2h(request):
         r1 = fetch_player(p1)
         r2 = fetch_player(p2)
         c.close(); conn.close()
-        # Apply edited names
         name_map = _edited_name_map()
-        if r1:
-            r1 = dict(r1)
-            sid = str(r1.get('steamid64') or '')
-            if sid in name_map: r1['name'] = name_map[sid]
-        if r2:
-            r2 = dict(r2)
-            sid = str(r2.get('steamid64') or '')
-            if sid in name_map: r2['name'] = name_map[sid]
-        return _json_response({"p1": r1, "p2": r2})
-    except Exception as e:
-        return _json_response({"error": str(e)})
+        for r in [r1, r2]:
+            if r:
+                r = dict(r)
+                sid = str(r.get('steamid64') or '')
+                if sid in name_map: r['name'] = name_map[sid]
+    except Exception:
+        pass
+
+    # Fallback to fshost for any missing player
+    if not r1:
+        r1 = await loop.run_in_executor(None, _find_in_fshost, p1)
+    if not r2:
+        r2 = await loop.run_in_executor(None, _find_in_fshost, p2)
+
+    return _json_response({"p1": r1, "p2": r2})
 
 async def handle_api_status(request):
     """GET /api/status — live CS2 server status via a2s"""
