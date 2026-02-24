@@ -531,7 +531,30 @@ nav{background:var(--nav-bg);border-bottom:2px solid var(--nav-border);display:f
 .win-rate-ring svg{transform:rotate(-90deg)}
 .win-rate-ring-label{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:'Rajdhani',sans-serif;font-weight:800;font-size:11px;color:var(--white)}
 
-/* ── Search bar ──────────────────────────────────────────────────────────── */
+/* ── Map Carousel (mobile) ───────────────────────────────────────────────── */
+@media(max-width:767px){
+  #p-maps{padding:0!important;margin:0!important;overflow:hidden}
+  /* Break p-maps out of #app padding on mobile */
+  #app:has(#p-maps:not([style*="display:none"])){padding-left:0;padding-right:0;padding-top:0}
+}
+.map-carousel-wrap{height:calc(100svh - 56px);overflow-y:scroll;scroll-snap-type:y mandatory;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+.map-carousel-wrap::-webkit-scrollbar{display:none}
+.map-carousel-slide{position:relative;height:calc(100svh - 56px);scroll-snap-align:start;scroll-snap-stop:always;overflow:hidden;display:flex;flex-direction:column}
+.map-carousel-bg{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:center 30%}
+.map-carousel-overlay{position:absolute;inset:0;background:linear-gradient(to bottom,rgba(0,0,0,.1) 0%,rgba(0,0,0,.3) 40%,rgba(0,0,0,.75) 100%)}
+.map-carousel-content{position:relative;z-index:2;display:flex;flex-direction:column;justify-content:flex-end;flex:1;padding:28px 20px 48px}
+.map-carousel-name{font-family:'Rajdhani',sans-serif;font-weight:900;font-size:11px;letter-spacing:4px;text-transform:uppercase;color:rgba(255,255,255,.5);margin-bottom:12px;text-shadow:0 1px 6px rgba(0,0,0,.9)}
+.map-carousel-stats{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:20px}
+.map-carousel-pill{display:inline-flex;align-items:center;gap:10px;background:rgba(8,10,16,.6);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border:1px solid rgba(255,255,255,.12);border-radius:8px;padding:10px 18px}
+.map-carousel-val{font-family:'Rajdhani',sans-serif;font-weight:900;font-size:36px;color:#fff;line-height:1}
+.map-carousel-lbl{font-size:11px;color:rgba(255,255,255,.55);text-transform:uppercase;letter-spacing:1.5px;line-height:1.5}
+.map-carousel-wr-bar{background:rgba(8,10,16,.55);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:12px 16px}
+.map-carousel-swipe-hint{position:absolute;bottom:18px;left:50%;transform:translateX(-50%);display:flex;flex-direction:column;align-items:center;gap:2px;color:rgba(255,255,255,.35);font-family:'Rajdhani',sans-serif;font-size:10px;letter-spacing:1.5px;text-transform:uppercase;animation:hint-bounce 1.8s ease-in-out infinite}
+@keyframes hint-bounce{0%,100%{transform:translateX(-50%) translateY(0)}50%{transform:translateX(-50%) translateY(-5px)}}
+.map-carousel-dots{position:fixed;right:14px;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:6px;z-index:100}
+.map-carousel-dot{width:6px;height:6px;border-radius:50%;background:rgba(255,255,255,.25);cursor:pointer;transition:all .25s}
+.map-carousel-dot.active{background:var(--orange);height:18px;border-radius:3px}
+
 .search-wrap{position:relative;margin-bottom:16px}
 .search-input{width:100%;box-sizing:border-box;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:10px 16px 10px 40px;font-family:'Rajdhani',sans-serif;font-size:15px;color:var(--white);outline:none;transition:border-color .2s,box-shadow .2s}
 .search-input:focus{border-color:rgba(var(--orange-rgb),.5);box-shadow:0 0 0 3px rgba(var(--orange-rgb),.08)}
@@ -1596,45 +1619,127 @@ async function loadMaps() {
     el.innerHTML = emptyState('maps','No Map Data','Play some matches to see map statistics'); return;
   }
 
-  const cards = allMaps.map(mapname => {
-    const demoTotal = demoCounts[mapname] || 0;
-    const db        = dbByMap[mapname] || {};
-    const avgRnd    = db.avg_rounds  ? parseFloat(db.avg_rounds).toFixed(1)  : '—';
-    const maxRnd    = db.max_rounds  ? parseInt(db.max_rounds)                : '—';
-    const mapImg    = MAP_IMGS[mapname];
+  const isMobile = window.innerWidth < 768;
 
-    const statsBar = '';
+  if (isMobile) {
+    // ── MOBILE: full-screen vertical snap carousel ──────────────────────────
+    const slides = allMaps.map((mapname, idx) => {
+      const demoTotal = demoCounts[mapname] || 0;
+      const db        = dbByMap[mapname] || {};
+      const avgRnd    = db.avg_rounds ? parseFloat(db.avg_rounds).toFixed(1) : '—';
+      const maxRnd    = db.max_rounds ? parseInt(db.max_rounds) : '—';
+      const mapImg    = MAP_IMGS[mapname];
+      const t1w = db.t1_wins || 0; const t2w = db.t2_wins || 0;
+      const totalGames = t1w + t2w;
+      const wr = totalGames > 0 ? Math.round(t1w / totalGames * 100) : null;
 
-    return `
-    <div style="position:relative;border-radius:6px;overflow:hidden;margin-bottom:12px;border:1px solid rgba(255,255,255,.06)">
-      <div style="position:relative;height:160px">
-        ${mapImg
-          ? `<img src="${mapImg}" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:0.82">`
-          : `<div style="position:absolute;inset:0;background:linear-gradient(135deg,#0d1117,#1a2332)"></div>`}
-        <div style="position:absolute;inset:0;background:linear-gradient(to bottom,rgba(0,0,0,.08) 0%,rgba(0,0,0,.55) 100%)"></div>
-        <div style="position:relative;z-index:2;height:100%;display:flex;flex-direction:column;justify-content:flex-end;padding:16px 20px">
-          <div style="font-family:'Rajdhani',sans-serif;font-weight:800;font-size:13px;letter-spacing:3px;text-transform:uppercase;color:rgba(255,255,255,.55);margin-bottom:8px;text-shadow:0 1px 4px rgba(0,0,0,.8)">${esc(mapname)}</div>
-          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-            <div style="display:inline-flex;align-items:center;gap:10px;background:rgba(10,13,20,.5);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border:1px solid rgba(255,255,255,.1);border-radius:6px;padding:8px 16px">
-              <div style="font-family:'Rajdhani',sans-serif;font-weight:900;font-size:34px;color:#fff;line-height:1">${demoTotal}</div>
-              <div style="font-size:11px;color:rgba(255,255,255,.6);text-transform:uppercase;letter-spacing:1.5px;line-height:1.4">Games<br>Played</div>
+      return `<div class="map-carousel-slide" data-idx="${idx}">
+        ${mapImg ? `<img src="${mapImg}" class="map-carousel-bg">` : `<div class="map-carousel-bg" style="background:linear-gradient(135deg,#0d1117,#1a2332)"></div>`}
+        <div class="map-carousel-overlay"></div>
+        <div class="map-carousel-content">
+          <div class="map-carousel-name">${esc(mapname)}</div>
+          <div class="map-carousel-stats">
+            <div class="map-carousel-pill">
+              <div class="map-carousel-val">${demoTotal}</div>
+              <div class="map-carousel-lbl">Games<br>Played</div>
             </div>
-            ${avgRnd !== '—' ? `<div style="display:inline-flex;align-items:center;gap:10px;background:rgba(10,13,20,.5);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border:1px solid rgba(255,255,255,.1);border-radius:6px;padding:8px 16px">
-              <div style="font-family:'Rajdhani',sans-serif;font-weight:900;font-size:34px;color:#fff;line-height:1">${avgRnd}</div>
-              <div style="font-size:11px;color:rgba(255,255,255,.6);text-transform:uppercase;letter-spacing:1.5px;line-height:1.4">Avg<br>Rounds</div>
+            ${avgRnd !== '—' ? `<div class="map-carousel-pill">
+              <div class="map-carousel-val">${avgRnd}</div>
+              <div class="map-carousel-lbl">Avg<br>Rounds</div>
             </div>` : ''}
-            ${maxRnd !== '—' ? `<div style="display:inline-flex;align-items:center;gap:10px;background:rgba(10,13,20,.5);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border:1px solid rgba(255,255,255,.1);border-radius:6px;padding:8px 16px">
-              <div style="font-family:'Rajdhani',sans-serif;font-weight:900;font-size:34px;color:#fff;line-height:1">${maxRnd}</div>
-              <div style="font-size:11px;color:rgba(255,255,255,.6);text-transform:uppercase;letter-spacing:1.5px;line-height:1.4">Most<br>Rounds</div>
+            ${maxRnd !== '—' ? `<div class="map-carousel-pill">
+              <div class="map-carousel-val">${maxRnd}</div>
+              <div class="map-carousel-lbl">Most<br>Rounds</div>
             </div>` : ''}
           </div>
+          ${wr !== null ? `<div class="map-carousel-wr-bar">
+            <div style="display:flex;justify-content:space-between;margin-bottom:6px;font-family:'Rajdhani',sans-serif;font-size:12px;color:rgba(255,255,255,.5);letter-spacing:1px">
+              <span>T1 WINS</span><span>${wr}% WIN RATE</span><span>T2 WINS</span>
+            </div>
+            <div style="height:5px;border-radius:3px;background:rgba(255,255,255,.12);overflow:hidden">
+              <div style="height:100%;width:${wr}%;background:var(--orange);border-radius:3px;transition:width .6s"></div>
+            </div>
+            <div style="display:flex;justify-content:space-between;margin-top:5px;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:13px">
+              <span style="color:var(--orange)">${t1w}W</span><span style="color:rgba(255,255,255,.4)">${totalGames} maps</span><span style="color:rgba(91,196,245,.8)">${t2w}W</span>
+            </div>
+          </div>` : ''}
         </div>
-      </div>
-    </div>`;
-  }).join('');
+        <div class="map-carousel-swipe-hint" style="${idx===0?'':'display:none'}">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,.4)" stroke-width="2"><polyline points="6 9 12 15 18 9" transform="rotate(180 12 12)"/></svg>
+          <span>Swipe up</span>
+        </div>
+      </div>`;
+    }).join('');
 
-  el.innerHTML = cards;
+    const dots = allMaps.map((_, i) =>
+      `<div class="map-carousel-dot${i===0?' active':''}" data-i="${i}" onclick="carouselGoTo(${i})"></div>`
+    ).join('');
+
+    el.innerHTML = `
+      <div class="map-carousel-wrap" id="map-carousel">
+        ${slides}
+      </div>
+      <div class="map-carousel-dots" id="map-carousel-dots">${dots}</div>`;
+
+    // Intersection observer to update active dot
+    const observer = new IntersectionObserver(entries => {
+      entries.forEach(entry => {
+        if (entry.intersectionRatio > 0.5) {
+          const idx = parseInt(entry.target.dataset.idx);
+          document.querySelectorAll('.map-carousel-dot').forEach((d, i) => d.classList.toggle('active', i === idx));
+        }
+      });
+    }, { root: document.getElementById('map-carousel'), threshold: 0.5 });
+    document.querySelectorAll('.map-carousel-slide').forEach(s => observer.observe(s));
+
+  } else {
+    // ── DESKTOP: stacked cards (original style) ──────────────────────────────
+    const cards = allMaps.map(mapname => {
+      const demoTotal = demoCounts[mapname] || 0;
+      const db        = dbByMap[mapname] || {};
+      const avgRnd    = db.avg_rounds  ? parseFloat(db.avg_rounds).toFixed(1)  : '—';
+      const maxRnd    = db.max_rounds  ? parseInt(db.max_rounds)                : '—';
+      const mapImg    = MAP_IMGS[mapname];
+
+      return `
+      <div style="position:relative;border-radius:6px;overflow:hidden;margin-bottom:12px;border:1px solid rgba(255,255,255,.06)">
+        <div style="position:relative;height:160px">
+          ${mapImg
+            ? `<img src="${mapImg}" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:0.82">`
+            : `<div style="position:absolute;inset:0;background:linear-gradient(135deg,#0d1117,#1a2332)"></div>`}
+          <div style="position:absolute;inset:0;background:linear-gradient(to bottom,rgba(0,0,0,.08) 0%,rgba(0,0,0,.55) 100%)"></div>
+          <div style="position:relative;z-index:2;height:100%;display:flex;flex-direction:column;justify-content:flex-end;padding:16px 20px">
+            <div style="font-family:'Rajdhani',sans-serif;font-weight:800;font-size:13px;letter-spacing:3px;text-transform:uppercase;color:rgba(255,255,255,.55);margin-bottom:8px;text-shadow:0 1px 4px rgba(0,0,0,.8)">${esc(mapname)}</div>
+            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+              <div style="display:inline-flex;align-items:center;gap:10px;background:rgba(10,13,20,.5);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border:1px solid rgba(255,255,255,.1);border-radius:6px;padding:8px 16px">
+                <div style="font-family:'Rajdhani',sans-serif;font-weight:900;font-size:34px;color:#fff;line-height:1">${demoTotal}</div>
+                <div style="font-size:11px;color:rgba(255,255,255,.6);text-transform:uppercase;letter-spacing:1.5px;line-height:1.4">Games<br>Played</div>
+              </div>
+              ${avgRnd !== '—' ? `<div style="display:inline-flex;align-items:center;gap:10px;background:rgba(10,13,20,.5);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border:1px solid rgba(255,255,255,.1);border-radius:6px;padding:8px 16px">
+                <div style="font-family:'Rajdhani',sans-serif;font-weight:900;font-size:34px;color:#fff;line-height:1">${avgRnd}</div>
+                <div style="font-size:11px;color:rgba(255,255,255,.6);text-transform:uppercase;letter-spacing:1.5px;line-height:1.4">Avg<br>Rounds</div>
+              </div>` : ''}
+              ${maxRnd !== '—' ? `<div style="display:inline-flex;align-items:center;gap:10px;background:rgba(10,13,20,.5);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border:1px solid rgba(255,255,255,.1);border-radius:6px;padding:8px 16px">
+                <div style="font-family:'Rajdhani',sans-serif;font-weight:900;font-size:34px;color:#fff;line-height:1">${maxRnd}</div>
+                <div style="font-size:11px;color:rgba(255,255,255,.6);text-transform:uppercase;letter-spacing:1.5px;line-height:1.4">Most<br>Rounds</div>
+              </div>` : ''}
+            </div>
+          </div>
+        </div>
+      </div>`;
+    }).join('');
+
+    el.innerHTML = cards;
+  }
 }
+
+function carouselGoTo(idx) {
+  const wrap = document.getElementById('map-carousel');
+  if (!wrap) return;
+  const slide = wrap.querySelectorAll('.map-carousel-slide')[idx];
+  if (slide) slide.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
 
 // ── Head-to-Head ──────────────────────────────────────────────────────────────
 let _h2hPlayers = null;
@@ -2084,68 +2189,115 @@ async function loadSpecialists() {
 function renderSpecialists(data, tab) {
   _specTab = tab;
   const el = document.getElementById('p-specialists');
+
+  // ── SVG icons per category ──────────────────────────────────────────────────
+  const TAB_ICONS = {
+    clutch: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/></svg>`,
+    entry:  `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="13 17 18 12 13 7"/><polyline points="6 17 11 12 6 7"/></svg>`,
+    flash:  `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>`,
+    utility:`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/><path d="M3.05 11a9 9 0 1 1 .5 4.5"/></svg>`,
+  };
+
   const tabs = [
     {id:'clutch',  label:'Clutch Kings'},
     {id:'entry',   label:'Entry Fraggers'},
     {id:'flash',   label:'Flash Kings'},
     {id:'utility', label:'Utility'},
   ];
-  const tabsHtml = tabs.map(t => `
-    <div onclick="renderSpecialists(window._specData,'${t.id}')"
-      style="padding:8px 20px;border-radius:3px;cursor:pointer;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:13px;letter-spacing:1.5px;text-transform:uppercase;transition:all .15s;${tab===t.id?'background:var(--orange);color:#000;':'background:var(--surface2);color:var(--muted2);border:1px solid var(--border);'}">${t.label}</div>
-  `).join('');
 
-  let sorted, cols, getValue;
+  const tabsHtml = tabs.map(t => {
+    const active = tab === t.id;
+    return `<button onclick="renderSpecialists(window._specData,'${t.id}')"
+      style="display:inline-flex;align-items:center;gap:7px;padding:8px 16px;border-radius:4px;cursor:pointer;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:12px;letter-spacing:1.5px;text-transform:uppercase;border:none;transition:all .15s;
+        ${active ? 'background:var(--orange);color:#000;' : 'background:var(--surface2);color:var(--muted2);outline:1px solid var(--border);'}">
+      <span style="color:${active?'#000':'var(--muted2)'}">${TAB_ICONS[t.id]}</span>${t.label}
+    </button>`;
+  }).join('');
+
+  let sorted, primaryVal, primaryLabel, secondaryVal, secondaryLabel;
   if (tab === 'clutch') {
     sorted = [...data].sort((a,b) => (b.clutch_total||0)-(a.clutch_total||0));
-    cols = [{label:'1v1 Wins'},{label:'1v2 Wins'},{label:'Total Clutches'}];
-    getValue = p => `<td style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:18px;color:var(--ct);text-align:center">${p.clutch_1v1??0}</td><td style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:18px;color:var(--t);text-align:center">${p.clutch_1v2??0}</td><td style="font-family:'Rajdhani',sans-serif;font-weight:800;font-size:20px;color:var(--orange);text-align:center">${p.clutch_total??0}</td>`;
+    primaryVal   = p => p.clutch_total ?? 0;
+    primaryLabel = 'Clutches';
+    secondaryVal   = p => `${p.clutch_1v1??0} 1v1 · ${p.clutch_1v2??0} 1v2`;
+    secondaryLabel = '';
   } else if (tab === 'entry') {
     sorted = [...data].sort((a,b) => (b.entry_wins||0)-(a.entry_wins||0));
-    cols = [{label:'Entry Wins'},{label:'Attempts'},{label:'Success Rate'}];
-    getValue = p => `<td style="font-family:'Rajdhani',sans-serif;font-weight:800;font-size:20px;color:var(--orange);text-align:center">${p.entry_wins??0}</td><td style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:18px;color:var(--muted2);text-align:center">${p.entry_attempts??0}</td><td style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:18px;color:var(--win);text-align:center">${p.entry_rate!=null?p.entry_rate+'%':'—'}</td>`;
+    primaryVal   = p => p.entry_wins ?? 0;
+    primaryLabel = 'Entry Wins';
+    secondaryVal   = p => `${p.entry_attempts??0} attempts · ${p.entry_rate!=null?p.entry_rate+'%':'—'} rate`;
+    secondaryLabel = '';
   } else if (tab === 'flash') {
     sorted = [...data].sort((a,b) => (b.flash_successes||0)-(a.flash_successes||0));
-    cols = [{label:'Total Flashes'},{label:'Per Map'},{label:'Matches'}];
-    getValue = p => `<td style="font-family:'Rajdhani',sans-serif;font-weight:800;font-size:20px;color:var(--orange);text-align:center">${p.flash_successes??0}</td><td style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:18px;color:var(--win);text-align:center">${p.flashes_per_map??'—'}</td><td style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:18px;color:var(--muted2);text-align:center">${p.matches??0}</td>`;
+    primaryVal   = p => p.flash_successes ?? 0;
+    primaryLabel = 'Flashes';
+    secondaryVal   = p => `${p.flashes_per_map??'—'} per map`;
+    secondaryLabel = '';
   } else {
     sorted = [...data].sort((a,b) => (b.utility_damage||0)-(a.utility_damage||0));
-    cols = [{label:'Total Util DMG'},{label:'Per Map'},{label:'Matches'}];
-    getValue = p => `<td style="font-family:'Rajdhani',sans-serif;font-weight:800;font-size:20px;color:var(--orange);text-align:center">${p.utility_damage!=null?Number(p.utility_damage).toLocaleString():'—'}</td><td style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:18px;color:var(--win);text-align:center">${p.util_dmg_per_map??'—'}</td><td style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:18px;color:var(--muted2);text-align:center">${p.matches??0}</td>`;
+    primaryVal   = p => p.utility_damage != null ? Number(p.utility_damage).toLocaleString() : '—';
+    primaryLabel = 'Util DMG';
+    secondaryVal   = p => `${p.util_dmg_per_map??'—'} per map`;
+    secondaryLabel = '';
   }
 
-  const rankColors = ['var(--orange)','#a0aec0','#b87333'];
-  const headerCols = cols.map(c=>`<th style="padding:8px 16px;text-align:center;font-family:'Rajdhani',sans-serif;font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:rgba(var(--orange-rgb),.7);border-bottom:1px solid rgba(var(--orange-rgb),.25)">${c.label}</th>`).join('');
-  const rows = sorted.map((p,i) => {
-    const rank = i+1;
-    const rankStr = rank <= 3
-      ? `<span style="font-size:18px;color:${rankColors[rank-1]};font-family:'Rajdhani',sans-serif;font-weight:800">${rank}</span>`
-      : `<span style="font-size:14px;color:var(--muted2);font-family:'Rajdhani',sans-serif;font-weight:700">${rank}</span>`;
-    const avatarEl = p._steam_avatar
-      ? `<img src="${p._steam_avatar}" style="width:30px;height:30px;border-radius:50%;object-fit:cover;vertical-align:middle;margin-right:10px;border:1px solid var(--border2)" alt="">`
-      : `<span style="display:inline-block;width:30px;height:30px;border-radius:50%;background:var(--surface2);vertical-align:middle;margin-right:10px;text-align:center;line-height:30px;font-size:11px;font-family:'Rajdhani',sans-serif;font-weight:700;color:var(--muted2)">${initials(p.name)}</span>`;
-    const rankCls = rank===1?'spec-rank-gold':rank===2?'spec-rank-silver':rank===3?'spec-rank-bronze':'';
-    return `<tr class="${rankCls}" onclick="go('player',{name:'${esc(p.name)}'},'specialists')" style="cursor:pointer;border-bottom:1px solid var(--border)">
-      <td style="padding:10px 14px;text-align:center;width:48px">${rankStr}</td>
-      <td style="padding:10px 14px">${avatarEl}<span style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:15px;color:var(--white);vertical-align:middle">${esc(p.name)}</span></td>
-      ${getValue(p)}
-    </tr>`;
+  // ── Podium (top 3) ───────────────────────────────────────────────────────────
+  const [p1, p2, p3] = sorted;
+  const podiumOrder = [p2, p1, p3].filter(Boolean); // visual order: 2nd left, 1st center, 3rd right
+  const podiumHeights = [72, 100, 52]; // px height of the podium platform
+  const podiumColors  = ['#a0aec0', 'var(--orange)', '#b87333'];
+  const podiumRanks   = [2, 1, 3];
+  const crownSvg = `<svg width="18" height="14" viewBox="0 0 24 18" fill="none"><path d="M2 16h20M3 16L1 4l7 6 4-8 4 8 7-6-2 12H3z" stroke="var(--orange)" stroke-width="1.8" stroke-linejoin="round" fill="rgba(255,133,0,.15)"/></svg>`;
+
+  const podiumHtml = `
+    <div style="display:flex;align-items:flex-end;justify-content:center;gap:8px;margin-bottom:20px;padding:0 8px">
+      ${podiumOrder.map((p, vi) => {
+        const rank = podiumRanks[vi];
+        const color = podiumColors[vi];
+        const height = podiumHeights[vi];
+        const isFirst = rank === 1;
+        const av = p._steam_avatar
+          ? `<img src="${p._steam_avatar}" style="width:${isFirst?'62px':'50px'};height:${isFirst?'62px':'50px'};border-radius:50%;object-fit:cover;border:2px solid ${color};box-shadow:0 0 12px ${color}44">`
+          : `<div style="width:${isFirst?'62px':'50px'};height:${isFirst?'62px':'50px'};border-radius:50%;background:var(--surface2);border:2px solid ${color};display:flex;align-items:center;justify-content:center;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:${isFirst?'18px':'14px'};color:${color}">${initials(p.name)}</div>`;
+        return `
+          <div style="flex:1;max-width:160px;display:flex;flex-direction:column;align-items:center;gap:6px;cursor:pointer" onclick="go('player',{name:'${esc(p.name)}'},'specialists')">
+            ${isFirst ? `<div style="margin-bottom:2px">${crownSvg}</div>` : ''}
+            ${av}
+            <div style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:${isFirst?'14px':'12px'};color:#fff;text-align:center;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:0 4px">${esc(p.name)}</div>
+            <div style="font-family:'Rajdhani',sans-serif;font-weight:900;font-size:${isFirst?'22px':'18px'};color:${color};line-height:1">${primaryVal(p)}</div>
+            <div style="width:100%;background:linear-gradient(to bottom,${color}33,${color}18);border:1px solid ${color}55;border-bottom:none;border-radius:6px 6px 0 0;height:${height}px;display:flex;align-items:center;justify-content:center">
+              <span style="font-family:'Rajdhani',sans-serif;font-weight:900;font-size:28px;color:${color}99">${rank}</span>
+            </div>
+          </div>`;
+      }).join('')}
+    </div>`;
+
+  // ── Rows (4th onward) ────────────────────────────────────────────────────────
+  const restRows = sorted.slice(3).map((p, i) => {
+    const rank = i + 4;
+    const av = p._steam_avatar
+      ? `<img src="${p._steam_avatar}" style="width:30px;height:30px;border-radius:50%;object-fit:cover;border:1px solid var(--border2)" alt="">`
+      : `<div style="width:30px;height:30px;border-radius:50%;background:var(--surface2);display:flex;align-items:center;justify-content:center;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:11px;color:var(--muted2)">${initials(p.name)}</div>`;
+    return `<div onclick="go('player',{name:'${esc(p.name)}'},'specialists')"
+      style="display:flex;align-items:center;gap:12px;padding:10px 14px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .12s"
+      onmouseover="this.style.background='rgba(var(--orange-rgb),.04)'" onmouseout="this.style.background=''">
+      <span style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:13px;color:var(--muted2);width:22px;text-align:center;flex-shrink:0">${rank}</span>
+      ${av}
+      <span style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:14px;color:var(--white);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(p.name)}</span>
+      <div style="text-align:right;flex-shrink:0">
+        <div style="font-family:'Rajdhani',sans-serif;font-weight:800;font-size:16px;color:var(--orange)">${primaryVal(p)}</div>
+        <div style="font-size:10px;color:var(--muted2)">${secondaryVal(p)}</div>
+      </div>
+    </div>`;
   }).join('');
 
   window._specData = data;
   el.innerHTML = `
-    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px">${tabsHtml}</div>
-    <div class="card lb-wrap">
-      <table class="lb-table" style="width:100%;border-collapse:collapse">
-        <thead><tr style="background:var(--table-head-bg);box-shadow:inset 0 1px 0 rgba(var(--orange-rgb),.2),inset 0 -1px 0 rgba(var(--orange-rgb),.12)">
-          <th style="padding:8px 14px;width:48px;border-bottom:1px solid rgba(var(--orange-rgb),.25)"></th>
-          <th style="padding:8px 14px;text-align:left;font-family:'Rajdhani',sans-serif;font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:rgba(var(--orange-rgb),.7);border-bottom:1px solid rgba(var(--orange-rgb),.25)">Player</th>
-          ${headerCols}
-        </tr></thead>
-        <tbody>${rows}</tbody>
-      </table>
-    </div>`;
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:20px">${tabsHtml}</div>
+    ${sorted.length >= 1 ? podiumHtml : ''}
+    ${sorted.length > 3 ? `<div class="card" style="padding:0">${restRows}</div>` : ''}`;
 }
+
 
 // ── Demo Browser ──────────────────────────────────────────────────────────────
 let _demoData = null;
@@ -2819,6 +2971,55 @@ function renderTeam(lineups) {
     </div>`;
   }).join('');
 
+  // Sort by wins for podium
+  const byWins = [...lineups].sort((a,b) => b.wins - a.wins || b.winRate - a.winRate);
+  const [pw1, pw2, pw3] = byWins;
+
+  const podiumColors  = ['#a0aec0', 'var(--orange)', '#b87333'];
+  const podiumHeights = [72, 104, 52];
+  const podiumRanks   = [2, 1, 3];
+  const podiumTeams   = [pw2, pw1, pw3].filter(Boolean);
+  const crownSvg = `<svg width="20" height="15" viewBox="0 0 24 18" fill="none"><path d="M2 16h20M3 16L1 4l7 6 4-8 4 8 7-6-2 12H3z" stroke="var(--orange)" stroke-width="1.8" stroke-linejoin="round" fill="rgba(255,133,0,.15)"/></svg>`;
+  const trophySvg = (color) => `<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/></svg>`;
+
+  const podiumHtml = podiumTeams.length >= 1 ? `
+    <div class="card" style="margin-bottom:16px;padding:20px 12px 0;overflow:hidden;position:relative">
+      <div style="position:absolute;top:12px;left:16px;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--muted2);display:flex;align-items:center;gap:6px">
+        ${trophySvg('rgba(var(--orange-rgb),.6)')} Most Wins
+      </div>
+      <div style="display:flex;align-items:flex-end;justify-content:center;gap:6px;margin-top:28px">
+        ${podiumTeams.map((lu, vi) => {
+          const rank = podiumRanks[vi];
+          const color = podiumColors[vi];
+          const h = podiumHeights[vi];
+          const isFirst = rank === 1;
+          const winPct = lu.winRate;
+          const winColor = winPct >= 60 ? 'var(--win)' : winPct >= 40 ? 'var(--orange)' : 'var(--loss)';
+
+          // Build small player avatar strip (up to 5)
+          const avatarStrip = lu.names.slice(0,5).map(n => {
+            const sid = lu.playerSids?.[n] || '';
+            const cached = sid && window._teamAvatarCache?.[sid];
+            return cached
+              ? `<img src="${cached}" style="width:20px;height:20px;border-radius:50%;object-fit:cover;border:1px solid var(--border2);margin-left:-6px;flex-shrink:0">`
+              : `<div style="width:20px;height:20px;border-radius:50%;background:var(--surface2);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:8px;font-family:'Rajdhani',sans-serif;font-weight:700;color:var(--muted2);margin-left:-6px;flex-shrink:0">${initials(n)}</div>`;
+          }).join('');
+
+          return `<div style="flex:1;max-width:190px;display:flex;flex-direction:column;align-items:center;gap:5px">
+            ${isFirst ? `<div style="margin-bottom:1px">${crownSvg}</div>` : ''}
+            <div style="font-family:'Rajdhani',sans-serif;font-weight:900;font-size:${isFirst?'15px':'13px'};color:#fff;text-align:center;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:0 4px" title="${esc(lu.teamName)}">${esc(lu.teamName)}</div>
+            <div style="font-family:'Rajdhani',sans-serif;font-weight:900;font-size:${isFirst?'32px':'24px'};color:${color};line-height:1">${lu.wins}</div>
+            <div style="font-size:9px;color:var(--muted2);letter-spacing:1px;text-transform:uppercase;margin-top:-2px">wins</div>
+            <div style="font-size:10px;color:${winColor};font-family:'Rajdhani',sans-serif;font-weight:700">${winPct}% WR · ${lu.total} played</div>
+            <div style="display:flex;justify-content:center;padding-left:6px;margin-bottom:6px">${avatarStrip}</div>
+            <div style="width:100%;background:linear-gradient(to bottom,${color}28,${color}10);border:1px solid ${color}44;border-bottom:none;border-radius:6px 6px 0 0;height:${h}px;display:flex;align-items:center;justify-content:center">
+              <span style="font-family:'Rajdhani',sans-serif;font-weight:900;font-size:${isFirst?'32px':'24px'};color:${color}55">${rank}</span>
+            </div>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>` : '';
+
   // No title — just the cards + refresh button tucked top-right
   el.innerHTML = `
     <div style="display:flex;justify-content:flex-end;margin-bottom:10px">
@@ -2827,6 +3028,7 @@ function renderTeam(lineups) {
         Refresh
       </button>
     </div>
+    ${podiumHtml}
     ${cards}`;
 
   attachShine();
