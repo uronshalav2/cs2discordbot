@@ -1454,11 +1454,19 @@ async function loadPlayer(name) {
   }).join('');
 
   const recentRows = recent.map(m => {
-    // Resolve the player's actual team name from their team slot (team1/team2)
-    const playerTeamName = m.team === 'team1' ? (m.team1_name ?? '') : m.team === 'team2' ? (m.team2_name ?? '') : (m.team ?? '');
-    const winnerLc = (m.winner ?? '').toLowerCase().trim();
-    const playerTeamLc = playerTeamName.toLowerCase().trim();
-    const won = winnerLc && playerTeamLc && winnerLc === playerTeamLc;
+    // Determine win/loss by score — bulletproof, avoids winner-name casing mismatches
+    const s1 = parseInt(m.team1_score ?? 0);
+    const s2 = parseInt(m.team2_score ?? 0);
+    let won = false;
+    if (s1 !== s2) {
+      won = (m.team === 'team1') ? s1 > s2 : s2 > s1;
+    } else {
+      // Scores equal or missing — fall back to winner name (case-insensitive)
+      const playerTeamName = m.team === 'team1' ? (m.team1_name ?? '') : m.team === 'team2' ? (m.team2_name ?? '') : (m.team ?? '');
+      const winnerLc = (m.winner ?? '').toLowerCase().trim();
+      const playerTeamLc = playerTeamName.toLowerCase().trim();
+      won = !!(winnerLc && playerTeamLc && winnerLc === playerTeamLc);
+    }
     const result = won ? `<span style="color:var(--win)">W</span>` : `<span style="color:var(--loss)">L</span>`;
     const kd2 = m.deaths>0?(m.kills/m.deaths).toFixed(2):parseFloat(m.kills||0).toFixed(2);
     return `<tr onclick="go('match',{id:'${m.matchid}'},'player')">
