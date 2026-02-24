@@ -878,7 +878,8 @@ const _GH_BASE = `https://raw.githubusercontent.com/${_GH.user}/${_GH.repo}/${_G
 // Fetch from local API; if result is empty/null, fall back to GitHub snapshot
 async function apiFetch(endpoint, ghFile) {
   try {
-    const r = await fetch(endpoint);
+    // Use 'default' cache mode so browser respects Cache-Control headers from server
+    const r = await fetch(endpoint, { cache: 'default' });
     if (r.ok) {
       const data = await r.json();
       // Consider it valid if it's a non-empty array or a non-error object
@@ -901,6 +902,25 @@ async function apiFetch(endpoint, ghFile) {
   }
   return ghFile && ghFile.startsWith('matches/') ? {} : [];
 }
+
+// ── Prefetch: warm the most-used endpoints in the background on page load ──
+// By the time the user clicks a nav item the data is already in browser cache.
+(function prefetchOnLoad() {
+  const PREFETCH = [
+    '/api/matches?limit=30',
+    '/api/matches/full',
+    '/api/leaderboard',
+    '/api/mapstats',
+    '/api/specialists',
+  ];
+  // Use requestIdleCallback when available so prefetch doesn't compete with render
+  const schedule = window.requestIdleCallback || (fn => setTimeout(fn, 800));
+  schedule(() => {
+    PREFETCH.forEach(url => {
+      fetch(url, { cache: 'default' }).catch(() => {});
+    });
+  });
+})();
 
 const _pages = ['matches','leaderboard','maps','h2h','specialists','demos','player','match','predict','team','teamh2h'];
 
@@ -2701,36 +2721,15 @@ async function loadTeam() {
   if (_teamCache) { renderTeam(_teamCache); return; }
   el.innerHTML=`<div class="loading"><span class="spin" style="display:inline-flex;align-items:center;justify-content:center;color:var(--orange)">${_spinnerSvg}</span></div>`;
 
-  // Step 1: get match list (metadata only - players array is NOT included here)
-  const matchList = await apiFetch('/api/matches?limit=50', 'matches.json');
-  if (!Array.isArray(matchList) || !matchList.length) {
-    el.innerHTML = emptyState('team','No Match Data','Team stats will appear after matches are completed'); return;
-  }
-
-  // Helper: fetch a single match with a timeout so one slow request can't stall everything
-  async function fetchMatchSafe(matchid) {
-    try {
-      const ctrl = new AbortController();
-      const timer = setTimeout(() => ctrl.abort(), 8000);
-      const r = await fetch('/api/match/' + matchid, { signal: ctrl.signal });
-      clearTimeout(timer);
-      if (!r.ok) return null;
+  // Single request — server returns all matches with full player data
+  let fullMatches = [];
+  try {
+    const r = await fetch('/api/matches/full');
+    if (r.ok) {
       const d = await r.json();
-      return d && !d.error ? d : null;
-    } catch(_) { return null; }
-  }
-
-  // Step 2: fetch each match in parallel batches, show progress
-  const BATCH = 15;
-  const fullMatches = [];
-  for (let i = 0; i < matchList.length; i += BATCH) {
-    const batch = matchList.slice(i, i + BATCH);
-    const results = await Promise.all(batch.map(m => fetchMatchSafe(m.matchid)));
-    results.forEach(r => { if (r) fullMatches.push(r); });
-    const pct = Math.round(Math.min((i + BATCH) / matchList.length * 100, 100));
-    const wrap = el.querySelector('.spin');
-    if (wrap) wrap.title = `Loading… ${pct}%`;
-  }
+      if (Array.isArray(d)) fullMatches = d;
+    }
+  } catch(_) {}
 
   if (!fullMatches.length) {
     el.innerHTML = emptyState('team','No Match Data','Team stats will appear after matches are completed'); return;
