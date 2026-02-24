@@ -674,6 +674,7 @@ def _merge_missing_players(fshost_players: list, matchzy_players: list,
 
 
 
+def _patch_aggregate_rows(rows: list) -> list:
     """
     Patch leaderboard / specialists / career aggregate rows with edited player names.
     Only names are patched here — aggregate stats (kills/deaths totals) stay as MatchZy
@@ -946,7 +947,7 @@ def _aggregate_stats_from_fshost() -> list:
 
 
 async def handle_api_leaderboard(request):
-    """GET /api/leaderboard — career stats, MatchZy primary / fshost fallback"""
+    """GET /api/leaderboard — career stats from matchzy_stats_players only"""
     try:
         conn = get_db()
         c = conn.cursor(dictionary=True)
@@ -977,29 +978,14 @@ async def handle_api_leaderboard(request):
         """)
         rows = c.fetchall()
         c.close(); conn.close()
-
-        # Fallback to fshost aggregation if MatchZy has no data
-        if not rows:
-            loop = asyncio.get_running_loop()
-            rows = await loop.run_in_executor(None, _aggregate_stats_from_fshost)
-            rows.sort(key=lambda r: int(r.get('kills') or 0), reverse=True)
-
         rows = _patch_aggregate_rows(rows)
         return _json_response(rows)
     except Exception as e:
-        # MatchZy tables may not exist at all — go straight to fshost
-        try:
-            loop = asyncio.get_running_loop()
-            rows = await loop.run_in_executor(None, _aggregate_stats_from_fshost)
-            rows.sort(key=lambda r: int(r.get('kills') or 0), reverse=True)
-            rows = _patch_aggregate_rows(rows)
-            return _json_response(rows)
-        except Exception as e2:
-            return _json_response({"error": str(e2)})
+        return _json_response({"error": str(e)})
 
 
 async def handle_api_specialists(request):
-    """GET /api/specialists — specialist stat boards, MatchZy primary / fshost fallback"""
+    """GET /api/specialists — specialist stat boards from matchzy_stats_players only"""
     try:
         conn = get_db()
         c = conn.cursor(dictionary=True)
@@ -1027,23 +1013,10 @@ async def handle_api_specialists(request):
         """)
         rows = c.fetchall()
         c.close(); conn.close()
-
-        if not rows:
-            loop = asyncio.get_running_loop()
-            rows = await loop.run_in_executor(None, _aggregate_stats_from_fshost)
-            rows.sort(key=lambda r: int(r.get('clutch_total') or r.get('clutch_wins') or 0), reverse=True)
-
         rows = _patch_aggregate_rows(rows)
         return _json_response(rows)
     except Exception as e:
-        try:
-            loop = asyncio.get_running_loop()
-            rows = await loop.run_in_executor(None, _aggregate_stats_from_fshost)
-            rows.sort(key=lambda r: int(r.get('clutch_total') or r.get('clutch_wins') or 0), reverse=True)
-            rows = _patch_aggregate_rows(rows)
-            return _json_response(rows)
-        except Exception as e2:
-            return _json_response({"error": str(e2)})
+        return _json_response({"error": str(e)})
 
 STEAMID64_BASE = 76561197960265728
 
@@ -1117,32 +1090,20 @@ async def handle_api_mapstats(request):
         return _json_response({"error": str(e)})
 
 async def handle_api_h2h(request):
-    """GET /api/h2h?p1=name&p2=name — head to head career stats, MatchZy primary / fshost fallback"""
+    """GET /api/h2h?p1=name&p2=name — head to head career stats from matchzy_stats_players only"""
     p1 = request.rel_url.query.get('p1', '')
     p2 = request.rel_url.query.get('p2', '')
     if not p1 or not p2:
         return _json_response({"error": "Need p1 and p2 query params"})
 
-    loop = asyncio.get_running_loop()
-
-    def _find_in_fshost(name):
-        rows = _aggregate_stats_from_fshost()
-        name_map = _edited_name_map()
-        edited_sid = next((s for s, n in name_map.items() if n == name), None)
-        row = next((r for r in rows if r['name'] == name
-                    or r['steamid64'] == edited_sid), None)
-        if not row:
-            return None
-        r = dict(row)
-        if r['steamid64'] in name_map:
-            r['name'] = name_map[r['steamid64']]
-        return r
-
     r1 = r2 = None
     try:
         conn = get_db()
         c = conn.cursor(dictionary=True)
+        name_map = _edited_name_map()
+
         def fetch_player(name):
+            # Try by stored name first
             c.execute(f"""
                 SELECT name, steamid64,
                     COUNT(DISTINCT matchid)                                     AS matches,
@@ -1164,24 +1125,42 @@ async def handle_api_h2h(request):
                 GROUP BY steamid64, name
                 LIMIT 1
             """, (name,))
-            return c.fetchone()
+            row = c.fetchone()
+            if row:
+                return row
+            # Try by steamid64 (in case name was edited)
+            sid = next((s for s, n in name_map.items() if n == name), None)
+            if sid:
+                c.execute(f"""
+                    SELECT name, steamid64,
+                        COUNT(DISTINCT matchid) AS matches,
+                        SUM(kills) AS kills, SUM(deaths) AS deaths,
+                        SUM(assists) AS assists, SUM(head_shot_kills) AS headshots,
+                        SUM(damage) AS damage, SUM(enemies5k) AS aces,
+                        SUM(enemies4k) AS quads, SUM(v1_wins) AS clutch_wins,
+                        SUM(entry_wins) AS entry_wins,
+                        ROUND(SUM(kills)/NULLIF(SUM(deaths),0),2) AS kd,
+                        ROUND(SUM(head_shot_kills)/NULLIF(SUM(kills),0)*100,1) AS hs_pct,
+                        ROUND(SUM(damage)/NULLIF(COUNT(DISTINCT CONCAT(matchid,'_',mapnumber)),0)/30,1) AS adr
+                    FROM {MATCHZY_TABLES['players']}
+                    WHERE steamid64 = %s AND steamid64 != '0'
+                    GROUP BY steamid64, name LIMIT 1
+                """, (sid,))
+                return c.fetchone()
+            return None
+
         r1 = fetch_player(p1)
         r2 = fetch_player(p2)
         c.close(); conn.close()
-        name_map = _edited_name_map()
+
+        # Patch edited names
         for r in [r1, r2]:
             if r:
-                r = dict(r)
                 sid = str(r.get('steamid64') or '')
-                if sid in name_map: r['name'] = name_map[sid]
-    except Exception:
-        pass
-
-    # Fallback to fshost for any missing player
-    if not r1:
-        r1 = await loop.run_in_executor(None, _find_in_fshost, p1)
-    if not r2:
-        r2 = await loop.run_in_executor(None, _find_in_fshost, p2)
+                if sid in name_map:
+                    r['name'] = name_map[sid]
+    except Exception as e:
+        return _json_response({"error": str(e)})
 
     return _json_response({"p1": r1, "p2": r2})
 
