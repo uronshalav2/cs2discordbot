@@ -1691,6 +1691,8 @@ async def start_http_server():
     app.router.add_get('/stats',   handle_stats_page)
     app.router.add_get('/',        handle_stats_page)
     app.router.add_get('/health',  handle_health_check)
+    assets_path = pathlib.Path(__file__).parent / "assets"
+    app.router.add_static('/assets', path=assets_path, name='assets')
 
     port = int(os.getenv('PORT', 8080))
     runner = web.AppRunner(app)
