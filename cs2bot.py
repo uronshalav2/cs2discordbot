@@ -177,19 +177,24 @@ async def handle_api_player(request):
                 SELECT p.matchid, p.mapnumber, p.team, p.steamid64,
                     p.kills, p.deaths, p.assists, p.damage, p.head_shot_kills,
                     p.enemies5k, p.v1_wins,
-                    m.mapname, m.winner, m.team1_score, m.team2_score,
-                    mm.team1_name, mm.team2_name,
+                    m.mapname, m.team1_score, m.team2_score,
+                    mm.team1_name, mm.team2_name, mm.winner,
                     ROUND(p.damage/30,1) AS adr,
                     ROUND(p.head_shot_kills/NULLIF(p.kills,0)*100,1) AS hs_pct,
                     CASE
+                        WHEN LOWER(p.team) = LOWER(mm.team1_name) THEN 'team1'
+                        WHEN LOWER(p.team) = LOWER(mm.team2_name) THEN 'team2'
                         WHEN LOWER(p.team) IN ('team1','team_1','1') THEN 'team1'
                         WHEN LOWER(p.team) IN ('team2','team_2','2') THEN 'team2'
-                        WHEN LOWER(p.team) = 'ct' THEN
-                            CASE WHEN LOWER(mm.team1_name) = LOWER(m.winner) THEN 'team1' ELSE 'team2' END
-                        WHEN LOWER(p.team) = 't' THEN
-                            CASE WHEN LOWER(mm.team1_name) = LOWER(m.winner) THEN 'team2' ELSE 'team1' END
-                        ELSE p.team
-                    END AS player_team
+                        ELSE NULL
+                    END AS player_team,
+                    CASE
+                        WHEN LOWER(p.team) = LOWER(mm.team1_name) THEN
+                            CASE WHEN LOWER(mm.winner) = LOWER(mm.team1_name) THEN 1 ELSE 0 END
+                        WHEN LOWER(p.team) = LOWER(mm.team2_name) THEN
+                            CASE WHEN LOWER(mm.winner) = LOWER(mm.team2_name) THEN 1 ELSE 0 END
+                        ELSE NULL
+                    END AS player_won
                 FROM {MATCHZY_TABLES['players']} p
                 LEFT JOIN {MATCHZY_TABLES['maps']} m ON p.matchid=m.matchid AND p.mapnumber=m.mapnumber
                 LEFT JOIN {MATCHZY_TABLES['matches']} mm ON p.matchid=mm.matchid
