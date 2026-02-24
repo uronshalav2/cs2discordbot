@@ -25,43 +25,82 @@
 }
 *{box-sizing:border-box;margin:0;padding:0}
 html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;font-size:13px;scroll-behavior:smooth}
-/* NAV */
-nav{background:var(--nav-bg);border-bottom:2px solid var(--nav-border);display:flex;align-items:center;padding:0 20px;height:50px;position:sticky;top:0;z-index:200;gap:0;transition:background .2s,border-color .2s}
-.logo{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:26px;letter-spacing:-2px;color:var(--orange);text-transform:uppercase;margin-right:20px;white-space:nowrap;display:flex;align-items:center;line-height:1}
-.tabs{display:flex;gap:0;height:100%;position:relative}
+/* ── SIDEBAR NAV (desktop) ───────────────────────────────────────────────── */
+:root { --sidebar-w: 200px; }
 
-/* Tab groups */
-.tab-group{position:relative;display:flex;height:100%}
-.tab-group-label{height:100%;padding:0 14px;display:flex;align-items:center;gap:5px;font-family:'Rajdhani',sans-serif;font-weight:600;font-size:12px;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted2);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-2px;transition:color .18s,background .18s;white-space:nowrap;user-select:none}
-.tab-group-label:hover{color:var(--text);background:rgba(255,255,255,.03)}
-.tab-group-label.group-active{color:var(--orange)}
-.tab-group-label svg{transition:transform .2s}
-.tab-group.open .tab-group-label svg{transform:rotate(180deg)}
-.tab-group-arrow{opacity:.5;width:10px;height:10px}
+nav{
+  display:none; /* hidden on mobile, shown via media query below */
+}
 
-/* Dropdown sub-menu */
-.tab-dropdown{position:absolute;top:100%;left:0;min-width:160px;background:var(--subnav-bg);border:1px solid var(--border);border-radius:6px;padding:4px;box-shadow:0 8px 24px rgba(0,0,0,.4);opacity:0;pointer-events:none;transform:translateY(-4px);transition:opacity .18s,transform .18s;z-index:300}
-.tab-group.open .tab-dropdown{opacity:1;pointer-events:auto;transform:translateY(0)}
-.tab-dd-item{padding:9px 12px;border-radius:4px;font-family:'Rajdhani',sans-serif;font-weight:600;font-size:12px;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted2);cursor:pointer;transition:all .12s;white-space:nowrap}
-.tab-dd-item:hover{color:var(--text);background:rgba(255,255,255,.05)}
-.tab-dd-item.active{color:var(--orange);background:var(--orange-glow)}
+.sidebar{
+  position:fixed;top:0;left:0;bottom:0;width:var(--sidebar-w);
+  background:var(--nav-bg);border-right:1px solid var(--border);
+  display:flex;flex-direction:column;z-index:200;
+  transition:background .2s,border-color .2s;
+  overflow:hidden;
+}
+.sidebar-logo{
+  padding:20px 18px 16px;
+  font-family:'Rajdhani',sans-serif;font-weight:700;font-size:26px;
+  letter-spacing:-2px;color:var(--orange);text-transform:uppercase;
+  display:flex;align-items:center;line-height:1;
+  border-bottom:1px solid var(--border);margin-bottom:8px;flex-shrink:0;
+}
+.sidebar-section{
+  padding:8px 14px 4px;
+  font-family:'Rajdhani',sans-serif;font-size:9px;font-weight:700;
+  letter-spacing:2px;text-transform:uppercase;color:var(--muted);
+  margin-top:6px;
+}
+.sidebar-item{
+  display:flex;align-items:center;gap:10px;
+  padding:9px 16px;margin:1px 8px;border-radius:5px;
+  font-family:'Rajdhani',sans-serif;font-weight:600;font-size:12px;
+  letter-spacing:1.5px;text-transform:uppercase;
+  color:var(--muted2);cursor:pointer;
+  border-left:2px solid transparent;
+  transition:color .15s,background .15s,border-color .15s;
+  white-space:nowrap;user-select:none;
+}
+.sidebar-item svg{width:15px;height:15px;flex-shrink:0;opacity:.6;transition:opacity .15s}
+.sidebar-item:hover{color:var(--text);background:rgba(255,255,255,.04)}
+.sidebar-item:hover svg{opacity:.9}
+.sidebar-item.active{
+  color:var(--orange);background:var(--orange-glow);
+  border-left-color:var(--orange);
+}
+.sidebar-item.active svg{opacity:1}
+.sidebar-spacer{flex:1}
+.sidebar-bottom{
+  border-top:1px solid var(--border);padding:10px 8px;
+  display:flex;align-items:center;gap:4px;flex-shrink:0;
+}
+.sidebar-icon-btn{
+  flex:1;display:flex;align-items:center;justify-content:center;
+  padding:8px;border-radius:5px;cursor:pointer;
+  background:transparent;border:none;
+  color:var(--muted2);transition:color .15s,background .15s;
+}
+.sidebar-icon-btn:hover{color:var(--orange);background:var(--orange-glow)}
+/* Notification badge on sidebar */
+.sidebar-icon-btn .notif-badge{top:4px;right:4px}
 
-/* Single tabs (Matches, Demos) */
-.tab{height:100%;padding:0 14px;display:flex;align-items:center;font-family:'Rajdhani',sans-serif;font-weight:600;font-size:12px;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted2);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-2px;transition:color .18s,background .18s;position:relative;white-space:nowrap}
-.tab:hover{color:var(--text);background:rgba(255,255,255,.03)}
-.tab.active{color:var(--orange)}
-/* Sliding underline indicator */
-.tab-indicator{position:absolute;bottom:-2px;height:2px;background:var(--orange);transition:left .25s cubic-bezier(.4,0,.2,1),width .25s cubic-bezier(.4,0,.2,1),opacity .2s;pointer-events:none;box-shadow:0 0 8px rgba(var(--orange-rgb),.6);border-radius:1px}
-.nav-right{margin-left:auto;display:flex;gap:10px;align-items:center}
-
-
-/* Hamburger */
-.hamburger{display:none;flex-direction:column;justify-content:center;gap:5px;width:36px;height:36px;cursor:pointer;padding:4px;border-radius:3px;margin-left:auto;flex-shrink:0}
+/* ── MOBILE NAV ──────────────────────────────────────────────────────────── */
+.topbar{
+  display:none;
+  background:var(--nav-bg);border-bottom:1px solid var(--border);
+  align-items:center;padding:0 16px;height:50px;position:sticky;top:0;z-index:200;
+}
+.topbar-logo{
+  font-family:'Rajdhani',sans-serif;font-weight:700;font-size:24px;
+  letter-spacing:-2px;color:var(--orange);text-transform:uppercase;
+  display:flex;align-items:center;line-height:1;
+}
+.hamburger{display:flex;flex-direction:column;justify-content:center;gap:5px;width:36px;height:36px;cursor:pointer;padding:4px;border-radius:3px;margin-left:auto;flex-shrink:0}
 .hamburger span{display:block;height:2px;background:var(--orange);border-radius:2px;transition:all .25s}
 .hamburger.open span:nth-child(1){transform:translateY(7px) rotate(45deg)}
 .hamburger.open span:nth-child(2){opacity:0}
 .hamburger.open span:nth-child(3){transform:translateY(-7px) rotate(-45deg)}
-/* Mobile drawer */
 .mobile-menu{display:none;position:fixed;top:50px;left:0;right:0;bottom:0;background:rgba(0,0,0,.6);z-index:199;backdrop-filter:blur(4px)}
 .mobile-menu.open{display:block}
 .mobile-drawer{background:var(--nav-bg);border-bottom:2px solid var(--border);padding:8px 0}
@@ -70,15 +109,34 @@ nav{background:var(--nav-bg);border-bottom:2px solid var(--nav-border);display:f
 .mobile-tab{padding:11px 24px;font-family:'Rajdhani',sans-serif;font-weight:600;font-size:14px;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted2);cursor:pointer;border-left:3px solid transparent;transition:all .15s}
 .mobile-tab:hover{color:var(--text);background:rgba(255,255,255,.03)}
 .mobile-tab.active{color:var(--orange);border-left-color:var(--orange);background:var(--orange-glow)}
-@media(max-width:768px){
+
+/* Responsive breakpoint */
+@media(min-width:769px){
+  .sidebar{display:flex}
+  .topbar{display:none}
+  /* Unused desktop nav remnants hidden */
   .tabs{display:none}
   .nav-right{display:none}
+  .hamburger{display:none}
+}
+@media(max-width:768px){
+  .sidebar{display:none}
+  .topbar{display:flex}
   .hamburger{display:flex}
 }
 
-/* LAYOUT */
+/* ── LAYOUT ──────────────────────────────────────────────────────────────── */
 #app{max-width:1100px;margin:0 auto;padding:24px 16px}
-@media(max-width:767px){#app{padding:20px 12px}}
+@media(min-width:769px){
+  body{padding-left:var(--sidebar-w)}
+  #app{padding:28px 24px}
+}
+@media(max-width:768px){#app{padding:20px 12px}}
+
+/* Keep these for any remaining references — they are no-ops on desktop now */
+.tab-indicator{display:none}
+.tab-group-label,.tab-group-arrow,.tab-dropdown,.tab-dd-item,.tab-group{display:none}
+.tab,.nav-right{display:none}
 .page-title{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:20px;letter-spacing:1px;text-transform:uppercase;color:var(--white);margin-bottom:16px;display:flex;align-items:center;gap:10px}
 .page-title .sub{font-size:11px;color:var(--muted2);font-weight:500;letter-spacing:.5px;text-transform:none;font-family:'Inter',sans-serif}
 
@@ -591,80 +649,91 @@ nav{background:var(--nav-bg);border-bottom:2px solid var(--nav-border);display:f
 </style>
 </head>
 <body>
-<nav>
-  <div class="logo"><span style="font-size:22px;font-weight:800;letter-spacing:-1px">R</span><span style="font-size:22px;font-weight:300;letter-spacing:-1px;color:var(--orange2)">G</span></div>
-  <div class="tabs">
-    <!-- Single: Matches -->
-    <div class="tab active" data-p="matches">Matches</div>
-
-    <!-- Group: Stats -->
-    <div class="tab-group" id="tg-stats">
-      <div class="tab-group-label" id="tgl-stats">
-        Stats
-        <svg class="tab-group-arrow" viewBox="0 0 10 10" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M2 3.5L5 6.5L8 3.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-      </div>
-      <div class="tab-dropdown">
-        <div class="tab-dd-item" data-p="leaderboard" onclick="_navStack=[];go('leaderboard')">Leaderboard</div>
-        <div class="tab-dd-item" data-p="maps" onclick="_navStack=[];go('maps')">Maps</div>
-        <div class="tab-dd-item" data-p="specialists" onclick="_navStack=[];go('specialists')">Specialists</div>
-        <div class="tab-dd-item" data-p="team" onclick="_navStack=[];go('team')">Team Stats</div>
-      </div>
-    </div>
-
-    <!-- Group: Players -->
-    <div class="tab-group" id="tg-players">
-      <div class="tab-group-label" id="tgl-players">
-        Players
-        <svg class="tab-group-arrow" viewBox="0 0 10 10" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M2 3.5L5 6.5L8 3.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-      </div>
-      <div class="tab-dropdown">
-        <div class="tab-dd-item" data-p="h2h" onclick="_navStack=[];go('h2h')">Head-to-Head</div>
-        <div class="tab-dd-item" data-p="teamh2h" onclick="_navStack=[];go('teamh2h')">Team vs Team</div>
-        <div class="tab-dd-item" data-p="predict" onclick="_navStack=[];go('predict')">Predict</div>
-      </div>
-    </div>
-
-    <!-- Single: Demos -->
-    <div class="tab" data-p="demos">Demos</div>
-
-    <div class="tab-indicator" id="tab-indicator"></div>
+<!-- ── SIDEBAR (desktop) ────────────────────────────────────────────────── -->
+<aside class="sidebar">
+  <div class="sidebar-logo">
+    <span style="font-size:22px;font-weight:800;letter-spacing:-1px">R</span><span style="font-size:22px;font-weight:300;letter-spacing:-1px;color:var(--orange2)">G</span>
   </div>
-  <div class="nav-right">
-    <!-- Search -->
-    <div style="position:relative" id="search-wrap-nav">
-      <button onclick="toggleSearchOverlay()" title="Search" style="background:transparent;border:none;cursor:pointer;padding:6px;color:var(--muted2);display:flex;align-items:center;transition:color .2s" onmouseover="this.style.color='var(--orange)'" onmouseout="this.style.color='var(--muted2)'">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-      </button>
-    </div>
-    <!-- Notification Bell -->
-    <div style="position:relative" id="notif-wrap">
-      <button class="notif-btn" id="notif-btn" onclick="toggleNotifDropdown()" title="Notifications" aria-label="Notifications">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>
-        </svg>
-        <span class="notif-badge" id="notif-badge"></span>
-      </button>
-      <div class="notif-dropdown" id="notif-dropdown">
-        <div class="notif-header">
-          <span class="notif-header-title">Notifications</span>
-          <button class="notif-clear-btn" onclick="clearAllNotifs()">Clear All</button>
-        </div>
-        <div class="notif-list" id="notif-list"></div>
-        <div class="notif-footer">
-          <button class="notif-footer-btn" onclick="go('matches');closeNotifDropdown()">View All Matches →</button>
-        </div>
-      </div>
-    </div>
-    <button class="settings-btn" onclick="openSettings()" title="Settings" aria-label="Settings">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
-      </svg>
+
+  <div class="sidebar-section">Matches</div>
+  <div class="sidebar-item active" data-p="matches" onclick="_navStack=[];go('matches')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18"/><circle cx="12" cy="15" r="2"/></svg>
+    Matches
+  </div>
+  <div class="sidebar-item" data-p="demos" onclick="_navStack=[];go('demos')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/><polygon points="10 9 15 12 10 15 10 9"/></svg>
+    Demos
+  </div>
+
+  <div class="sidebar-section">Stats</div>
+  <div class="sidebar-item" data-p="leaderboard" onclick="_navStack=[];go('leaderboard')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="13" width="6" height="8" rx="1"/><rect x="9" y="8" width="6" height="13" rx="1"/><rect x="16" y="3" width="6" height="18" rx="1"/></svg>
+    Leaderboard
+  </div>
+  <div class="sidebar-item" data-p="maps" onclick="_navStack=[];go('maps')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="3 7 9 4 15 7 21 4 21 17 15 20 9 17 3 20"/><line x1="9" y1="4" x2="9" y2="17"/><line x1="15" y1="7" x2="15" y2="20"/></svg>
+    Maps
+  </div>
+  <div class="sidebar-item" data-p="specialists" onclick="_navStack=[];go('specialists')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+    Specialists
+  </div>
+  <div class="sidebar-item" data-p="team" onclick="_navStack=[];go('team')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+    Team Stats
+  </div>
+
+  <div class="sidebar-section">Players</div>
+  <div class="sidebar-item" data-p="h2h" onclick="_navStack=[];go('h2h')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><circle cx="17" cy="11" r="3"/></svg>
+    Head-to-Head
+  </div>
+  <div class="sidebar-item" data-p="teamh2h" onclick="_navStack=[];go('teamh2h')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="9" height="10" rx="1"/><rect x="13" y="7" width="9" height="10" rx="1"/><path d="M11 12h2"/></svg>
+    Team vs Team
+  </div>
+  <div class="sidebar-item" data-p="predict" onclick="_navStack=[];go('predict')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+    Predict
+  </div>
+
+  <div class="sidebar-spacer"></div>
+
+  <!-- Bottom: search, notifications, settings -->
+  <div class="sidebar-bottom">
+    <button class="sidebar-icon-btn" onclick="toggleSearchOverlay()" title="Search">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
     </button>
+    <button class="sidebar-icon-btn notif-btn" id="notif-btn" onclick="toggleNotifDropdown()" title="Notifications" style="position:relative">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+      <span class="notif-badge" id="notif-badge"></span>
+    </button>
+    <button class="sidebar-icon-btn settings-btn" onclick="openSettings()" title="Settings">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+    </button>
+  </div>
+  <!-- Notification dropdown (reused) -->
+  <div class="notif-dropdown" id="notif-dropdown" style="bottom:54px;top:auto;left:8px;right:8px;width:auto">
+    <div class="notif-header">
+      <span class="notif-header-title">Notifications</span>
+      <button class="notif-clear-btn" onclick="clearAllNotifs()">Clear All</button>
+    </div>
+    <div class="notif-list" id="notif-list"></div>
+    <div class="notif-footer">
+      <button class="notif-footer-btn" onclick="go('matches');closeNotifDropdown()">View All Matches →</button>
+    </div>
+  </div>
+</aside>
+
+<!-- ── MOBILE TOPBAR ─────────────────────────────────────────────────────── -->
+<div class="topbar">
+  <div class="topbar-logo">
+    <span style="font-size:22px;font-weight:800;letter-spacing:-1px">R</span><span style="font-size:22px;font-weight:300;letter-spacing:-1px;color:var(--orange2)">G</span>
   </div>
   <div class="hamburger" id="hamburger" onclick="toggleMenu()">
     <span></span><span></span><span></span>
   </div>
-</nav>
+</div>
 <div class="mobile-menu" id="mobile-menu" onclick="closeMenu()">
   <div class="mobile-drawer" onclick="event.stopPropagation()">
     <div class="mobile-section" style="border-top:none;margin-top:0;padding-top:12px">Matches</div>
@@ -793,41 +862,7 @@ function closeMenu() {
 }
 
 // ── Tab indicator ─────────────────────────────────────────────────────────────
-function moveTabIndicator(page) {
-  const indicator = document.getElementById('tab-indicator');
-  if (!indicator) return;
-  const tabsEl = document.querySelector('.tabs');
-  if (!tabsEl) return;
-  const tabsRect = tabsEl.getBoundingClientRect();
-
-  // For direct tabs (Matches, Demos) find the .tab element
-  const directTab = document.querySelector(`.tab[data-p="${page}"]`);
-  if (directTab) {
-    const r = directTab.getBoundingClientRect();
-    indicator.style.left = (r.left - tabsRect.left) + 'px';
-    indicator.style.width = r.width + 'px';
-    indicator.style.opacity = '1';
-    return;
-  }
-
-  // For group pages (leaderboard, maps, specialists, h2h, predict)
-  // position the indicator under the parent group label
-  const groupMap = {leaderboard:'stats',maps:'stats',specialists:'stats',team:'stats',h2h:'players',predict:'players',teamh2h:'players'};
-  const groupId = groupMap[page];
-  if (groupId) {
-    const groupLabel = document.getElementById('tgl-' + groupId);
-    if (groupLabel) {
-      const r = groupLabel.getBoundingClientRect();
-      indicator.style.left = (r.left - tabsRect.left) + 'px';
-      indicator.style.width = r.width + 'px';
-      indicator.style.opacity = '1';
-      return;
-    }
-  }
-
-  // Hidden pages (player, match) — keep indicator where it is
-  indicator.style.opacity = '0';
-}
+function moveTabIndicator(page) { /* no-op: replaced by sidebar */ }
 
 // ── GitHub JSON Fallback ─────────────────────────────────────────────────────
 // If the local API returns empty/error, automatically try the GitHub backup.
@@ -893,18 +928,9 @@ function go(page, params, back) {
       el.classList.remove('page-in','page-out');
     });
     incoming.classList.add('page-in');
-    document.querySelectorAll('.tab').forEach(function(t){ t.classList.toggle('active', t.dataset.p===page); });
+    // Update sidebar + mobile nav active states
+    document.querySelectorAll('.sidebar-item').forEach(function(t){ t.classList.toggle('active', t.dataset.p===page); });
     document.querySelectorAll('.mobile-tab').forEach(function(t){ t.classList.toggle('active', t.dataset.p===page); });
-    // Update dropdown items active state
-    document.querySelectorAll('.tab-dd-item').forEach(function(t){ t.classList.toggle('active', t.dataset.p===page); });
-    // Update group label active state
-    const groupMap = {leaderboard:'stats',maps:'stats',specialists:'stats',team:'stats',h2h:'players',predict:'players',teamh2h:'players'};
-    document.querySelectorAll('.tab-group-label').forEach(function(l){ l.classList.remove('group-active'); });
-    if (groupMap[page]) {
-      const gl = document.getElementById('tgl-'+groupMap[page]);
-      if (gl) gl.classList.add('group-active');
-    }
-    moveTabIndicator(page);
     _curPage = page;
     _curParams = params;
     if(page==='matches')     loadMatches();
@@ -942,46 +968,8 @@ function goBack(defaultPage) {
     go(defaultPage || 'matches');
   }
 }
-document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',()=>{ _navStack=[]; go(t.dataset.p); }));
 
-// ── Dropdown menus — JS-controlled so the gap between label and panel ─────────
-// doesn't accidentally close the menu while the mouse crosses it.
-(function initDropdowns() {
-  document.querySelectorAll('.tab-group').forEach(group => {
-    let closeTimer = null;
 
-    function openGroup() {
-      clearTimeout(closeTimer);
-      // Close all other groups first
-      document.querySelectorAll('.tab-group.open').forEach(g => {
-        if (g !== group) g.classList.remove('open');
-      });
-      group.classList.add('open');
-    }
-
-    function scheduleClose() {
-      closeTimer = setTimeout(() => group.classList.remove('open'), 120);
-    }
-
-    group.addEventListener('mouseenter', openGroup);
-    group.addEventListener('mouseleave', scheduleClose);
-
-    // Clicking the label also toggles (for keyboard/touch)
-    const label = group.querySelector('.tab-group-label');
-    if (label) {
-      label.addEventListener('click', e => {
-        e.stopPropagation();
-        group.classList.toggle('open');
-      });
-    }
-  });
-
-  // Close all dropdowns when clicking outside
-  document.addEventListener('click', () => {
-    document.querySelectorAll('.tab-group.open').forEach(g => g.classList.remove('open'));
-  });
-  document.querySelector('nav')?.addEventListener('click', e => e.stopPropagation());
-})();
 
 
 // Force dark mode always — clear any saved light-mode preference
