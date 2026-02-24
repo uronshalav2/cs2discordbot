@@ -69,7 +69,8 @@ nav{background:var(--nav-bg);border-bottom:2px solid var(--nav-border);display:f
 }
 
 /* LAYOUT */
-#app{max-width:1100px;margin:0 auto;padding:20px 16px}
+#app{max-width:1100px;margin:0 auto;padding:24px 16px}
+@media(max-width:767px){#app{padding:20px 12px}}
 .page-title{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:20px;letter-spacing:1px;text-transform:uppercase;color:var(--white);margin-bottom:16px;display:flex;align-items:center;gap:10px}
 .page-title .sub{font-size:11px;color:var(--muted2);font-weight:500;letter-spacing:.5px;text-transform:none;font-family:'Inter',sans-serif}
 
@@ -396,7 +397,7 @@ nav{background:var(--nav-bg);border-bottom:2px solid var(--nav-border);display:f
 .pred-role{font-size:9px;letter-spacing:1px;text-transform:uppercase;color:var(--muted2);margin-top:1px}
 
 /* UTIL */
-.loading{padding:48px;text-align:center;color:var(--muted2)}
+.loading{display:flex;align-items:center;justify-content:center;min-height:calc(100svh - 160px);color:var(--muted2)}
 .spin{display:inline-block;width:160px;height:auto;margin-bottom:0}
 .spin svg,.spin svg *{fill:var(--orange)!important}
 .spin{
@@ -2917,13 +2918,13 @@ function renderTeam(lineups) {
 
     // Player rows — show avatar placeholder initially, load async after render
     const playerPills = lu.names.map(n => {
-      // Find steamid for this player name from any player in the data
       const sid = lu.playerSids ? (lu.playerSids[n] || '') : '';
-      const avatarId = sid ? `tav-${sid}` : '';
-      const cached = sid && window._teamAvatarCache[sid];
+      const safeSid = sid ? sid.replace(/\D/g,'') : ''; // digits only, safe for CSS id
+      const avatarId = safeSid ? `tav-${safeSid}` : '';
+      const cached = safeSid && window._teamAvatarCache[safeSid];
       const avatarHtml = cached
         ? `<img class="lineup-avatar" src="${cached}" alt="">`
-        : `<div class="lineup-avatar-placeholder" id="${avatarId}">${initials(n)}</div>`;
+        : `<div class="lineup-avatar-placeholder"${avatarId ? ` id="${avatarId}"` : ''}>${initials(n)}</div>`;
       return `<div class="lineup-player" onclick="event.stopPropagation();go('player',{name:'${esc(n)}'},'team')">
         ${avatarHtml}
         <span style="font-family:'Rajdhani',sans-serif;font-weight:600;font-size:13px;color:var(--white)">${esc(n)}</span>
@@ -3050,13 +3051,25 @@ function renderTeam(lineups) {
   // Load Steam avatars async — replace placeholders as they arrive
   lineups.forEach(lu => {
     (lu.playerSidList || []).forEach(async ({name, sid}) => {
-      if (!sid || window._teamAvatarCache[sid]) return;
+      if (!sid) return;
+      const safeSid = sid.replace(/\D/g,'');
+      if (!safeSid) return;
+      if (window._teamAvatarCache[safeSid]) {
+        // Already cached — replace any placeholders that are still in the DOM
+        document.querySelectorAll(`#tav-${safeSid}`).forEach(el => {
+          const img = document.createElement('img');
+          img.className = 'lineup-avatar';
+          img.src = window._teamAvatarCache[safeSid];
+          img.alt = '';
+          el.replaceWith(img);
+        });
+        return;
+      }
       try {
-        const s = await fetch('/api/steam/' + sid).then(r=>r.json()).catch(()=>({}));
+        const s = await fetch('/api/steam/' + safeSid).then(r=>r.json()).catch(()=>({}));
         if (!s.avatar) return;
-        window._teamAvatarCache[sid] = s.avatar;
-        // Replace all placeholder elements for this steamid
-        document.querySelectorAll(`#tav-${sid}`).forEach(el => {
+        window._teamAvatarCache[safeSid] = s.avatar;
+        document.querySelectorAll(`#tav-${safeSid}`).forEach(el => {
           const img = document.createElement('img');
           img.className = 'lineup-avatar';
           img.src = s.avatar;
