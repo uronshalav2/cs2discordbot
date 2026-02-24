@@ -35,12 +35,46 @@ async def handle_health_check(request):
 # STATS WEBSITE API ENDPOINTS
 # ─────────────────────────────────────────────────────────────────────────────
 
-def _json_response(data):
+def _json_response(data, max_age=0):
+    headers = {"Access-Control-Allow-Origin": "*"}
+    if max_age > 0:
+        headers["Cache-Control"] = f"public, max-age={max_age}"
+    else:
+        headers["Cache-Control"] = "no-cache"
     return web.Response(
         text=json.dumps(data, default=str),
         content_type='application/json',
-        headers={"Access-Control-Allow-Origin": "*"},
+        headers=headers,
     )
+
+# ─────────────────────────────────────────────────────────────────────────────
+# SERVER-SIDE IN-MEMORY CACHE
+# ─────────────────────────────────────────────────────────────────────────────
+import time as _time
+
+_API_CACHE: dict = {}
+_API_CACHE_TTL = {
+    'matches':      30,
+    'matches_full': 30,
+    'leaderboard':  60,
+    'specialists':  60,
+    'mapstats':     60,
+    'teams':        60,
+}
+
+def _cache_get(key: str):
+    entry = _API_CACHE.get(key)
+    if entry and (_time.monotonic() - entry['ts']) < _API_CACHE_TTL.get(key, 30):
+        return entry['data']
+    return None
+
+def _cache_set(key: str, data):
+    _API_CACHE[key] = {'data': data, 'ts': _time.monotonic()}
+    return data
+
+def _cache_bust(*keys):
+    for k in keys:
+        _API_CACHE.pop(k, None)
 
 async def handle_api_player(request):
     """GET /api/player/{name} — full career stats, MatchZy primary / fshost fallback"""
@@ -224,6 +258,9 @@ async def handle_api_matches(request):
     """
     try:
         limit = int(request.rel_url.query.get('limit', 50))
+        cached = _cache_get('matches')
+        if cached is not None:
+            return _json_response(cached[:limit], max_age=30)
         loop  = asyncio.get_running_loop()
 
         # ── Build match list from fshost JSONs ────────────────────────────────
@@ -312,7 +349,8 @@ async def handle_api_matches(request):
                 if edits.get('map'):    r['mapname'] = edits['map']
                 if edits.get('winner'): r['winner']  = edits['winner']
 
-        return _json_response(results)
+        _cache_set('matches', results)
+        return _json_response(results, max_age=30)
     except Exception as e:
         return _json_response({"error": str(e)})
 
@@ -426,6 +464,99 @@ async def handle_api_match(request):
         })
     except Exception as e:
         return _json_response({"error": str(e)})
+
+
+async def handle_api_matches_full(request):
+    """
+    GET /api/matches/full — all matches WITH player data in one shot.
+    Eliminates the N+1 fetch pattern on the team stats page.
+    """
+    try:
+        cached = _cache_get('matches_full')
+        if cached is not None:
+            return _json_response(cached, max_age=30)
+
+        loop = asyncio.get_running_loop()
+        matchid_map = await loop.run_in_executor(None, build_matchid_to_demo_map)
+        all_edits   = _get_all_edits()
+
+        results = []
+        for mid, entry in matchid_map.items():
+            meta = entry.get('metadata') or {}
+            if not meta:
+                continue
+            matchid = str(meta.get('match_id') or mid)
+            edits   = all_edits.get(matchid, {})
+            t1e     = edits.get('team1', {})
+            t2e     = edits.get('team2', {})
+
+            t1 = meta.get('team1', {})
+            t2 = meta.get('team2', {})
+
+            t1name  = t1e.get('name')  or t1.get('name', 'Team 1')
+            t2name  = t2e.get('name')  or t2.get('name', 'Team 2')
+            t1score = t1e['score'] if 'score' in t1e else t1.get('score', 0)
+            t2score = t2e['score'] if 'score' in t2e else t2.get('score', 0)
+            mapname = edits.get('map')    or meta.get('map', 'unknown')
+            winner  = edits.get('winner') or meta.get('winner', '')
+
+            players = _players_from_fshost(meta, matchid)
+            players = _apply_match_player_edits(players, matchid)
+            for p in players:
+                if p.get('team') == 'team1' and t1e.get('name'):
+                    p['team_name'] = t1name
+                elif p.get('team') == 'team2' and t2e.get('name'):
+                    p['team_name'] = t2name
+
+            added_players = edits.get('added_players', [])
+            for ap in list(added_players):
+                ap = dict(ap)
+                ap['source'] = 'added'; ap['matchid'] = matchid; ap['mapnumber'] = 1
+                if ap.get('team') == 'team1': ap['team_name'] = t1name
+                elif ap.get('team') == 'team2': ap['team_name'] = t2name
+                kills = int(ap.get('kills', 0) or 0); deaths = int(ap.get('deaths', 0) or 0)
+                hs = int(ap.get('head_shot_kills', 0) or 0); dmg = int(ap.get('damage', 0) or 0)
+                ap.setdefault('kd',     round(kills / deaths, 2) if deaths else float(kills))
+                ap.setdefault('hs_pct', round(hs / kills * 100, 1) if kills else 0.0)
+                ap.setdefault('adr',    round(dmg / 30, 1))
+                players.append(ap)
+
+            results.append({
+                'meta': {
+                    'matchid':     matchid,
+                    'team1_name':  t1name,
+                    'team2_name':  t2name,
+                    'team1_score': t1score,
+                    'team2_score': t2score,
+                    'winner':      winner,
+                    'end_time':    meta.get('date'),
+                    'mapname':     mapname,
+                    'filename':    entry.get('name', ''),
+                    'is_edited':   bool(edits),
+                },
+                'maps': [{
+                    'matchid':      matchid,
+                    'mapnumber':    1,
+                    'mapname':      mapname,
+                    'team1_score':  t1score,
+                    'team2_score':  t2score,
+                    'winner':       winner,
+                    'total_rounds': meta.get('total_rounds'),
+                }],
+                'players': players,
+                'demo': {
+                    'name': entry.get('name', ''),
+                    'url':  entry.get('download_url', ''),
+                    'size': entry.get('size_formatted', ''),
+                },
+            })
+
+        results.sort(key=lambda r: str(r['meta'].get('end_time') or ''), reverse=True)
+        _cache_set('matches_full', results)
+        return _json_response(results, max_age=30)
+    except Exception as e:
+        return _json_response({"error": str(e)})
+
 
 
 def _players_from_fshost(data: dict, matchid: str) -> list:
@@ -549,6 +680,7 @@ _get_all_edits._cache = {}
 def _bust_edits_cache():
     """Call this after saving edits so the cache refreshes immediately."""
     _get_all_edits._cache = {}
+    _cache_bust('matches', 'matches_full', 'leaderboard', 'specialists', 'mapstats', 'teams')
 
 
 def _edited_name_map():
@@ -963,6 +1095,9 @@ def _aggregate_stats_from_fshost() -> list:
 async def handle_api_leaderboard(request):
     """GET /api/leaderboard — career stats from matchzy_stats_players only"""
     try:
+        cached = _cache_get('leaderboard')
+        if cached is not None:
+            return _json_response(cached, max_age=60)
         conn = get_db()
         c = conn.cursor(dictionary=True)
         c.execute(f"""
@@ -993,7 +1128,8 @@ async def handle_api_leaderboard(request):
         rows = c.fetchall()
         c.close(); conn.close()
         rows = _patch_aggregate_rows(rows)
-        return _json_response(rows)
+        _cache_set('leaderboard', rows)
+        return _json_response(rows, max_age=60)
     except Exception as e:
         return _json_response({"error": str(e)})
 
@@ -1001,6 +1137,9 @@ async def handle_api_leaderboard(request):
 async def handle_api_specialists(request):
     """GET /api/specialists — specialist stat boards from matchzy_stats_players only"""
     try:
+        cached = _cache_get('specialists')
+        if cached is not None:
+            return _json_response(cached, max_age=60)
         conn = get_db()
         c = conn.cursor(dictionary=True)
         c.execute(f"""
@@ -1028,7 +1167,8 @@ async def handle_api_specialists(request):
         rows = c.fetchall()
         c.close(); conn.close()
         rows = _patch_aggregate_rows(rows)
-        return _json_response(rows)
+        _cache_set('specialists', rows)
+        return _json_response(rows, max_age=60)
     except Exception as e:
         return _json_response({"error": str(e)})
 
@@ -1080,6 +1220,9 @@ async def handle_api_steam(request):
 async def handle_api_mapstats(request):
     """GET /api/mapstats — win rates and avg scores per map"""
     try:
+        cached = _cache_get('mapstats')
+        if cached is not None:
+            return _json_response(cached, max_age=60)
         conn = get_db()
         c = conn.cursor(dictionary=True)
         c.execute(f"""
@@ -1099,7 +1242,8 @@ async def handle_api_mapstats(request):
         """)
         rows = c.fetchall()
         c.close(); conn.close()
-        return _json_response(rows)
+        _cache_set('mapstats', rows)
+        return _json_response(rows, max_age=60)
     except Exception as e:
         return _json_response({"error": str(e)})
 
@@ -1522,6 +1666,7 @@ async def start_http_server():
     app.router.add_get('/api/player/{name}',           handle_api_player)
     app.router.add_get('/api/steam/{steamid64}',       handle_api_steam)
     app.router.add_get('/api/matches',                 handle_api_matches)
+    app.router.add_get('/api/matches/full',            handle_api_matches_full)
     app.router.add_get('/api/match/{matchid}',         handle_api_match)
     app.router.add_get('/api/demos',                   handle_api_demos)
     app.router.add_get('/api/leaderboard',             handle_api_leaderboard)
@@ -1546,8 +1691,6 @@ async def start_http_server():
     app.router.add_get('/stats',   handle_stats_page)
     app.router.add_get('/',        handle_stats_page)
     app.router.add_get('/health',  handle_health_check)
-    assets_path = pathlib.Path(__file__).parent / "assets"
-    app.router.add_static('/assets', path=assets_path, name='assets')
 
     port = int(os.getenv('PORT', 8080))
     runner = web.AppRunner(app)
