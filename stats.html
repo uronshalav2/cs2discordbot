@@ -519,15 +519,14 @@ nav{background:var(--nav-bg);border-bottom:2px solid var(--nav-border);display:f
 .team-stat-pill-val{font-family:'Rajdhani',sans-serif;font-weight:800;font-size:22px;color:var(--white);line-height:1}
 .team-stat-pill-lbl{font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--muted2);margin-top:3px}
 /* Map photo rows */
-.map-photo-row{position:relative;overflow:hidden;border-bottom:1px solid var(--border);flex:1;min-height:42px}
+.map-photo-row{position:relative;overflow:hidden;border-bottom:1px solid rgba(255,255,255,.06);height:48px;flex-shrink:0}
 .map-photo-row:last-child{border-bottom:none}
-.map-photo-bg{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:center 40%}
-.map-photo-overlay{position:absolute;inset:0;background:rgba(0,0,0,.38)}
-.map-photo-strip{position:absolute;inset:0;display:flex;align-items:center;gap:10px;padding:0 14px;backdrop-filter:brightness(.7);-webkit-backdrop-filter:brightness(.7);background:rgba(10,10,14,.45)}
-.map-photo-label{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:12px;letter-spacing:1.5px;text-transform:uppercase;color:#fff;width:68px;flex-shrink:0;text-shadow:0 1px 4px rgba(0,0,0,.8)}
-.map-photo-bar-track{flex:1;height:3px;border-radius:2px;background:rgba(255,255,255,.15);overflow:hidden}
-.map-photo-bar-fill{height:100%;border-radius:2px;transition:width .5s cubic-bezier(.4,0,.2,1)}
-.map-photo-wl{font-size:11px;font-family:'Rajdhani',sans-serif;font-weight:700;width:48px;text-align:right;flex-shrink:0;color:rgba(255,255,255,.8);text-shadow:0 1px 4px rgba(0,0,0,.8)}
+.map-photo-bg{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:center 35%;opacity:.28;filter:saturate(1.2)}
+.map-photo-content{position:relative;z-index:2;display:flex;align-items:center;gap:10px;padding:0 14px;height:48px}
+.map-photo-label{font-family:'Rajdhani',sans-serif;font-weight:800;font-size:11px;letter-spacing:2px;text-transform:uppercase;color:rgba(255,255,255,.9);width:62px;flex-shrink:0}
+.map-photo-bar-track{flex:1;height:3px;border-radius:3px;background:rgba(255,255,255,.1);overflow:hidden}
+.map-photo-bar-fill{height:100%;border-radius:3px;transition:width .6s cubic-bezier(.4,0,.2,1)}
+.map-photo-wl{font-size:11px;font-family:'Rajdhani',sans-serif;font-weight:700;width:44px;text-align:right;flex-shrink:0;color:rgba(255,255,255,.55);letter-spacing:.5px}
 .win-rate-ring{position:relative;width:54px;height:54px;flex-shrink:0}
 .win-rate-ring svg{transform:rotate(-90deg)}
 .win-rate-ring-label{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:'Rajdhani',sans-serif;font-weight:800;font-size:13px;color:var(--white)}
@@ -2702,16 +2701,17 @@ function renderTeam(lineups) {
 
     // Map photo rows with backdrop-blur strip
     const mapPhotoRows = lu.mapEntries.slice(0,5).map(({map, w, l, pct}) => {
-      const label  = map.replace('de_','').toUpperCase();
-      const imgUrl = MAP_IMGS[map] || '';
+      const label    = map.replace('de_','').toUpperCase();
+      const imgUrl   = MAP_IMGS[map] || '';
       const barColor = pct >= 60 ? '#22c55e' : pct >= 40 ? 'var(--orange)' : '#ef4444';
+      const accentColor = pct >= 60 ? 'rgba(34,197,94,.7)' : pct >= 40 ? 'rgba(255,85,0,.7)' : 'rgba(239,68,68,.7)';
       const bg = imgUrl
-        ? `<img class="map-photo-bg" src="${imgUrl}" alt="" loading="lazy">
-           <div class="map-photo-overlay"></div>`
-        : `<div style="position:absolute;inset:0;background:var(--surface2)"></div>`;
-      return `<div class="map-photo-row">
+        ? `<img class="map-photo-bg" src="${imgUrl}" alt="" loading="lazy">`
+        : '';
+      return `<div class="map-photo-row" style="background:var(--surface2)">
         ${bg}
-        <div class="map-photo-strip">
+        <div style="position:absolute;left:0;top:0;bottom:0;width:2px;background:${accentColor}"></div>
+        <div class="map-photo-content">
           <span class="map-photo-label">${label}</span>
           <div class="map-photo-bar-track">
             <div class="map-photo-bar-fill" style="width:${pct.toFixed(0)}%;background:${barColor}"></div>
@@ -2729,18 +2729,18 @@ function renderTeam(lineups) {
         </div>
         ${lu.bestMap ? `<span style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted2)">Best: ${lu.bestMap.map.replace('de_','').toUpperCase()}</span>` : ''}
       </div>
-      <div style="display:flex;align-items:stretch">
-        <div style="flex:1;border-right:1px solid var(--border);min-width:0">
+      <div style="display:grid;grid-template-columns:1fr 300px">
+        <div style="border-right:1px solid var(--border)">
           ${playerPills}
         </div>
-        <div style="width:320px;flex-shrink:0;display:flex;flex-direction:column">
+        <div style="display:flex;flex-direction:column;overflow:hidden">
           <div style="display:flex;border-bottom:1px solid var(--border);flex-shrink:0">
             <div class="team-stat-pill">${ring(lu.winRate,color)}<span class="team-stat-pill-lbl">Win Rate</span></div>
             <div class="team-stat-pill"><span class="team-stat-pill-val">${lu.total}</span><span class="team-stat-pill-lbl">Matches</span></div>
             <div class="team-stat-pill"><span class="team-stat-pill-val" style="color:var(--win)">${lu.wins}</span><span class="team-stat-pill-lbl">Wins</span></div>
             <div class="team-stat-pill"><span class="team-stat-pill-val" style="color:var(--loss)">${lu.losses}</span><span class="team-stat-pill-lbl">Losses</span></div>
           </div>
-          <div style="flex:1;display:flex;flex-direction:column;justify-content:stretch">
+          <div style="flex:1;display:flex;flex-direction:column;overflow:hidden">
             ${mapPhotoRows || `<div style="padding:14px 16px;color:var(--muted2);font-size:12px">No map data</div>`}
           </div>
         </div>
