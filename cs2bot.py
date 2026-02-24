@@ -1185,14 +1185,89 @@ def to_steamid64(raw: str) -> str:
     except (ValueError, TypeError):
         return raw
 
+# ── Steam avatar local cache ─────────────────────────────────────────────────
+# In-memory cache: steamid64 -> local URL or Steam CDN URL
+_AVATAR_CACHE: dict = {}  # { steamid64: '/assets/avatars/{steamid64}.jpg' or cdn url }
+_AVATARS_DIR  = pathlib.Path(__file__).parent / "assets" / "avatars"
+
+def _gh_push_avatar(steamid64: str, img_bytes: bytes) -> bool:
+    """Push avatar image to GitHub repo via Contents API. Returns True on success."""
+    if not GITHUB_TOKEN:
+        return False
+    import base64
+    try:
+        path    = f"assets/avatars/{steamid64}.jpg"
+        api_url = f"https://api.github.com/repos/{GITHUB_USER}/{GITHUB_REPO}/contents/{path}"
+        headers = {
+            "Authorization": f"token {GITHUB_TOKEN}",
+            "Accept":        "application/vnd.github.v3+json",
+        }
+        # Check if file already exists (need SHA to update)
+        sha = None
+        check = requests.get(api_url, headers=headers, timeout=8)
+        if check.status_code == 200:
+            sha = check.json().get("sha")
+
+        body = {
+            "message": f"chore: cache avatar for {steamid64}",
+            "branch":  GITHUB_BRANCH,
+            "content": base64.b64encode(img_bytes).decode(),
+        }
+        if sha:
+            body["sha"] = sha
+
+        r = requests.put(api_url, headers=headers, json=body, timeout=15)
+        return r.status_code in (200, 201)
+    except Exception as e:
+        print(f"[avatar] GitHub push failed for {steamid64}: {e}")
+        return False
+
+def _fetch_and_cache_avatar(steamid64: str, cdn_url: str) -> str:
+    """
+    Download avatar from Steam CDN, save locally + push to GitHub.
+    Returns local path if successful, cdn_url as fallback.
+    """
+    try:
+        _AVATARS_DIR.mkdir(parents=True, exist_ok=True)
+        local_path = _AVATARS_DIR / f"{steamid64}.jpg"
+
+        # Download image
+        r = requests.get(cdn_url, timeout=8)
+        r.raise_for_status()
+        img_bytes = r.content
+
+        # Save locally for this Railway instance
+        local_path.write_bytes(img_bytes)
+
+        # Push to GitHub so it survives redeploys
+        _gh_push_avatar(steamid64, img_bytes)
+
+        local_url = f"/assets/avatars/{steamid64}.jpg"
+        _AVATAR_CACHE[steamid64] = local_url
+        print(f"[avatar] Cached {steamid64} → {local_url}")
+        return local_url
+    except Exception as e:
+        print(f"[avatar] Failed to cache {steamid64}: {e}")
+        _AVATAR_CACHE[steamid64] = cdn_url
+        return cdn_url
+
 async def handle_api_steam(request):
-    """GET /api/steam/{steamid64} — fetch Steam profile info via Steam Web API"""
+    """GET /api/steam/{steamid64} — fetch Steam profile, serve avatar locally."""
     steamid = request.match_info.get('steamid64', '')
     if not steamid or not STEAM_API_KEY:
         return _json_response({"error": "Steam API not configured"})
     try:
         steamid64 = to_steamid64(steamid)
+
+        # Check in-memory avatar cache first
+        if steamid64 in _AVATAR_CACHE:
+            cached_url = _AVATAR_CACHE[steamid64]
+            # Still need to return full profile — serve with cached avatar url
+            # We only have the URL cached, not the full profile, so fall through
+            # to Steam API but swap in the local avatar URL afterwards.
+
         loop = asyncio.get_running_loop()
+
         def fetch():
             url = (
                 f"https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v2/"
@@ -1212,8 +1287,32 @@ async def handle_api_steam(request):
                 "country":     p.get("loccountrycode", ""),
                 "real_name":   p.get("realname", ""),
             }
+
         data = await loop.run_in_executor(None, fetch)
-        return _json_response(data)
+
+        if data.get("avatar"):
+            cdn_url   = data["avatar"]
+            steamid64 = str(data.get("steamid") or steamid64)
+
+            # If already cached locally, swap URL immediately
+            if steamid64 in _AVATAR_CACHE:
+                data["avatar"] = _AVATAR_CACHE[steamid64]
+            else:
+                # Check if file already exists on disk (e.g. after redeploy from GitHub)
+                local_path = _AVATARS_DIR / f"{steamid64}.jpg"
+                if local_path.exists():
+                    local_url = f"/assets/avatars/{steamid64}.jpg"
+                    _AVATAR_CACHE[steamid64] = local_url
+                    data["avatar"] = local_url
+                else:
+                    # Fetch, save locally and push to GitHub in background
+                    asyncio.ensure_future(
+                        loop.run_in_executor(None, _fetch_and_cache_avatar, steamid64, cdn_url)
+                    )
+                    # Return CDN url for now — next request will get local url
+                    data["avatar"] = cdn_url
+
+        return _json_response(data, max_age=3600)
     except Exception as e:
         return _json_response({"error": str(e)})
 
@@ -1692,6 +1791,8 @@ async def start_http_server():
     app.router.add_get('/',        handle_stats_page)
     app.router.add_get('/health',  handle_health_check)
     assets_path = pathlib.Path(__file__).parent / "assets"
+    # Ensure avatars dir exists so static serving works even before first avatar is cached
+    (assets_path / "avatars").mkdir(parents=True, exist_ok=True)
     app.router.add_static('/assets', path=assets_path, name='assets')
 
     port = int(os.getenv('PORT', 8080))
@@ -1705,6 +1806,10 @@ async def start_http_server():
 TOKEN = os.getenv("TOKEN")
 STEAM_API_KEY  = os.getenv("STEAM_API_KEY", "")
 EDIT_PASSWORD  = os.getenv("EDIT_PASSWORD", "changeme")   # set in Railway env vars
+GITHUB_TOKEN   = os.getenv("GITHUB_TOKEN", "")             # PAT with repo scope
+GITHUB_USER    = os.getenv("GITHUB_USER",  "uronshalav2")
+GITHUB_REPO    = os.getenv("GITHUB_REPO",  "cs2discordbot")
+GITHUB_BRANCH  = os.getenv("GITHUB_BRANCH","main")
 SERVER_IP = os.getenv("SERVER_IP", "127.0.0.1")
 SERVER_PORT = int(os.getenv("SERVER_PORT", 27015))
 RCON_IP = os.getenv("RCON_IP", SERVER_IP)
