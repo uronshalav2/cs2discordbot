@@ -405,8 +405,8 @@ nav{background:var(--nav-bg);border-bottom:2px solid var(--nav-border);display:f
 .pred-role{font-size:9px;letter-spacing:1px;text-transform:uppercase;color:var(--muted2);margin-top:1px}
 
 /* UTIL */
-.loading{display:flex;align-items:center;justify-content:center;min-height:calc(100svh - 160px);color:var(--muted2)}
-.spin{display:inline-block;width:160px;height:auto;margin-bottom:0}
+.loading{display:flex;align-items:center;justify-content:center;min-height:200px;color:var(--muted2)}
+.spin{display:inline-block;width:clamp(80px,30vw,140px);height:auto;margin-bottom:0;flex-shrink:0}
 .spin svg,.spin svg *{fill:var(--orange)!important}
 .spin{
   -webkit-mask-image:linear-gradient(90deg,rgba(0,0,0,.5) 0%,rgba(0,0,0,.5) 25%,rgba(0,0,0,1) 50%,rgba(0,0,0,.5) 75%,rgba(0,0,0,.5) 100%);
@@ -1174,38 +1174,34 @@ const fmtDate = s=>{
 };
 const initials = n=>(n||'?').split(/[ _]/).slice(0,2).map(w=>w[0]||'').join('').toUpperCase().slice(0,2)||'?';
 // ── Spinner: fetch SVG once, inline it so fill:var(--orange) works via CSS ────
-let _spinnerSvg = null;
+const _SPINNER_FALLBACK = `<svg viewBox="0 0 60 60" xmlns="http://www.w3.org/2000/svg"><circle cx="30" cy="30" r="24" fill="none" stroke="inherit" stroke-width="4" stroke-dasharray="100 50" stroke-linecap="round"><animateTransform attributeName="transform" type="rotate" from="0 30 30" to="360 30 30" dur="1s" repeatCount="indefinite"/></circle></svg>`;
+let _spinnerSvg = _SPINNER_FALLBACK; // start with fallback so spin() works instantly
 const _SPINNER_URL = 'assets/spinner/cs2-logo.svg';
 
-async function _getSpinnerSvg() {
-  if (_spinnerSvg) return _spinnerSvg;
+// Preload eagerly in the background as soon as the script runs
+(async () => {
   try {
     const res = await fetch(_SPINNER_URL);
+    if (!res.ok) throw new Error('fetch failed');
     const text = await res.text();
-    // Strip XML declaration, DOCTYPE, and width/height attrs so it scales freely
     let svg = text
       .replace(/<\?xml[^?]*\?>/g, '')
       .replace(/<!DOCTYPE[^>]*>/g, '')
       .replace(/\s(width|height)="[^"]*"/g, '')
       .trim();
-    // Force all fills to inherit so CSS can control via fill:var(--orange)
     svg = svg.replace(/fill="[^"]*"/g, 'fill="inherit"');
     _spinnerSvg = svg;
-  } catch(e) {
-    // Fallback: simple CSS ring spinner
-    _spinnerSvg = `<svg viewBox="0 0 60 60" xmlns="http://www.w3.org/2000/svg"><circle cx="30" cy="30" r="24" fill="none" stroke="inherit" stroke-width="4" stroke-dasharray="100 50" stroke-linecap="round"><animateTransform attributeName="transform" type="rotate" from="0 30 30" to="360 30 30" dur="1s" repeatCount="indefinite"/></circle></svg>`;
-  }
-  return _spinnerSvg;
-}
+    // Swap into any spinner already on screen
+    document.querySelectorAll('.spin').forEach(el => { el.innerHTML = svg; });
+  } catch(e) { /* keep fallback */ }
+})();
+
+function _getSpinnerSvg() { return Promise.resolve(_spinnerSvg); }
 
 function spin(id) {
   const el = document.getElementById(id);
-  // Show a temporary placeholder immediately, then swap in the real SVG
-  el.innerHTML = '<div class="loading"><span class="spin" style="display:inline-flex;align-items:center;justify-content:center"></span></div>';
-  _getSpinnerSvg().then(svg => {
-    const wrap = el.querySelector('.spin');
-    if (wrap) { wrap.innerHTML = svg; wrap.style.color = 'var(--orange)'; }
-  });
+  if (!el) return;
+  el.innerHTML = `<div class="loading"><span class="spin" style="display:inline-flex;align-items:center;justify-content:center;color:var(--orange)">${_spinnerSvg}</span></div>`;
 }
 
 // ── Demo helpers ─────────────────────────────────────────────────────────────
@@ -1598,7 +1594,7 @@ async function loadPlayer(name) {
 // ── Map Stats ─────────────────────────────────────────────────────────────────
 async function loadMaps() {
   const el = document.getElementById('p-maps');
-  _getSpinnerSvg().then(svg=>{el.innerHTML='<div class="loading"><span class="spin" style="display:inline-flex;align-items:center;justify-content:center;color:var(--orange)">'+svg+'</span></div>'});
+  el.innerHTML=`<div class="loading"><span class="spin" style="display:inline-flex;align-items:center;justify-content:center;color:var(--orange)">${_spinnerSvg}</span></div>`;
   const [dbStats, demos] = await Promise.all([
     apiFetch('/api/mapstats', 'mapstats.json'),
     fetch('/api/demos').then(r=>r.json()).catch(()=>[]),
@@ -1754,7 +1750,7 @@ let _h2hSel = [null, null]; // [player1, player2]
 
 async function loadH2H() {
   const el = document.getElementById('p-h2h');
-  _getSpinnerSvg().then(svg=>{el.innerHTML='<div class="loading"><span class="spin" style="display:inline-flex;align-items:center;justify-content:center;color:var(--orange)">'+svg+'</span></div>'});
+  el.innerHTML=`<div class="loading"><span class="spin" style="display:inline-flex;align-items:center;justify-content:center;color:var(--orange)">${_spinnerSvg}</span></div>`;
   if (!_h2hPlayers) {
     const data = await apiFetch('/api/leaderboard', 'leaderboard.json');
     // Fetch Steam avatars for all
@@ -1853,7 +1849,7 @@ async function runH2H() {
   if (!p1 || !p2 || !body) return;
 
   // Show loading state inside the expanding body
-  _getSpinnerSvg().then(svg=>{body.innerHTML='<div class="loading"><span class="spin" style="display:inline-flex;align-items:center;justify-content:center;color:var(--orange)">'+svg+'</span></div>'});
+  body.innerHTML=`<div class="loading"><span class="spin" style="display:inline-flex;align-items:center;justify-content:center;color:var(--orange)">${_spinnerSvg}</span></div>`;
   body.classList.add('open');
 
   // Collapse picker
@@ -1937,7 +1933,7 @@ function h2hBack() {
 let _lbSort = 'kills';
 async function loadLeaderboard() {
   const el = document.getElementById('p-leaderboard');
-  _getSpinnerSvg().then(svg=>{el.innerHTML='<div class="loading"><span class="spin" style="display:inline-flex;align-items:center;justify-content:center;color:var(--orange)">'+svg+'</span></div>'});
+  el.innerHTML=`<div class="loading"><span class="spin" style="display:inline-flex;align-items:center;justify-content:center;color:var(--orange)">${_spinnerSvg}</span></div>`;
   const data = await apiFetch('/api/leaderboard', 'leaderboard.json');
   if (!Array.isArray(data) || !data.length) {
     el.innerHTML = emptyState('leaderboard','No Player Data','Stats will appear after matches are completed');
@@ -1945,7 +1941,7 @@ async function loadLeaderboard() {
   }
   // Compute win/loss streak per player from match history
   try {
-    const matches = await apiFetch('/api/matches?limit=100', 'matches.json');
+    const matches = await apiFetch('/api/matches?limit=50', 'matches.json');
     if (Array.isArray(matches) && matches.length) {
       // Sort oldest→newest so we can walk forward
       const sorted = [...matches].sort((a,b)=>new Date(a.end_time)-new Date(b.end_time));
@@ -2176,7 +2172,7 @@ let _specData = null;
 async function loadSpecialists() {
   const el = document.getElementById('p-specialists');
   if (_specData) { renderSpecialists(_specData, _specTab); return; }
-  _getSpinnerSvg().then(svg=>{el.innerHTML='<div class="loading"><span class="spin" style="display:inline-flex;align-items:center;justify-content:center;color:var(--orange)">'+svg+'</span></div>'});
+  el.innerHTML=`<div class="loading"><span class="spin" style="display:inline-flex;align-items:center;justify-content:center;color:var(--orange)">${_spinnerSvg}</span></div>`;
   const data = await apiFetch('/api/specialists', 'specialists.json');
   if (!Array.isArray(data) || !data.length) {
     el.innerHTML = emptyState('specialists','No Specialist Data','Clutch kings, entry fraggers and more will appear here'); return;
@@ -2320,7 +2316,7 @@ let _demoFilters = {map:''};
 async function loadDemos() {
   const el = document.getElementById('p-demos');
   if (_demoData) { renderDemos(); return; }
-  _getSpinnerSvg().then(svg=>{el.innerHTML='<div class="loading"><span class="spin" style="display:inline-flex;align-items:center;justify-content:center;color:var(--orange)">'+svg+'</span></div>'});
+  el.innerHTML=`<div class="loading"><span class="spin" style="display:inline-flex;align-items:center;justify-content:center;color:var(--orange)">${_spinnerSvg}</span></div>`;
   const data = await fetch('/api/demos').then(r=>r.json()).catch(()=>[]);
   if (!Array.isArray(data) || !data.length) {
     el.innerHTML = emptyState('demos','No Demos Found','Demo files will appear here once uploaded'); return;
@@ -2489,7 +2485,7 @@ let _predictTeams   = [[], []];
 
 async function loadPredict() {
   const el = document.getElementById('p-predict');
-  _getSpinnerSvg().then(svg=>{el.innerHTML='<div class="loading"><span class="spin" style="display:inline-flex;align-items:center;justify-content:center;color:var(--orange)">'+svg+'</span></div>'});
+  el.innerHTML=`<div class="loading"><span class="spin" style="display:inline-flex;align-items:center;justify-content:center;color:var(--orange)">${_spinnerSvg}</span></div>`;
   if (!_predictPlayers) {
     const data = await apiFetch('/api/leaderboard', 'leaderboard.json');
     await Promise.all(data.slice(0,40).map(async p => {
@@ -2715,23 +2711,37 @@ let _teamCache = null;
 async function loadTeam() {
   const el = document.getElementById('p-team');
   if (_teamCache) { renderTeam(_teamCache); return; }
-  _getSpinnerSvg().then(svg=>{el.innerHTML='<div class="loading"><span class="spin" style="display:inline-flex;align-items:center;justify-content:center;color:var(--orange)">'+svg+'</span></div>'});
+  el.innerHTML=`<div class="loading"><span class="spin" style="display:inline-flex;align-items:center;justify-content:center;color:var(--orange)">${_spinnerSvg}</span></div>`;
 
   // Step 1: get match list (metadata only - players array is NOT included here)
-  const matchList = await apiFetch('/api/matches?limit=200', 'matches.json');
+  const matchList = await apiFetch('/api/matches?limit=50', 'matches.json');
   if (!Array.isArray(matchList) || !matchList.length) {
     el.innerHTML = emptyState('team','No Match Data','Team stats will appear after matches are completed'); return;
   }
 
-  // Step 2: fetch each match individually in parallel to get full player data
-  const BATCH = 10; // concurrent requests at a time
+  // Helper: fetch a single match with a timeout so one slow request can't stall everything
+  async function fetchMatchSafe(matchid) {
+    try {
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 8000);
+      const r = await fetch('/api/match/' + matchid, { signal: ctrl.signal });
+      clearTimeout(timer);
+      if (!r.ok) return null;
+      const d = await r.json();
+      return d && !d.error ? d : null;
+    } catch(_) { return null; }
+  }
+
+  // Step 2: fetch each match in parallel batches, show progress
+  const BATCH = 15;
   const fullMatches = [];
   for (let i = 0; i < matchList.length; i += BATCH) {
     const batch = matchList.slice(i, i + BATCH);
-    const results = await Promise.all(
-      batch.map(m => apiFetch('/api/match/' + m.matchid, `matches/${m.matchid}.json`).catch(()=>null))
-    );
-    results.forEach(r => { if (r && !r.error) fullMatches.push(r); });
+    const results = await Promise.all(batch.map(m => fetchMatchSafe(m.matchid)));
+    results.forEach(r => { if (r) fullMatches.push(r); });
+    const pct = Math.round(Math.min((i + BATCH) / matchList.length * 100, 100));
+    const wrap = el.querySelector('.spin');
+    if (wrap) wrap.title = `Loading… ${pct}%`;
   }
 
   if (!fullMatches.length) {
@@ -3789,7 +3799,7 @@ let _th2hSel = [null, null];
 
 async function loadTeamH2H() {
   const el = document.getElementById('p-teamh2h');
-  _getSpinnerSvg().then(svg => { el.innerHTML = '<div class="loading"><span class="spin" style="display:inline-flex;align-items:center;justify-content:center;color:var(--orange)">' + svg + '</span></div>'; });
+  el.innerHTML=`<div class="loading"><span class="spin" style="display:inline-flex;align-items:center;justify-content:center;color:var(--orange)">${_spinnerSvg}</span></div>`;
   if (!_teamH2HTeams) {
     _teamH2HTeams = await fetch('/api/teams').then(r => r.json()).catch(() => []);
   }
@@ -3855,7 +3865,7 @@ async function runTeamH2H() {
   const [t1, t2] = _th2hSel;
   const body = document.getElementById('th2h-result-body');
   if (!t1 || !t2 || !body) return;
-  _getSpinnerSvg().then(svg => { body.innerHTML = '<div class="loading"><span class="spin" style="display:inline-flex;align-items:center;justify-content:center;color:var(--orange)">' + svg + '</span></div>'; });
+  body.innerHTML=`<div class="loading"><span class="spin" style="display:inline-flex;align-items:center;justify-content:center;color:var(--orange)">${_spinnerSvg}</span></div>`;
   body.classList.add('open');
   const data = await fetch(`/api/teamh2h?t1=${encodeURIComponent(t1)}&t2=${encodeURIComponent(t2)}`).then(r => r.json()).catch(() => ({}));
   if (data.error || !data.matches) { body.innerHTML = '<div style="padding:16px;color:var(--loss)">No data found</div>'; return; }
