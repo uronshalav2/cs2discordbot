@@ -164,6 +164,7 @@ async def handle_api_matches(request):
                 'total_rounds':meta.get('total_rounds'),
                 'demo_url':    entry.get('download_url', ''),
                 'demo_size':   entry.get('size_formatted', ''),
+                'filename':    entry.get('name', ''),   # e.g. 2026-02-23_20-11-44_29_de_ancient_..._stats.json
             })
 
         # ── Merge any DB-only matches not in fshost ───────────────────────────
@@ -230,7 +231,7 @@ async def handle_api_matches(request):
 
 
 async def handle_api_match(request):
-    """GET /api/match/{matchid} — fshost JSON merged with any stored edits."""
+    """GET /api/match/{matchid} — fshost JSON merged with edits + MatchZy gap-fill."""
     matchid = request.match_info.get('matchid', '')
     try:
         loop = asyncio.get_running_loop()
@@ -277,15 +278,48 @@ async def handle_api_match(request):
             'total_rounds': data.get('total_rounds'),
         }]
 
-        # Apply edits to fshost player list — also patch team_name on each player
+        # Build base player list from fshost, apply stat edits
         players = _players_from_fshost(data, matchid)
         players = _apply_match_player_edits(players, matchid)
-        # Patch team_name on players if team name was edited
+        # Patch team_name if team name was edited
         for p in players:
             if p.get('team') == 'team1' and t1e.get('name'):
-                p['team_name'] = t1e['name']
+                p['team_name'] = t1name
             elif p.get('team') == 'team2' and t2e.get('name'):
-                p['team_name'] = t2e['name']
+                p['team_name'] = t2name
+
+        # ── Merge manually-added players from edits ──────────────────────────
+        added_players = edits.get('added_players', [])
+        added_sids    = {str(ap.get('steamid64') or '') for ap in added_players}
+        for ap in added_players:
+            ap = dict(ap)
+            ap['source']    = 'added'
+            ap['matchid']   = matchid
+            ap['mapnumber'] = 1
+            # Apply team_name based on current (possibly edited) team names
+            if ap.get('team') == 'team1':
+                ap['team_name'] = t1name
+            elif ap.get('team') == 'team2':
+                ap['team_name'] = t2name
+            # Recalculate derived fields
+            kills  = int(ap.get('kills', 0) or 0)
+            deaths = int(ap.get('deaths', 0) or 0)
+            hs     = int(ap.get('head_shot_kills', 0) or 0)
+            dmg    = int(ap.get('damage', 0) or 0)
+            ap.setdefault('kd',     round(kills / deaths, 2) if deaths else float(kills))
+            ap.setdefault('hs_pct', round(hs / kills * 100, 1) if kills else 0.0)
+            ap.setdefault('adr',    round(dmg / 30, 1))
+            players.append(ap)
+
+        # ── Fetch MatchZy players to surface "available to add" list ─────────
+        matchzy_players = await loop.run_in_executor(None, _get_matchzy_players_for_match, matchid)
+        _, missing_players = _merge_missing_players(players, matchzy_players, added_sids)
+        # Patch team names on missing players too
+        for mp in missing_players:
+            if mp.get('team') == 'team1':
+                mp['team_name'] = t1name
+            elif mp.get('team') == 'team2':
+                mp['team_name'] = t2name
 
         matchid_map = build_matchid_to_demo_map()
         entry = matchid_map.get(str(matchid), {})
@@ -294,7 +328,15 @@ async def handle_api_match(request):
             'url':  entry.get('download_url', ''),
             'size': entry.get('size_formatted', ''),
         }
-        return _json_response({"meta": meta, "maps": maps, "players": players, "demo": demo})
+        # Include filename in meta so team stats page can use it as unique match key
+        meta['filename'] = entry.get('name', '')
+        return _json_response({
+            "meta":            meta,
+            "maps":            maps,
+            "players":         players,
+            "demo":            demo,
+            "missing_players": missing_players,   # MatchZy players not in fshost
+        })
     except Exception as e:
         return _json_response({"error": str(e)})
 
@@ -440,17 +482,16 @@ def _apply_match_player_edits(players: list, matchid: str) -> list:
     """
     Patch a per-match player list with stored edits.
     Recalculates kd / hs_pct / adr when base stats are edited.
-    Also appends any new players added via the edit modal (edits.new_players).
     """
     edits = _get_edits(matchid)
     if not edits:
         return players
     player_edits = edits.get('players', {})
+    if not player_edits:
+        return players
     out = []
-    existing_sids = set()
     for p in players:
         sid = str(p.get('steamid64') or p.get('steam_id') or '')
-        existing_sids.add(sid)
         pe  = player_edits.get(sid, {})
         if pe:
             p = dict(p)
@@ -466,36 +507,6 @@ def _apply_match_player_edits(players: list, matchid: str) -> list:
             if 'damage' in pe:
                 p['adr'] = round(dmg / 30, 1)
         out.append(p)
-
-    # Append new players that were added via the edit modal
-    new_players = edits.get('new_players', [])
-    for np in new_players:
-        sid = str(np.get('steamid64', '') or '')
-        if not sid or sid in existing_sids:
-            continue  # skip duplicates or invalid
-        kills  = int(np.get('kills', 0) or 0)
-        deaths = int(np.get('deaths', 0) or 0)
-        hs     = int(np.get('head_shot_kills', 0) or 0)
-        dmg    = int(np.get('damage', 0) or 0)
-        new_p = {
-            'steamid64':      sid,
-            'steam_id':       sid,
-            'name':           np.get('name', 'Unknown'),
-            'team':           np.get('team', ''),
-            'kills':          kills,
-            'deaths':         deaths,
-            'assists':        int(np.get('assists', 0) or 0),
-            'damage':         dmg,
-            'rating':         float(np.get('rating', 0) or 0),
-            'kast':           float(np.get('kast', 0) or 0),
-            'kd':             round(kills / deaths, 2) if deaths else float(kills),
-            'hs_pct':         round(hs / kills * 100, 1) if kills else 0.0,
-            'adr':            round(dmg / 30, 1),
-            'head_shot_kills':hs,
-            'is_added':       True,  # flag so UI can distinguish if needed
-        }
-        out.append(new_p)
-        existing_sids.add(sid)
     return out
 
 
@@ -516,7 +527,80 @@ def _apply_meta_edits(meta: dict, matchid: str) -> dict:
     return meta
 
 
-def _patch_aggregate_rows(rows: list) -> list:
+def _get_matchzy_players_for_match(matchid: str) -> list:
+    """
+    Fetch all player rows for a match from matchzy_stats_players.
+    Returns a list of dicts with the same field names used elsewhere.
+    Used to detect players that left early and weren't captured by fshost.
+    """
+    try:
+        conn = get_db()
+        c = conn.cursor(dictionary=True)
+        c.execute(f"""
+            SELECT
+                p.steamid64, p.name, p.team,
+                p.kills, p.deaths, p.assists, p.damage,
+                p.head_shot_kills,
+                p.enemies5k, p.enemies4k, p.enemies3k,
+                p.v1_wins, p.v2_wins,
+                p.entry_wins, p.entry_count,
+                p.flash_successes,
+                p.utility_damage,
+                ROUND(p.damage / 30.0, 1)                              AS adr,
+                ROUND(p.head_shot_kills / NULLIF(p.kills,0) * 100, 1) AS hs_pct,
+                mm.team1_name, mm.team2_name
+            FROM {MATCHZY_TABLES['players']} p
+            LEFT JOIN {MATCHZY_TABLES['matches']} mm ON mm.matchid = p.matchid
+            WHERE p.matchid = %s AND p.steamid64 != '0'
+        """, (str(matchid),))
+        rows = c.fetchall()
+        c.close(); conn.close()
+        # Normalise team field: MatchZy stores 'team1'/'team2' or 'CT'/'T' depending on version
+        out = []
+        for r in rows:
+            r = dict(r)
+            r['matchid']   = str(matchid)
+            r['mapnumber'] = 1
+            r['steamid64'] = str(r.get('steamid64') or '0')
+            r['source']    = 'matchzy'
+            # Determine team key for consistency with fshost convention
+            team_raw = str(r.get('team') or '').lower()
+            if team_raw in ('team1', 'team_1', '1'):
+                r['team'] = 'team1'
+            elif team_raw in ('team2', 'team_2', '2'):
+                r['team'] = 'team2'
+            # team_name from match row
+            if r['team'] == 'team1':
+                r['team_name'] = r.get('team1_name') or 'Team 1'
+            else:
+                r['team_name'] = r.get('team2_name') or 'Team 2'
+            out.append(r)
+        return out
+    except Exception as e:
+        print(f"[matchzy-players] Error for match {matchid}: {e}")
+        return []
+
+
+def _merge_missing_players(fshost_players: list, matchzy_players: list,
+                           added_sids: set) -> tuple[list, list]:
+    """
+    Compare fshost player list vs MatchZy player list.
+    Returns (merged_players, missing_players) where:
+      - merged_players = fshost list (already has edits applied)
+      - missing_players = MatchZy rows whose steamid64 is NOT in fshost list
+        AND NOT already manually added via edits['added_players']
+    """
+    fshost_sids = {str(p.get('steamid64') or '') for p in fshost_players}
+    missing = [
+        p for p in matchzy_players
+        if p['steamid64'] not in fshost_sids
+        and p['steamid64'] not in added_sids
+        and p['steamid64'] != '0'
+    ]
+    return fshost_players, missing
+
+
+
     """
     Patch leaderboard / specialists / career aggregate rows with edited player names.
     Only names are patched here — aggregate stats (kills/deaths totals) stay as MatchZy
@@ -1059,200 +1143,6 @@ async def handle_api_revert_match(request):
         return _json_response({"ok": False, "error": str(e)})
 
 
-async def handle_api_matchzy_players(request):
-    """
-    GET /api/match/{matchid}/matchzy_players
-    
-    The fshost matchid and the MatchZy DB matchid are DIFFERENT ID systems.
-    We resolve the correct MatchZy matchid using a priority chain:
-    
-      1. steamids — find the matchid in matchzy_stats_players that contains
-                    the most steamid64s from the fshost player list (most reliable,
-                    immune to team name edits)
-      2. date     — find the matchzy_stats_matches row whose end_time is closest
-                    to the fshost match date (fallback when no steamids available)
-      3. raw id   — try the fshost matchid directly as a MatchZy matchid (last resort)
-    """
-    fshost_matchid = request.match_info.get('matchid', '')
-    # Optional: caller may pass known steamids as ?sids=sid1,sid2,...
-    sids_param = request.rel_url.query.get('sids', '').strip()
-    date_param = request.rel_url.query.get('date', '').strip()
-
-    try:
-        conn = get_db()
-        if not matchzy_tables_exist(conn):
-            conn.close()
-            return _json_response({"error": "MatchZy tables not found"})
-
-        c = conn.cursor(dictionary=True)
-        mz_matchid = None
-        resolve_method = None
-
-        # ── Strategy 1: match by steamids ─────────────────────────────────────
-        # Get steamids from fshost JSON (unaffected by team name edits)
-        fshost_sids = set()
-        fshost_data = None
-        try:
-            fshost_data = _fetch_fshost_match_json(fshost_matchid)
-            if fshost_data:
-                for tk in ('team1', 'team2'):
-                    for fp in fshost_data.get(tk, {}).get('players', []):
-                        sid = str(fp.get('steam_id', '') or '')
-                        if sid and sid != '0':
-                            fshost_sids.add(sid)
-        except Exception:
-            pass
-
-        # Supplement with any sids passed from frontend
-        if sids_param:
-            for s in sids_param.split(','):
-                s = s.strip()
-                if s and s != '0':
-                    fshost_sids.add(s)
-
-        if fshost_sids:
-            # Find which MatchZy matchid has the most overlap with our steamids
-            placeholders = ','.join(['%s'] * len(fshost_sids))
-            c.execute(f"""
-                SELECT matchid, COUNT(*) AS overlap
-                FROM {MATCHZY_TABLES['players']}
-                WHERE steamid64 IN ({placeholders})
-                GROUP BY matchid
-                ORDER BY overlap DESC, matchid DESC
-                LIMIT 1
-            """, list(fshost_sids))
-            row = c.fetchone()
-            if row and row['overlap'] >= 1:
-                mz_matchid = row['matchid']
-                resolve_method = f"steamids (overlap={row['overlap']})"
-
-        # ── Strategy 2: match by date proximity ───────────────────────────────
-        if mz_matchid is None and date_param:
-            try:
-                c.execute(f"""
-                    SELECT matchid,
-                           ABS(TIMESTAMPDIFF(SECOND, end_time, %s)) AS diff_secs
-                    FROM {MATCHZY_TABLES['matches']}
-                    WHERE end_time IS NOT NULL
-                    ORDER BY diff_secs ASC
-                    LIMIT 1
-                """, (date_param,))
-                row = c.fetchone()
-                # Accept if within 4 hours
-                if row and row['diff_secs'] is not None and row['diff_secs'] < 14400:
-                    mz_matchid = row['matchid']
-                    resolve_method = f"date (diff={row['diff_secs']}s)"
-            except Exception:
-                pass
-
-        # ── Strategy 3: raw matchid fallback ──────────────────────────────────
-        if mz_matchid is None:
-            try:
-                mz_matchid = int(fshost_matchid)
-            except (ValueError, TypeError):
-                mz_matchid = fshost_matchid
-            resolve_method = "raw_id_fallback"
-
-        # ── Fetch players for resolved matchid ────────────────────────────────
-        # JOIN matchzy_stats_maps to get total rounds for per-round normalization
-        c.execute(f"""
-            SELECT
-                p.steamid64,
-                p.name,
-                p.team,
-                p.kills,
-                p.deaths,
-                p.assists,
-                p.damage,
-                p.head_shot_kills,
-                p.enemies5k,
-                p.enemies4k,
-                p.enemies3k,
-                p.v1_count,
-                p.v1_wins,
-                p.v2_count,
-                p.v2_wins,
-                p.entry_count,
-                p.entry_wins,
-                p.utility_damage,
-                p.flash_count,
-                p.flash_successes,
-                p.mapnumber,
-                (m.team1_score + m.team2_score) AS total_rounds,
-                ROUND(p.kills / NULLIF(p.deaths, 0), 2)             AS kd,
-                ROUND(p.head_shot_kills / NULLIF(p.kills,0)*100, 1) AS hs_pct,
-                ROUND(p.damage / NULLIF(m.team1_score + m.team2_score, 0), 1) AS adr
-            FROM {MATCHZY_TABLES['players']} p
-            LEFT JOIN {MATCHZY_TABLES['maps']} m
-                ON m.matchid = p.matchid AND m.mapnumber = p.mapnumber
-            WHERE p.matchid = %s
-            ORDER BY p.team, p.kills DESC
-        """, (mz_matchid,))
-        rows = c.fetchall()
-        c.close()
-        conn.close()
-
-        # ── Annotate rows ──────────────────────────────────────────────────────
-        result = []
-        for row in rows:
-            sid = str(row.get('steamid64') or '')
-            row['in_fshost']  = sid in fshost_sids
-            row['is_missing'] = sid not in fshost_sids
-            for field in ('kills','deaths','assists','damage','head_shot_kills',
-                          'enemies5k','enemies4k','enemies3k','v1_wins','v2_wins',
-                          'entry_wins','utility_damage','flash_successes'):
-                if row.get(field) is None:
-                    row[field] = 0
-
-            # ── Estimate Rating (HLTV 2.0-inspired approximation) ─────────────
-            # Formula: (KPR*0.73 + DPR_inv*0.53 + impact*0.50 + ADR*0.0073 + 0.48) scaled
-            # where impact = 2.13*KPR + 0.42*(assists/rounds) - 0.41
-            r = int(row.get('total_rounds') or 0)
-            k = int(row.get('kills') or 0)
-            d = int(row.get('deaths') or 0)
-            a = int(row.get('assists') or 0)
-            dmg = int(row.get('damage') or 0)
-            if r > 0:
-                kpr     = k / r
-                dpr     = d / r
-                apr     = a / r
-                adr_val = dmg / r
-                impact  = 2.13 * kpr + 0.42 * apr - 0.41
-                rating  = 0.0073 * adr_val + 0.3591 * kpr - 0.5329 * dpr + 0.2372 * impact + 0.9523
-                row['rating'] = round(max(0.01, rating), 2)
-            else:
-                row['rating'] = None
-
-            # ── Estimate KAST ─────────────────────────────────────────────────
-            # KAST = rounds with Kill/Assist/Survive/Trade. We approximate:
-            # Rounds survived  = total_rounds - deaths
-            # Rounds with kill = kills (capped at rounds)
-            # Rounds with assist = assists (partial overlap assumed)
-            # We use: KAST ≈ min(100, (survived + kill_rounds + assist_rounds) / rounds * correction)
-            # This is an estimate — real KAST needs round-by-round data.
-            if r > 0:
-                survived      = max(0, r - d)
-                kill_rounds   = min(k, r)          # upper bound
-                assist_rounds = min(a, max(0, r - kill_rounds))
-                raw_kast      = (survived + kill_rounds + assist_rounds) / r
-                # Apply a mild compression — empirically KAST rarely exceeds 85 for average players
-                kast_est      = min(99.0, raw_kast * 72.0)
-                row['kast']   = round(kast_est, 1)
-            else:
-                row['kast'] = None
-
-            result.append(row)
-
-        return _json_response({
-            "players":        result,
-            "mz_matchid":     mz_matchid,
-            "resolve_method": resolve_method,
-            "fshost_sids":    list(fshost_sids),
-        })
-    except Exception as e:
-        return _json_response({"error": str(e)})
-
-
 async def start_http_server():
     app = web.Application()
     app.router.add_get('/api/specialists',             handle_api_specialists)
@@ -1268,15 +1158,13 @@ async def start_http_server():
     # ── Edit endpoints ────────────────────────────────────────────────────────
     app.router.add_post('/api/auth/edit',              handle_api_auth_edit)
     app.router.add_post('/api/match/{matchid}/save',   handle_api_save_match)
-    app.router.add_get('/api/match/{matchid}/edits',           handle_api_get_edits)
-    app.router.add_get('/api/match/{matchid}/matchzy_players', handle_api_matchzy_players)
+    app.router.add_get('/api/match/{matchid}/edits',   handle_api_get_edits)
     app.router.add_route('PATCH',  '/api/match/{matchid}/edit', handle_api_patch_match)
     app.router.add_route('DELETE', '/api/match/{matchid}/edit', handle_api_revert_match)
-    app.router.add_route('OPTIONS', '/api/auth/edit',                          handle_options)
-    app.router.add_route('OPTIONS', '/api/match/{matchid}/save',               handle_options)
-    app.router.add_route('OPTIONS', '/api/match/{matchid}/edit',               handle_options)
-    app.router.add_route('OPTIONS', '/api/match/{matchid}/edits',              handle_options)
-    app.router.add_route('OPTIONS', '/api/match/{matchid}/matchzy_players',    handle_options)
+    app.router.add_route('OPTIONS', '/api/auth/edit',             handle_options)
+    app.router.add_route('OPTIONS', '/api/match/{matchid}/save',  handle_options)
+    app.router.add_route('OPTIONS', '/api/match/{matchid}/edit',  handle_options)
+    app.router.add_route('OPTIONS', '/api/match/{matchid}/edits', handle_options)
     # ── Static ────────────────────────────────────────────────────────────────
     app.router.add_get('/stats',   handle_stats_page)
     app.router.add_get('/',        handle_stats_page)
