@@ -2185,7 +2185,7 @@ function renderSpecialists(data, tab) {
       return `<button onclick="renderSpecialists(window._specData,'${t.id}')"
         style="display:inline-flex;align-items:center;gap:6px;padding:8px 14px;border-radius:4px;cursor:pointer;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:12px;letter-spacing:1.2px;text-transform:uppercase;border:none;white-space:nowrap;flex-shrink:0;transition:all .15s;
           ${active ? 'background:var(--orange-glow);color:var(--orange);' : 'background:var(--surface2);color:var(--muted2);outline:1px solid var(--border);'}">
-        <span style="display:inline-flex;color:${active?'#000':'var(--muted2)'}">${TAB_ICONS[t.id]}</span>${t.label}
+        <span style="display:inline-flex;color:${active?'var(--orange)':'var(--muted2)'}">${TAB_ICONS[t.id]}</span>${t.label}
       </button>`;
     }).join('')}
   </div>`;
