@@ -1187,105 +1187,16 @@ def to_steamid64(raw: str) -> str:
 
 # ── Steam avatar local cache ─────────────────────────────────────────────────
 # In-memory cache: steamid64 -> local URL or Steam CDN URL
-_AVATAR_CACHE: dict = {}  # { steamid64: '/assets/avatars/{steamid64}.jpg' or cdn url }
-_AVATARS_DIR  = pathlib.Path(__file__).parent / "assets" / "avatars"
 
-def _preload_avatar_cache() -> None:
-    """Populate _AVATAR_CACHE from any avatars already saved on disk (survives redeploys via GitHub)."""
-    if not _AVATARS_DIR.exists():
-        return
-    count = 0
-    for f in _AVATARS_DIR.glob("*.jpg"):
-        sid = f.stem  # filename without extension = steamid64
-        if sid not in _AVATAR_CACHE:
-            _AVATAR_CACHE[sid] = f"/assets/avatars/{sid}.jpg"
-            count += 1
-    if count:
-        print(f"[avatar] Preloaded {count} avatars from disk into cache")
 
-def _gh_push_avatar(steamid64: str, img_bytes: bytes) -> bool:
-    """Push avatar image to GitHub repo via Contents API. Returns True on success."""
-    if not GITHUB_TOKEN:
-        return False
-    import base64
-    try:
-        path    = f"assets/avatars/{steamid64}.jpg"
-        api_url = f"https://api.github.com/repos/{GITHUB_USER}/{GITHUB_REPO}/contents/{path}"
-        headers = {
-            "Authorization": f"token {GITHUB_TOKEN}",
-            "Accept":        "application/vnd.github.v3+json",
-        }
-        # Check if file already exists (need SHA to update)
-        sha = None
-        check = requests.get(api_url, headers=headers, timeout=8)
-        if check.status_code == 200:
-            sha = check.json().get("sha")
-
-        body = {
-            "message": f"chore: cache avatar for {steamid64}",
-            "branch":  GITHUB_BRANCH,
-            "content": base64.b64encode(img_bytes).decode(),
-        }
-        if sha:
-            body["sha"] = sha
-
-        r = requests.put(api_url, headers=headers, json=body, timeout=15)
-        success = r.status_code in (200, 201)
-        if success:
-            print(f"[avatar] GitHub push OK for {steamid64} (HTTP {r.status_code})")
-        else:
-            print(f"[avatar] GitHub push FAILED for {steamid64}: HTTP {r.status_code} — {r.text[:300]}")
-        return success
-    except Exception as e:
-        print(f"[avatar] GitHub push EXCEPTION for {steamid64}: {e}")
-        return False
-
-def _fetch_and_cache_avatar(steamid64: str, cdn_url: str) -> str:
-    """
-    Download avatar from Steam CDN, save locally + push to GitHub.
-    Returns local path if successful, cdn_url as fallback.
-    """
-    try:
-        _AVATARS_DIR.mkdir(parents=True, exist_ok=True)
-        local_path = _AVATARS_DIR / f"{steamid64}.jpg"
-
-        # Download image
-        r = requests.get(cdn_url, timeout=8)
-        r.raise_for_status()
-        img_bytes = r.content
-
-        # Save locally for this Railway instance
-        local_path.write_bytes(img_bytes)
-
-        # Push to GitHub so avatars survive redeploys.
-        # Railway is configured (railway.toml watchPaths) to ignore changes
-        # under assets/avatars/, so this commit will NOT trigger a redeploy.
-        _gh_push_avatar(steamid64, img_bytes)
-
-        local_url = f"/assets/avatars/{steamid64}.jpg"
-        _AVATAR_CACHE[steamid64] = local_url
-        print(f"[avatar] Cached {steamid64} → {local_url}")
-        return local_url
-    except Exception as e:
-        print(f"[avatar] Failed to cache {steamid64}: {e}")
-        _AVATAR_CACHE[steamid64] = cdn_url
-        return cdn_url
 
 async def handle_api_steam(request):
-    """GET /api/steam/{steamid64} — fetch Steam profile, serve avatar locally."""
+    """GET /api/steam/{steamid64} — fetch Steam profile and avatar from CDN."""
     steamid = request.match_info.get('steamid64', '')
     if not steamid or not STEAM_API_KEY:
         return _json_response({"error": "Steam API not configured"})
     try:
         steamid64 = to_steamid64(steamid)
-
-        # Check in-memory avatar cache first
-        if steamid64 in _AVATAR_CACHE:
-            cached_url = _AVATAR_CACHE[steamid64]
-            # Still need to return full profile — serve with cached avatar url
-            # We only have the URL cached, not the full profile, so fall through
-            # to Steam API but swap in the local avatar URL afterwards.
-
         loop = asyncio.get_running_loop()
 
         def fetch():
@@ -1309,23 +1220,6 @@ async def handle_api_steam(request):
             }
 
         data = await loop.run_in_executor(None, fetch)
-
-        if data.get("avatar"):
-            cdn_url   = data["avatar"]
-            steamid64 = str(data.get("steamid") or steamid64)
-
-            if steamid64 in _AVATAR_CACHE:
-                # Already on disk — serve local URL instantly, no CDN hit
-                data["avatar"] = _AVATAR_CACHE[steamid64]
-            else:
-                # First time seeing this player — serve CDN for this response,
-                # then download and save to disk in the background.
-                # Every subsequent request will hit local disk instead of CDN.
-                data["avatar"] = cdn_url
-                asyncio.ensure_future(
-                    loop.run_in_executor(None, _fetch_and_cache_avatar, steamid64, cdn_url)
-                )
-
         return _json_response(data, max_age=3600)
     except Exception as e:
         return _json_response({"error": str(e)})
@@ -1772,126 +1666,6 @@ async def handle_api_player_mapstats(request):
     except Exception as e:
         return _json_response({"error": str(e)})
 
-
-async def handle_api_debug_avatar(request):
-    """GET /api/debug/avatar — test GitHub token and avatar pipeline."""
-    lines = []
-    lines.append(f"GITHUB_TOKEN  : {'SET (' + GITHUB_TOKEN[:6] + '...)' if GITHUB_TOKEN else 'MISSING'}")
-    lines.append(f"GITHUB_USER   : {GITHUB_USER or 'MISSING'}")
-    lines.append(f"GITHUB_REPO   : {GITHUB_REPO or 'MISSING'}")
-    lines.append(f"GITHUB_BRANCH : {GITHUB_BRANCH or 'MISSING'}")
-    lines.append(f"STEAM_API_KEY : {'SET' if STEAM_API_KEY else 'MISSING'}")
-    lines.append(f"AVATARS_DIR   : {_AVATARS_DIR} (exists: {_AVATARS_DIR.exists()})")
-    lines.append(f"Avatar cache  : {len(_AVATAR_CACHE)} entries")
-    lines.append("")
-    if GITHUB_TOKEN:
-        try:
-            api_url = f"https://api.github.com/repos/{GITHUB_USER}/{GITHUB_REPO}"
-            headers = {"Authorization": f"token {GITHUB_TOKEN}", "Accept": "application/vnd.github.v3+json"}
-            r = requests.get(api_url, headers=headers, timeout=8)
-            if r.status_code == 200:
-                lines.append("GitHub repo access : OK")
-            elif r.status_code == 401:
-                lines.append("GitHub repo access : FAILED 401 - token invalid or expired")
-            elif r.status_code == 404:
-                lines.append("GitHub repo access : FAILED 404 - repo not found or no access")
-            else:
-                lines.append(f"GitHub repo access : FAILED {r.status_code} - {r.text[:200]}")
-        except Exception as e:
-            lines.append(f"GitHub repo access : EXCEPTION - {e}")
-    else:
-        lines.append("GitHub repo access : skipped (no token)")
-    lines.append("")
-    if _AVATARS_DIR.exists():
-        files = list(_AVATARS_DIR.glob("*.jpg"))
-        lines.append(f"Avatars on disk : {len(files)}")
-        for f in files[:5]:
-            lines.append(f"  {f.name}")
-        if len(files) > 5:
-            lines.append(f"  ... and {len(files)-5} more")
-    else:
-        lines.append("Avatars on disk : directory not created yet")
-    return web.Response(text="\n".join(lines), content_type="text/plain",
-                        headers={"Access-Control-Allow-Origin": "*"})
-
-
-async def handle_api_debug_avatar_sync(request):
-    """GET /api/debug/avatar/sync — download and push ALL player avatars to GitHub in one shot."""
-    loop = asyncio.get_running_loop()
-    lines = []
-
-    # 1. Collect all steamid64s from DB
-    steamids = set()
-    try:
-        conn = get_db()
-        c = conn.cursor()
-        c.execute(f"SELECT DISTINCT steamid64 FROM {MATCHZY_TABLES['players']} WHERE steamid64 != '0'")
-        steamids = {str(r[0]) for r in c.fetchall()}
-        c.close(); conn.close()
-        lines.append(f"Found {len(steamids)} unique steamids in DB")
-    except Exception as e:
-        lines.append(f"DB error: {e}")
-
-    if not steamids:
-        return web.Response(text="No steamids found in DB", content_type="text/plain")
-
-    # 2. Skip ones already on disk
-    missing = [sid for sid in sorted(steamids)
-               if not (_AVATARS_DIR / f"{sid}.jpg").exists()]
-    lines.append(f"Already on disk : {len(steamids) - len(missing)}")
-    lines.append(f"To download     : {len(missing)}")
-    lines.append("")
-
-    if not missing:
-        lines.append("All avatars already saved — nothing to do.")
-        return web.Response(text="\n".join(lines), content_type="text/plain",
-                            headers={"Access-Control-Allow-Origin": "*"})
-
-    # 3. Fetch avatar URLs from Steam API in batches of 100
-    def fetch_batch(batch):
-        try:
-            r = requests.get(
-                "https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v2/",
-                params={"key": STEAM_API_KEY, "steamids": ",".join(batch)},
-                timeout=15,
-            )
-            r.raise_for_status()
-            return {
-                str(p["steamid"]): p.get("avatarfull") or p.get("avatarmedium") or p.get("avatar")
-                for p in r.json().get("response", {}).get("players", [])
-            }
-        except Exception as e:
-            print(f"[avatar sync] batch fetch error: {e}")
-            return {}
-
-    downloaded = 0
-    failed = 0
-    batches = [missing[i:i+100] for i in range(0, len(missing), 100)]
-
-    for batch in batches:
-        avatar_urls = await loop.run_in_executor(None, fetch_batch, batch)
-        for sid in batch:
-            av_url = avatar_urls.get(sid)
-            if not av_url:
-                lines.append(f"  SKIP {sid} — no avatar URL (private profile?)")
-                failed += 1
-                continue
-            result = await loop.run_in_executor(None, _fetch_and_cache_avatar, sid, av_url)
-            if result.startswith("/assets/"):
-                lines.append(f"  OK   {sid}")
-                downloaded += 1
-            else:
-                lines.append(f"  FAIL {sid}")
-                failed += 1
-
-    lines.append("")
-    lines.append(f"Downloaded + pushed : {downloaded}")
-    lines.append(f"Failed              : {failed}")
-    lines.append(f"Total on disk now   : {len(list(_AVATARS_DIR.glob('*.jpg')))}")
-
-    return web.Response(text="\n".join(lines), content_type="text/plain",
-                        headers={"Access-Control-Allow-Origin": "*"})
-
 async def start_http_server():
     app = web.Application()
     app.router.add_get('/api/specialists',             handle_api_specialists)
@@ -1923,12 +1697,9 @@ async def start_http_server():
     app.router.add_get('/stats',   handle_stats_page)
     app.router.add_get('/',        handle_stats_page)
     app.router.add_get('/health',  handle_health_check)
-    app.router.add_get('/api/debug/avatar', handle_api_debug_avatar)
-    app.router.add_get('/api/debug/avatar/sync', handle_api_debug_avatar_sync)
     assets_path = pathlib.Path(__file__).parent / "assets"
     # Ensure avatars dir exists so static serving works even before first avatar is cached
     (assets_path / "avatars").mkdir(parents=True, exist_ok=True)
-    _preload_avatar_cache()  # warm in-memory cache from previously saved avatars
     app.router.add_static('/assets', path=assets_path, name='assets')
 
     port = int(os.getenv('PORT', 8080))
@@ -1942,10 +1713,6 @@ async def start_http_server():
 TOKEN = os.getenv("TOKEN")
 STEAM_API_KEY  = os.getenv("STEAM_API_KEY", "")
 EDIT_PASSWORD  = os.getenv("EDIT_PASSWORD", "changeme")   # set in Railway env vars
-GITHUB_TOKEN   = os.getenv("GITHUB_TOKEN", "")             # PAT with repo scope
-GITHUB_USER    = os.getenv("GITHUB_USER",  "uronshalav2")
-GITHUB_REPO    = os.getenv("GITHUB_REPO",  "cs2discordbot")
-GITHUB_BRANCH  = os.getenv("GITHUB_BRANCH","main")
 SERVER_IP = os.getenv("SERVER_IP", "127.0.0.1")
 SERVER_PORT = int(os.getenv("SERVER_PORT", 27015))
 RCON_IP = os.getenv("RCON_IP", SERVER_IP)
@@ -1955,10 +1722,8 @@ CHANNEL_ID = int(os.getenv("CHANNEL_ID", 0))
 SERVER_DEMOS_CHANNEL_ID = int(os.getenv("SERVER_DEMOS_CHANNEL_ID", 0))
 DEMOS_JSON_URL = os.getenv("DEMOS_JSON_URL")
 GUILD_ID = int(os.getenv("GUILD_ID", "0") or "0")
-FACEIT_API_KEY = os.getenv("FACEIT_API_KEY")
 OWNER_ID = int(os.getenv("OWNER_ID", 0))
 SERVER_LOG_PATH = os.getenv("SERVER_LOG_PATH", "")
-FACEIT_GAME_ID = "cs2"
 MAP_WHITELIST = [
     "de_inferno", "de_mirage", "de_dust2", "de_overpass",
     "de_nuke", "de_ancient", "de_vertigo", "de_anubis"
@@ -2563,35 +2328,6 @@ def flag(cc):
         return "🏳️"
     return "".join(chr(ord(c.upper()) + 127397) for c in cc)
 
-async def fetch_faceit_stats_cs2(nickname: str) -> dict:
-    if not FACEIT_API_KEY:
-        raise ValueError("FACEIT_API_KEY missing")
-    headers = {"Authorization": f"Bearer {FACEIT_API_KEY}"}
-    info_url = f"https://open.faceit.com/data/v4/players?nickname={nickname}"
-    r = requests.get(info_url, headers=headers)
-    if r.status_code == 404:
-        raise ValueError("Player not found on FACEIT.")
-    r.raise_for_status()
-    pdata = r.json()
-    pid = pdata.get("player_id")
-    stats_url = f"https://open.faceit.com/data/v4/players/{pid}/stats/{FACEIT_GAME_ID}"
-    s = requests.get(stats_url, headers=headers)
-    if s.status_code == 404:
-        raise ValueError("Player has not played CS2 on FACEIT.")
-    s.raise_for_status()
-    stats = s.json().get("lifetime", {})
-    game_info = pdata.get("games", {}).get(FACEIT_GAME_ID, {})
-    return {
-        "nickname": pdata.get("nickname"),
-        "player_id": pid,
-        "country_flag": flag(pdata.get("country")),
-        "avatar": pdata.get("avatar"),
-        "level": game_info.get("skill_level"),
-        "elo": game_info.get("faceit_elo"),
-        "matches": stats.get("Matches"),
-        "win_rate": stats.get("Win Rate %"),
-        "kd_ratio": stats.get("Average K/D Ratio"),
-    }
 
 async def get_enhanced_status_embed():
     addr = (SERVER_IP, SERVER_PORT)
@@ -3012,24 +2748,6 @@ async def demos_cmd(inter: discord.Interaction):
                 item.disabled = True
     await inter.followup.send(embed=embed, view=view, ephemeral=True)
 
-@bot.tree.command(name="elo", description="Get FACEIT stats for CS2")
-async def faceit_cmd(inter: discord.Interaction, nickname: str):
-    await inter.response.defer(ephemeral=True)
-    try:
-        stats = await fetch_faceit_stats_cs2(nickname)
-    except Exception as e:
-        return await inter.followup.send(f"❌ {e}", ephemeral=True)
-    embed = discord.Embed(
-        title=f"{stats['country_flag']} {stats['nickname']} — FACEIT CS2", color=0xFF8800
-    )
-    embed.set_thumbnail(url=stats["avatar"])
-    embed.add_field(name="Level", value=stats["level"], inline=True)
-    embed.add_field(name="ELO", value=stats["elo"], inline=True)
-    embed.add_field(name="Win Rate", value=f"{stats['win_rate']}%", inline=True)
-    embed.add_field(name="Matches", value=stats["matches"], inline=True)
-    embed.add_field(name="K/D", value=stats["kd_ratio"], inline=True)
-    embed.set_footer(text=f"Player ID: {stats['player_id']}")
-    await inter.followup.send(embed=embed, ephemeral=True)
 
 # ========== ADMIN COMMANDS ==========
 @bot.tree.command(name="csssay", description="Send center-screen message to all players")
