@@ -1230,9 +1230,14 @@ def _gh_push_avatar(steamid64: str, img_bytes: bytes) -> bool:
             body["sha"] = sha
 
         r = requests.put(api_url, headers=headers, json=body, timeout=15)
-        return r.status_code in (200, 201)
+        success = r.status_code in (200, 201)
+        if success:
+            print(f"[avatar] GitHub push OK for {steamid64} (HTTP {r.status_code})")
+        else:
+            print(f"[avatar] GitHub push FAILED for {steamid64}: HTTP {r.status_code} — {r.text[:300]}")
+        return success
     except Exception as e:
-        print(f"[avatar] GitHub push failed for {steamid64}: {e}")
+        print(f"[avatar] GitHub push EXCEPTION for {steamid64}: {e}")
         return False
 
 def _fetch_and_cache_avatar(steamid64: str, cdn_url: str) -> str:
@@ -1809,6 +1814,84 @@ async def handle_api_debug_avatar(request):
     return web.Response(text="\n".join(lines), content_type="text/plain",
                         headers={"Access-Control-Allow-Origin": "*"})
 
+
+async def handle_api_debug_avatar_sync(request):
+    """GET /api/debug/avatar/sync — download and push ALL player avatars to GitHub in one shot."""
+    loop = asyncio.get_running_loop()
+    lines = []
+
+    # 1. Collect all steamid64s from DB
+    steamids = set()
+    try:
+        conn = get_db()
+        c = conn.cursor()
+        c.execute(f"SELECT DISTINCT steamid64 FROM {MATCHZY_TABLES['players']} WHERE steamid64 != '0'")
+        steamids = {str(r[0]) for r in c.fetchall()}
+        c.close(); conn.close()
+        lines.append(f"Found {len(steamids)} unique steamids in DB")
+    except Exception as e:
+        lines.append(f"DB error: {e}")
+
+    if not steamids:
+        return web.Response(text="No steamids found in DB", content_type="text/plain")
+
+    # 2. Skip ones already on disk
+    missing = [sid for sid in sorted(steamids)
+               if not (_AVATARS_DIR / f"{sid}.jpg").exists()]
+    lines.append(f"Already on disk : {len(steamids) - len(missing)}")
+    lines.append(f"To download     : {len(missing)}")
+    lines.append("")
+
+    if not missing:
+        lines.append("All avatars already saved — nothing to do.")
+        return web.Response(text="\n".join(lines), content_type="text/plain",
+                            headers={"Access-Control-Allow-Origin": "*"})
+
+    # 3. Fetch avatar URLs from Steam API in batches of 100
+    def fetch_batch(batch):
+        try:
+            r = requests.get(
+                "https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v2/",
+                params={"key": STEAM_API_KEY, "steamids": ",".join(batch)},
+                timeout=15,
+            )
+            r.raise_for_status()
+            return {
+                str(p["steamid"]): p.get("avatarfull") or p.get("avatarmedium") or p.get("avatar")
+                for p in r.json().get("response", {}).get("players", [])
+            }
+        except Exception as e:
+            print(f"[avatar sync] batch fetch error: {e}")
+            return {}
+
+    downloaded = 0
+    failed = 0
+    batches = [missing[i:i+100] for i in range(0, len(missing), 100)]
+
+    for batch in batches:
+        avatar_urls = await loop.run_in_executor(None, fetch_batch, batch)
+        for sid in batch:
+            av_url = avatar_urls.get(sid)
+            if not av_url:
+                lines.append(f"  SKIP {sid} — no avatar URL (private profile?)")
+                failed += 1
+                continue
+            result = await loop.run_in_executor(None, _fetch_and_cache_avatar, sid, av_url)
+            if result.startswith("/assets/"):
+                lines.append(f"  OK   {sid}")
+                downloaded += 1
+            else:
+                lines.append(f"  FAIL {sid}")
+                failed += 1
+
+    lines.append("")
+    lines.append(f"Downloaded + pushed : {downloaded}")
+    lines.append(f"Failed              : {failed}")
+    lines.append(f"Total on disk now   : {len(list(_AVATARS_DIR.glob('*.jpg')))}")
+
+    return web.Response(text="\n".join(lines), content_type="text/plain",
+                        headers={"Access-Control-Allow-Origin": "*"})
+
 async def start_http_server():
     app = web.Application()
     app.router.add_get('/api/specialists',             handle_api_specialists)
@@ -1841,6 +1924,7 @@ async def start_http_server():
     app.router.add_get('/',        handle_stats_page)
     app.router.add_get('/health',  handle_health_check)
     app.router.add_get('/api/debug/avatar', handle_api_debug_avatar)
+    app.router.add_get('/api/debug/avatar/sync', handle_api_debug_avatar_sync)
     assets_path = pathlib.Path(__file__).parent / "assets"
     # Ensure avatars dir exists so static serving works even before first avatar is cached
     (assets_path / "avatars").mkdir(parents=True, exist_ok=True)
