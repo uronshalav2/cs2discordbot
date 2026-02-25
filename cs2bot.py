@@ -1190,6 +1190,19 @@ def to_steamid64(raw: str) -> str:
 _AVATAR_CACHE: dict = {}  # { steamid64: '/assets/avatars/{steamid64}.jpg' or cdn url }
 _AVATARS_DIR  = pathlib.Path(__file__).parent / "assets" / "avatars"
 
+def _preload_avatar_cache() -> None:
+    """Populate _AVATAR_CACHE from any avatars already saved on disk (survives redeploys via GitHub)."""
+    if not _AVATARS_DIR.exists():
+        return
+    count = 0
+    for f in _AVATARS_DIR.glob("*.jpg"):
+        sid = f.stem  # filename without extension = steamid64
+        if sid not in _AVATAR_CACHE:
+            _AVATAR_CACHE[sid] = f"/assets/avatars/{sid}.jpg"
+            count += 1
+    if count:
+        print(f"[avatar] Preloaded {count} avatars from disk into cache")
+
 def _gh_push_avatar(steamid64: str, img_bytes: bytes) -> bool:
     """Push avatar image to GitHub repo via Contents API. Returns True on success."""
     if not GITHUB_TOKEN:
@@ -1239,7 +1252,9 @@ def _fetch_and_cache_avatar(steamid64: str, cdn_url: str) -> str:
         # Save locally for this Railway instance
         local_path.write_bytes(img_bytes)
 
-        # Push to GitHub so it survives redeploys
+        # Push to GitHub so avatars survive redeploys.
+        # Railway is configured (railway.toml watchPaths) to ignore changes
+        # under assets/avatars/, so this commit will NOT trigger a redeploy.
         _gh_push_avatar(steamid64, img_bytes)
 
         local_url = f"/assets/avatars/{steamid64}.jpg"
@@ -1294,23 +1309,17 @@ async def handle_api_steam(request):
             cdn_url   = data["avatar"]
             steamid64 = str(data.get("steamid") or steamid64)
 
-            # If already cached locally, swap URL immediately
             if steamid64 in _AVATAR_CACHE:
+                # Already on disk — serve local URL instantly, no CDN hit
                 data["avatar"] = _AVATAR_CACHE[steamid64]
             else:
-                # Check if file already exists on disk (e.g. after redeploy from GitHub)
-                local_path = _AVATARS_DIR / f"{steamid64}.jpg"
-                if local_path.exists():
-                    local_url = f"/assets/avatars/{steamid64}.jpg"
-                    _AVATAR_CACHE[steamid64] = local_url
-                    data["avatar"] = local_url
-                else:
-                    # Fetch, save locally and push to GitHub in background
-                    asyncio.ensure_future(
-                        loop.run_in_executor(None, _fetch_and_cache_avatar, steamid64, cdn_url)
-                    )
-                    # Return CDN url for now — next request will get local url
-                    data["avatar"] = cdn_url
+                # First time seeing this player — serve CDN for this response,
+                # then download and save to disk in the background.
+                # Every subsequent request will hit local disk instead of CDN.
+                data["avatar"] = cdn_url
+                asyncio.ensure_future(
+                    loop.run_in_executor(None, _fetch_and_cache_avatar, steamid64, cdn_url)
+                )
 
         return _json_response(data, max_age=3600)
     except Exception as e:
@@ -1793,6 +1802,7 @@ async def start_http_server():
     assets_path = pathlib.Path(__file__).parent / "assets"
     # Ensure avatars dir exists so static serving works even before first avatar is cached
     (assets_path / "avatars").mkdir(parents=True, exist_ok=True)
+    _preload_avatar_cache()  # warm in-memory cache from previously saved avatars
     app.router.add_static('/assets', path=assets_path, name='assets')
 
     port = int(os.getenv('PORT', 8080))
