@@ -473,9 +473,22 @@ nav{
   -webkit-mask-position:200% center;mask-position:200% center;
   animation:cs2-sweep 1.2s ease-in-out infinite;
 }
+/* Fallback for Safari/iOS where mask-image on inline SVG may not render */
+@supports not (mask-image:linear-gradient(black,black)){
+  .spin{
+    -webkit-mask-image:none!important;
+    mask-image:none!important;
+    animation:cs2-rotate 1s linear infinite;
+    opacity:.85;
+  }
+}
 @keyframes cs2-sweep{
   0%  {-webkit-mask-position:200% center;mask-position:200% center}
   100%{-webkit-mask-position:-100% center;mask-position:-100% center}
+}
+@keyframes cs2-rotate{
+  from{transform:rotate(0deg)}
+  to{transform:rotate(360deg)}
 }
 .empty{padding:40px;text-align:center;color:var(--muted2)}
 .ovx{overflow-x:auto}
