@@ -1697,10 +1697,7 @@ async def start_http_server():
     app.router.add_get('/stats',   handle_stats_page)
     app.router.add_get('/',        handle_stats_page)
     app.router.add_get('/health',  handle_health_check)
-    assets_path = pathlib.Path(__file__).parent / "assets"
-    # Ensure avatars dir exists so static serving works even before first avatar is cached
-    (assets_path / "avatars").mkdir(parents=True, exist_ok=True)
-    app.router.add_static('/assets', path=assets_path, name='assets')
+
 
     port = int(os.getenv('PORT', 8080))
     runner = web.AppRunner(app)
