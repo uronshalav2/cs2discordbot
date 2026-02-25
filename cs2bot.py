@@ -1768,6 +1768,47 @@ async def handle_api_player_mapstats(request):
         return _json_response({"error": str(e)})
 
 
+async def handle_api_debug_avatar(request):
+    """GET /api/debug/avatar — test GitHub token and avatar pipeline."""
+    lines = []
+    lines.append(f"GITHUB_TOKEN  : {'SET (' + GITHUB_TOKEN[:6] + '...)' if GITHUB_TOKEN else 'MISSING'}")
+    lines.append(f"GITHUB_USER   : {GITHUB_USER or 'MISSING'}")
+    lines.append(f"GITHUB_REPO   : {GITHUB_REPO or 'MISSING'}")
+    lines.append(f"GITHUB_BRANCH : {GITHUB_BRANCH or 'MISSING'}")
+    lines.append(f"STEAM_API_KEY : {'SET' if STEAM_API_KEY else 'MISSING'}")
+    lines.append(f"AVATARS_DIR   : {_AVATARS_DIR} (exists: {_AVATARS_DIR.exists()})")
+    lines.append(f"Avatar cache  : {len(_AVATAR_CACHE)} entries")
+    lines.append("")
+    if GITHUB_TOKEN:
+        try:
+            api_url = f"https://api.github.com/repos/{GITHUB_USER}/{GITHUB_REPO}"
+            headers = {"Authorization": f"token {GITHUB_TOKEN}", "Accept": "application/vnd.github.v3+json"}
+            r = requests.get(api_url, headers=headers, timeout=8)
+            if r.status_code == 200:
+                lines.append("GitHub repo access : OK")
+            elif r.status_code == 401:
+                lines.append("GitHub repo access : FAILED 401 - token invalid or expired")
+            elif r.status_code == 404:
+                lines.append("GitHub repo access : FAILED 404 - repo not found or no access")
+            else:
+                lines.append(f"GitHub repo access : FAILED {r.status_code} - {r.text[:200]}")
+        except Exception as e:
+            lines.append(f"GitHub repo access : EXCEPTION - {e}")
+    else:
+        lines.append("GitHub repo access : skipped (no token)")
+    lines.append("")
+    if _AVATARS_DIR.exists():
+        files = list(_AVATARS_DIR.glob("*.jpg"))
+        lines.append(f"Avatars on disk : {len(files)}")
+        for f in files[:5]:
+            lines.append(f"  {f.name}")
+        if len(files) > 5:
+            lines.append(f"  ... and {len(files)-5} more")
+    else:
+        lines.append("Avatars on disk : directory not created yet")
+    return web.Response(text="\n".join(lines), content_type="text/plain",
+                        headers={"Access-Control-Allow-Origin": "*"})
+
 async def start_http_server():
     app = web.Application()
     app.router.add_get('/api/specialists',             handle_api_specialists)
@@ -1799,6 +1840,7 @@ async def start_http_server():
     app.router.add_get('/stats',   handle_stats_page)
     app.router.add_get('/',        handle_stats_page)
     app.router.add_get('/health',  handle_health_check)
+    app.router.add_get('/api/debug/avatar', handle_api_debug_avatar)
     assets_path = pathlib.Path(__file__).parent / "assets"
     # Ensure avatars dir exists so static serving works even before first avatar is cached
     (assets_path / "avatars").mkdir(parents=True, exist_ok=True)
