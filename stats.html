@@ -889,6 +889,39 @@ const _GH = {
 };
 const _GH_BASE = `https://raw.githubusercontent.com/${_GH.user}/${_GH.repo}/${_GH.branch}/snapshots`;
 
+
+const initials = n=>(n||'?').split(/[ _]/).slice(0,2).map(w=>w[0]||'').join('').toUpperCase().slice(0,2)||'?';
+// ── Spinner: fetch SVG once, inline it so fill:var(--orange) works via CSS ────
+const _SPINNER_FALLBACK = `<svg viewBox="0 0 60 60" xmlns="http://www.w3.org/2000/svg"><circle cx="30" cy="30" r="24" fill="none" stroke="inherit" stroke-width="4" stroke-dasharray="100 50" stroke-linecap="round"><animateTransform attributeName="transform" type="rotate" from="0 30 30" to="360 30 30" dur="1s" repeatCount="indefinite"/></circle></svg>`;
+let _spinnerSvg = _SPINNER_FALLBACK; // start with fallback so spin() works instantly
+const _SPINNER_URL = 'assets/spinner/cs2-logo.svg';
+
+// Preload eagerly in the background as soon as the script runs
+(async () => {
+  try {
+    const res = await fetch(_SPINNER_URL);
+    if (!res.ok) throw new Error('fetch failed');
+    const text = await res.text();
+    let svg = text
+      .replace(/<\?xml[^?]*\?>/g, '')
+      .replace(/<!DOCTYPE[^>]*>/g, '')
+      .replace(/\s(width|height)="[^"]*"/g, '')
+      .trim();
+    svg = svg.replace(/fill="[^"]*"/g, 'fill="inherit"');
+    _spinnerSvg = svg;
+    // Swap into any spinner already on screen
+    document.querySelectorAll('.spin').forEach(el => { el.innerHTML = svg; });
+  } catch(e) { /* keep fallback */ }
+})();
+
+function _getSpinnerSvg() { return Promise.resolve(_spinnerSvg); }
+
+function spin(id) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.innerHTML = `<div class="loading"><span class="spin" style="display:inline-flex;align-items:center;justify-content:center;color:var(--orange)">${_spinnerSvg}</span></div>`;
+}
+
 // Fetch from local API; if result is empty/null, fall back to GitHub snapshot
 async function apiFetch(endpoint, ghFile) {
   try {
