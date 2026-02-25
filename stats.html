@@ -3002,12 +3002,6 @@ function renderTeam(lineups) {
 
   // No title — just the cards + refresh button tucked top-right
   el.innerHTML = `
-    <div style="display:flex;justify-content:flex-end;margin-bottom:10px">
-      <button onclick="_teamCache=null;_teamAvatarCache={};loadTeam()"
-        style="padding:6px 14px;background:transparent;border:1px solid var(--border);border-radius:3px;color:var(--muted2);font-family:'Rajdhani',sans-serif;font-size:11px;letter-spacing:1px;cursor:pointer;text-transform:uppercase">
-        Refresh
-      </button>
-    </div>
     ${podiumHtml}
     ${cards}`;
 
