@@ -126,12 +126,12 @@ nav{
 }
 
 /* ── LAYOUT ──────────────────────────────────────────────────────────────── */
-#app{max-width:1100px;margin:0 auto;padding:24px 16px}
+#app{max-width:1100px;margin:0 auto;padding:32px 16px 24px}
 @media(min-width:769px){
   body{padding-left:var(--sidebar-w)}
-  #app{padding:28px 24px 28px}
+  #app{padding:36px 24px 32px}
 }
-@media(max-width:768px){#app{padding:70px 12px 20px}}
+@media(max-width:768px){#app{padding:70px 12px 24px}}
 
 /* Keep these for any remaining references — they are no-ops on desktop now */
 .tab-indicator{display:none}
@@ -604,7 +604,7 @@ nav{
 
 /* ── Map Carousel (all screens) ─────────────────────────────────────────── */
 #p-maps{padding:0!important;margin:0!important;overflow:hidden}
-#app:has(#p-maps:not([style*="display:none"])){padding-left:0;padding-right:0;padding-top:0}
+#app:has(#p-maps:not([style*="display:none"])){padding-left:0!important;padding-right:0!important;padding-top:0!important}
 .map-carousel-wrap{height:calc(100svh - 56px);overflow-y:scroll;scroll-snap-type:y mandatory;-webkit-overflow-scrolling:touch;scrollbar-width:none}
 .map-carousel-wrap::-webkit-scrollbar{display:none}
 .map-carousel-slide{position:relative;height:calc(100svh - 56px);scroll-snap-align:start;scroll-snap-stop:always;overflow:hidden;display:flex;flex-direction:column}
