@@ -2957,16 +2957,18 @@ function renderTeam(lineups) {
   const [pw1, pw2, pw3] = byWins;
 
   // Named colors for podium (no CSS var in hex concat)
+  const _tAccentHex = rgbToHex(getComputedStyle(document.documentElement).getPropertyValue('--orange').trim()) || '#ff5500';
+  const _tAccentRgb = hexToRgb(_tAccentHex);
   const podiumColorMap = {
-    1: {solid:'#ff5500', bg:'rgba(255,85,0,0.15)',  border:'rgba(255,85,0,0.35)',  text:'rgba(255,85,0,0.35)'},
-    2: {solid:'#a0aec0', bg:'rgba(160,174,192,0.12)',border:'rgba(160,174,192,0.3)',text:'rgba(160,174,192,0.3)'},
-    3: {solid:'#b87333', bg:'rgba(184,115,51,0.12)', border:'rgba(184,115,51,0.3)', text:'rgba(184,115,51,0.3)'},
+    1: {solid:_tAccentHex, bg:`rgba(${_tAccentRgb},0.15)`, border:`rgba(${_tAccentRgb},0.35)`, text:`rgba(${_tAccentRgb},0.35)`},
+    2: {solid:'#c0c8d8',   bg:'rgba(160,174,192,0.12)',     border:'rgba(192,200,216,0.3)',      text:'rgba(192,200,216,0.3)'},
+    3: {solid:'#c8843a',   bg:'rgba(184,115,51,0.12)',      border:'rgba(200,132,58,0.3)',       text:'rgba(200,132,58,0.3)'},
   };
   const podiumHeights = [76, 108, 54];
   const podiumRanks   = [2, 1, 3];
   const podiumTeams   = [pw2, pw1, pw3].filter(Boolean);
-  const crownSvg = `<svg width="22" height="16" viewBox="0 0 24 18" fill="none"><path d="M2 16h20M3 16L1 4l7 6 4-8 4 8 7-6-2 12H3z" stroke="#ff5500" stroke-width="1.8" stroke-linejoin="round" fill="rgba(255,133,0,.2)"/></svg>`;
-  const trophySvg = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="rgba(255,85,0,.6)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/></svg>`;
+  const crownSvg = `<svg width="22" height="16" viewBox="0 0 24 18" fill="none"><path d="M2 16h20M3 16L1 4l7 6 4-8 4 8 7-6-2 12H3z" stroke="${_tAccentHex}" stroke-width="1.8" stroke-linejoin="round" fill="rgba(255,133,0,.2)"/></svg>`;
+  const trophySvg = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="${_tAccentHex}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/></svg>`;
 
   const podiumHtml = podiumTeams.length >= 1 ? `
     <div class="card" style="margin-bottom:16px;padding:16px 10px 0;overflow:hidden">
@@ -2980,7 +2982,7 @@ function renderTeam(lineups) {
           const h = podiumHeights[vi];
           const isFirst = rank === 1;
           const winPct = lu.winRate;
-          const winColor = winPct >= 60 ? '#22c55e' : winPct >= 40 ? '#ff5500' : '#ef4444';
+          const winColor = winPct >= 60 ? '#22c55e' : winPct >= 40 ? _tAccentHex : '#ef4444';
 
           // Avatar strip — up to 4 overlapping circles
           const avatarStrip = lu.names.slice(0,4).map((n, ai) => {
@@ -2999,7 +3001,7 @@ function renderTeam(lineups) {
             <div style="font-size:9px;color:var(--muted2);letter-spacing:1px;text-transform:uppercase;margin-top:-3px">wins</div>
             <div style="font-size:10px;font-family:'Rajdhani',sans-serif;font-weight:700;color:${winColor}">${winPct}%&thinsp;WR · ${lu.total}&thinsp;played</div>
             <div style="display:flex;justify-content:center;margin-bottom:8px">${avatarStrip}</div>
-            <div style="width:100%;background:${c.bg};border:1px solid ${c.border};border-bottom:none;border-radius:6px 6px 0 0;height:${h}px;display:flex;align-items:center;justify-content:center">
+            <div style="width:100%;background:${c.bg};border:1px solid ${c.border};border-bottom:none;border-radius:6px 6px 0 0;height:${h}px;display:flex;align-items:center;justify-content:center;animation:${rank===1?'podium-gold-pulse':rank===2?'podium-silver-pulse':'podium-bronze-pulse'} 2.4s ease-in-out infinite">
               <span style="font-family:'Rajdhani',sans-serif;font-weight:900;font-size:${isFirst?'36px':'26px'};color:${c.text}">${rank}</span>
             </div>
           </div>`;
