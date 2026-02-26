@@ -129,9 +129,9 @@ nav{
 #app{max-width:1100px;margin:0 auto;padding:24px 16px}
 @media(min-width:769px){
   body{padding-left:var(--sidebar-w)}
-  #app{padding:28px 24px}
+  #app{padding:28px 24px 28px}
 }
-@media(max-width:768px){#app{padding:20px 12px}}
+@media(max-width:768px){#app{padding:70px 12px 20px}}
 
 /* Keep these for any remaining references — they are no-ops on desktop now */
 .tab-indicator{display:none}
@@ -2032,7 +2032,7 @@ function renderLeaderboard(data, sortKey) {
       const avatarEl = p._steam_avatar
         ? `<img src="${p._steam_avatar}" style="width:56px;height:56px;border-radius:50%;object-fit:cover;border:2px solid ${c};margin-bottom:10px" alt="${esc(p.name)}">`
         : `<div style="width:56px;height:56px;border-radius:50%;background:var(--surface);border:2px solid ${c};display:flex;align-items:center;justify-content:center;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:20px;color:${c};margin:0 auto 10px">${initials(p.name)}</div>`;
-      return `<div class="podium-card" data-rank="${rank}" style="--card-color:${c};--glow:${glowColors[rank]};--bdr:${borderColors[rank]};flex:1;background:${glowColors[rank]};backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border:1px solid ${borderColors[rank]};border-top:2px solid ${c};border-radius:6px;padding:18px 14px;text-align:center;cursor:pointer;position:relative;overflow:hidden;animation:${glowAnims[rank]} 2.4s ease-in-out infinite;" onclick="go('player',{name:'${esc(p.name)}'},'leaderboard')">
+      return `<div class="podium-card" data-rank="${rank}" style="--card-color:${c};--glow:${glowColors[rank]};--bdr:${borderColors[rank]};flex:1;background:${glowColors[rank]};backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border:1px solid ${borderColors[rank]};border-top:2px solid ${c};border-radius:6px;padding:18px 14px;text-align:center;cursor:pointer;position:relative;overflow:hidden;" onclick="go('player',{name:'${esc(p.name)}'},'leaderboard')">
         <div class="podium-shine"></div>
         <div style="position:absolute;top:10px;left:14px;font-family:'Rajdhani',sans-serif;font-weight:800;font-size:11px;letter-spacing:2px;color:${c};opacity:.9">${rankLabels[rank]}</div>
         <div style="margin-top:6px;position:relative;z-index:1">${avatarEl}</div>
