@@ -126,7 +126,7 @@ nav{
 }
 
 /* ── LAYOUT ──────────────────────────────────────────────────────────────── */
-#app{max-width:1100px;margin:0 auto;padding:24px 16px;margin-top: 46px;}
+#app{max-width:1100px;margin:0 auto;padding:24px 16px}
 @media(min-width:769px){
   body{padding-left:var(--sidebar-w)}
   #app{padding:28px 24px}
@@ -394,6 +394,10 @@ nav{
 .podium-card:hover{transform:translateY(-3px);box-shadow:0 0 30px rgba(var(--orange-rgb),.2),0 12px 40px rgba(0,0,0,.6)!important}
 .podium-shine{position:absolute;inset:0;pointer-events:none;z-index:0;opacity:0;transition:opacity .4s ease;border-radius:inherit;background:radial-gradient(circle at var(--sx,50%) var(--sy,50%),rgba(255,200,100,.25) 0%,rgba(var(--orange-rgb),.08) 40%,transparent 65%)}
 .podium-card:hover .podium-shine{opacity:1}
+/* Podium rank shine animations */
+@keyframes podium-gold-pulse{0%,100%{box-shadow:0 0 18px 4px rgba(255,200,60,.35),0 0 40px 8px rgba(255,160,0,.15)}50%{box-shadow:0 0 28px 8px rgba(255,220,80,.55),0 0 60px 16px rgba(255,180,0,.25)}}
+@keyframes podium-silver-pulse{0%,100%{box-shadow:0 0 14px 3px rgba(180,196,220,.3),0 0 30px 6px rgba(160,174,192,.1)}50%{box-shadow:0 0 22px 6px rgba(200,210,230,.45),0 0 45px 10px rgba(180,196,220,.2)}}
+@keyframes podium-bronze-pulse{0%,100%{box-shadow:0 0 14px 3px rgba(200,132,58,.3),0 0 30px 6px rgba(184,115,51,.1)}50%{box-shadow:0 0 22px 6px rgba(220,150,70,.45),0 0 45px 10px rgba(200,132,58,.2)}}
 
 /* H2H RESULT EXPAND */
 .h2h-result-body{overflow:hidden;max-height:0;transition:max-height .4s ease;position:relative;z-index:1}
@@ -2018,16 +2022,17 @@ function renderLeaderboard(data, sortKey) {
     const top3 = sorted.slice(0,3);
     const podiumCard = (p, rank) => {
       if (!p) return '';
-      const colors      = ['var(--orange)','#a0aec0','#b87333'];
+      const colors      = ['var(--orange)','#c0c8d8','#c8843a'];
       const orRgb = getComputedStyle(document.documentElement).getPropertyValue('--orange-rgb').trim()||'255,85,0';
       const glowColors  = [`rgba(${orRgb},.18)`,'rgba(160,174,192,.14)','rgba(184,115,51,.15)'];
-      const borderColors= [`rgba(${orRgb},.35)`,'rgba(160,174,192,.3)','rgba(184,115,51,.3)'];
+      const borderColors= [`rgba(${orRgb},.35)`,'rgba(192,200,216,.3)','rgba(200,132,58,.3)'];
+      const glowAnims   = ['podium-gold-pulse','podium-silver-pulse','podium-bronze-pulse'];
       const rankLabels  = ['1ST','2ND','3RD'];
       const c = colors[rank];
       const avatarEl = p._steam_avatar
         ? `<img src="${p._steam_avatar}" style="width:56px;height:56px;border-radius:50%;object-fit:cover;border:2px solid ${c};margin-bottom:10px" alt="${esc(p.name)}">`
         : `<div style="width:56px;height:56px;border-radius:50%;background:var(--surface);border:2px solid ${c};display:flex;align-items:center;justify-content:center;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:20px;color:${c};margin:0 auto 10px">${initials(p.name)}</div>`;
-      return `<div class="podium-card" data-rank="${rank}" style="--card-color:${c};--glow:${glowColors[rank]};--bdr:${borderColors[rank]};flex:1;background:${glowColors[rank]};backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border:1px solid ${borderColors[rank]};border-top:2px solid ${c};border-radius:6px;padding:18px 14px;text-align:center;cursor:pointer;position:relative;overflow:hidden;" onclick="go('player',{name:'${esc(p.name)}'},'leaderboard')">
+      return `<div class="podium-card" data-rank="${rank}" style="--card-color:${c};--glow:${glowColors[rank]};--bdr:${borderColors[rank]};flex:1;background:${glowColors[rank]};backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border:1px solid ${borderColors[rank]};border-top:2px solid ${c};border-radius:6px;padding:18px 14px;text-align:center;cursor:pointer;position:relative;overflow:hidden;animation:${glowAnims[rank]} 2.4s ease-in-out infinite;" onclick="go('player',{name:'${esc(p.name)}'},'leaderboard')">
         <div class="podium-shine"></div>
         <div style="position:absolute;top:10px;left:14px;font-family:'Rajdhani',sans-serif;font-weight:800;font-size:11px;letter-spacing:2px;color:${c};opacity:.9">${rankLabels[rank]}</div>
         <div style="margin-top:6px;position:relative;z-index:1">${avatarEl}</div>
@@ -2184,8 +2189,8 @@ function renderSpecialists(data, tab) {
       const active = tab === t.id;
       return `<button onclick="renderSpecialists(window._specData,'${t.id}')"
         style="display:inline-flex;align-items:center;gap:6px;padding:8px 14px;border-radius:4px;cursor:pointer;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:12px;letter-spacing:1.2px;text-transform:uppercase;border:none;white-space:nowrap;flex-shrink:0;transition:all .15s;
-          ${active ? 'background:var(--orange-glow);color:var(--orange);' : 'background:var(--surface2);color:var(--muted2);outline:1px solid var(--border);'}">
-        <span style="display:inline-flex;color:${active?'var(--orange)':'var(--muted2)'}">${TAB_ICONS[t.id]}</span>${t.label}
+          ${active ? 'background:var(--orange);color:#000;' : 'background:var(--surface2);color:var(--muted2);outline:1px solid var(--border);'}">
+        <span style="display:inline-flex;color:${active?'#000':'var(--muted2)'}">${TAB_ICONS[t.id]}</span>${t.label}
       </button>`;
     }).join('')}
   </div>`;
@@ -2214,12 +2219,14 @@ function renderSpecialists(data, tab) {
   }
 
   // ── Podium colors — no CSS vars in hex concat ─────────────────────────────
+  const _accentHex = rgbToHex(getComputedStyle(document.documentElement).getPropertyValue('--orange').trim()) || '#ff5500';
+  const _accentRgb = hexToRgb(_accentHex);
   const PC = {
-    1: {solid:'#ff5500', bg:'rgba(255,85,0,0.13)',   border:'rgba(255,85,0,0.32)',   glow:'rgba(255,85,0,0.25)'},
-    2: {solid:'#a0aec0', bg:'rgba(160,174,192,0.1)', border:'rgba(160,174,192,0.28)',glow:'rgba(160,174,192,0.15)'},
-    3: {solid:'#b87333', bg:'rgba(184,115,51,0.1)',  border:'rgba(184,115,51,0.28)', glow:'rgba(184,115,51,0.15)'},
+    1: {solid:_accentHex,  bg:`rgba(${_accentRgb},0.13)`,   border:`rgba(${_accentRgb},0.32)`,   glow:`rgba(${_accentRgb},0.35)`},
+    2: {solid:'#c0c8d8',   bg:'rgba(160,174,192,0.1)',       border:'rgba(160,174,192,0.30)',       glow:'rgba(192,200,216,0.25)'},
+    3: {solid:'#c8843a',   bg:'rgba(184,115,51,0.1)',        border:'rgba(184,115,51,0.30)',        glow:'rgba(200,132,58,0.25)'},
   };
-  const crownSvg = `<svg width="20" height="14" viewBox="0 0 24 18" fill="none"><path d="M2 16h20M3 16L1 4l7 6 4-8 4 8 7-6-2 12H3z" stroke="#ff5500" stroke-width="1.8" stroke-linejoin="round" fill="rgba(255,133,0,.18)"/></svg>`;
+  const crownSvg = `<svg width="20" height="14" viewBox="0 0 24 18" fill="none"><path d="M2 16h20M3 16L1 4l7 6 4-8 4 8 7-6-2 12H3z" stroke="${_accentHex}" stroke-width="1.8" stroke-linejoin="round" fill="rgba(255,133,0,.18)"/></svg>`;
 
   const [p1, p2, p3] = sorted;
   const podiumOrder   = [p2, p1, p3].filter(Boolean);
@@ -2245,7 +2252,7 @@ function renderSpecialists(data, tab) {
             <div style="font-family:'Rajdhani',sans-serif;font-weight:900;font-size:${isFirst?'30px':'22px'};color:${c.solid};line-height:1">${primaryVal(p)}</div>
             <div style="font-size:9px;color:var(--muted2);letter-spacing:1px;text-transform:uppercase;margin-top:-2px">${primaryLabel}</div>
             <div style="font-size:10px;color:var(--muted2);font-family:'Rajdhani',sans-serif;margin-bottom:8px">${secondaryVal(p)}</div>
-            <div style="width:100%;background:${c.bg};border:1px solid ${c.border};border-bottom:none;border-radius:6px 6px 0 0;height:${h}px;display:flex;align-items:center;justify-content:center">
+            <div style="width:100%;background:${c.bg};border:1px solid ${c.border};border-bottom:none;border-radius:6px 6px 0 0;height:${h}px;display:flex;align-items:center;justify-content:center;animation:${rank===1?'podium-gold-pulse':rank===2?'podium-silver-pulse':'podium-bronze-pulse'} 2.4s ease-in-out infinite">
               <span style="font-family:'Rajdhani',sans-serif;font-weight:900;font-size:${isFirst?'34px':'26px'};color:${c.border}">${rank}</span>
             </div>
           </div>`;
@@ -2261,12 +2268,12 @@ function renderSpecialists(data, tab) {
       : `<div style="width:32px;height:32px;border-radius:50%;background:var(--surface2);display:flex;align-items:center;justify-content:center;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:11px;color:var(--muted2)">${initials(p.name)}</div>`;
     return `<div onclick="go('player',{name:'${esc(p.name)}'},'specialists')"
       style="display:flex;align-items:center;gap:12px;padding:10px 14px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .12s"
-      onmouseover="this.style.background='rgba(255,85,0,.04)'" onmouseout="this.style.background=''">
+      onmouseover="this.style.background='rgba(var(--orange-rgb),.04)'" onmouseout="this.style.background=''">
       <span style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:13px;color:var(--muted2);width:22px;text-align:center;flex-shrink:0">${rank}</span>
       ${av}
       <span style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:14px;color:var(--white);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(p.name)}</span>
       <div style="text-align:right;flex-shrink:0">
-        <div style="font-family:'Rajdhani',sans-serif;font-weight:800;font-size:17px;color:#ff5500">${primaryVal(p)}</div>
+        <div style="font-family:'Rajdhani',sans-serif;font-weight:800;font-size:17px;color:var(--orange)">${primaryVal(p)}</div>
         <div style="font-size:10px;color:var(--muted2)">${secondaryVal(p)}</div>
       </div>
     </div>`;
@@ -3002,6 +3009,12 @@ function renderTeam(lineups) {
 
   // No title — just the cards + refresh button tucked top-right
   el.innerHTML = `
+    <div style="display:flex;justify-content:flex-end;margin-bottom:10px">
+      <button onclick="_teamCache=null;_teamAvatarCache={};loadTeam()"
+        style="padding:6px 14px;background:transparent;border:1px solid var(--border);border-radius:3px;color:var(--muted2);font-family:'Rajdhani',sans-serif;font-size:11px;letter-spacing:1px;cursor:pointer;text-transform:uppercase">
+        Refresh
+      </button>
+    </div>
     ${podiumHtml}
     ${cards}`;
 
