@@ -79,6 +79,20 @@ def _cache_bust(*keys):
 async def handle_api_player(request):
     """GET /api/player/{name} — full career stats, MatchZy primary / fshost fallback"""
     name = request.match_info.get('name', '')
+    # Normalize Unicode punctuation to ASCII so names from JSONs (e.g. \u2019 apostrophe)
+    # match what is stored in the database.
+    import unicodedata
+    name = unicodedata.normalize('NFKC', name)
+    _unicode_replacements = {
+        '\u2018': "'", '\u2019': "'", '\u201a': "'", '\u201b': "'",
+        '\u02bc': "'", '\u02bb': "'", '\uff07': "'",
+        '\u201c': '"', '\u201d': '"', '\u201e': '"', '\u201f': '"', '\uff02': '"',
+        '\u2010': '-', '\u2011': '-', '\u2012': '-', '\u2013': '-',
+        '\u2014': '-', '\u2015': '-',
+    }
+    for uc, asc in _unicode_replacements.items():
+        name = name.replace(uc, asc)
+    name = name.strip()
     loop = asyncio.get_running_loop()
 
     # ── Helper: build career + recent from fshost data ────────────────────────
@@ -204,7 +218,8 @@ async def handle_api_player(request):
         if career:
             career = dict(career)
             name_map = _edited_name_map()
-            sid = str(career.get('steamid64') or '')
+            sid = to_steamid64(str(career.get('steamid64') or ''))
+            career['steamid64'] = sid  # store the corrected value
             if sid in name_map:
                 career['name'] = name_map[sid]
             c.execute(f"""
@@ -579,7 +594,7 @@ def _players_from_fshost(data: dict, matchid: str) -> list:
                 'matchid':        matchid,
                 'mapnumber':      1,
                 'steamid64':      str(fp.get('steam_id', '0')),
-                'name':           fp.get('name', '?'),
+                'name':           normalize_name(fp.get('name', '?')),
                 'team':           team_key,
                 'team_name':      team_name,
                 'kills':          kills,
@@ -780,7 +795,7 @@ def _get_matchzy_players_for_match(matchid: str) -> list:
             r = dict(r)
             r['matchid']   = str(matchid)
             r['mapnumber'] = 1
-            r['steamid64'] = str(r.get('steamid64') or '0')
+            r['steamid64'] = to_steamid64(str(r.get('steamid64') or '0'))
             r['source']    = 'matchzy'
             # Determine team key for consistency with fshost convention
             team_raw = str(r.get('team') or '').lower()
@@ -832,9 +847,10 @@ def _patch_aggregate_rows(rows: list) -> list:
         return rows
     out = []
     for row in rows:
-        sid = str(row.get('steamid64') or '')
+        row = dict(row)
+        row['steamid64'] = to_steamid64(str(row.get('steamid64') or '0'))
+        sid = row['steamid64']
         if sid in name_map:
-            row = dict(row)
             row['name'] = name_map[sid]
         out.append(row)
     return out
@@ -1026,7 +1042,7 @@ def _aggregate_stats_from_fshost() -> list:
                     sid = str(fp.get('steam_id') or fp.get('steamid64') or '0')
                     if sid == '0' or not sid:
                         continue
-                    name = fp.get('name') or '?'
+                    name = normalize_name(fp.get('name') or '?')
 
                     kills   = int(fp.get('kills', 0) or 0)
                     deaths  = int(fp.get('deaths', 0) or 0)
@@ -1128,6 +1144,8 @@ async def handle_api_leaderboard(request):
         rows = c.fetchall()
         c.close(); conn.close()
         rows = _patch_aggregate_rows(rows)
+        # Merge rows that share the same normalized steamid64 (Steam32 vs Steam64 duplicates)
+        rows = _merge_duplicate_player_rows(rows)
         _cache_set('leaderboard', rows)
         return _json_response(rows, max_age=60)
     except Exception as e:
@@ -1167,6 +1185,7 @@ async def handle_api_specialists(request):
         rows = c.fetchall()
         c.close(); conn.close()
         rows = _patch_aggregate_rows(rows)
+        rows = _merge_duplicate_player_rows(rows)
         _cache_set('specialists', rows)
         return _json_response(rows, max_age=60)
     except Exception as e:
@@ -1184,6 +1203,60 @@ def to_steamid64(raw: str) -> str:
         return str(val)
     except (ValueError, TypeError):
         return raw
+
+def normalize_name(name: str) -> str:
+    """
+    Normalize player names from JSON so they match DB names.
+    Converts Unicode lookalike apostrophes/quotes to plain ASCII equivalents.
+    e.g. \u2019 (right single quote) → plain apostrophe '
+    """
+    if not name:
+        return name
+    # Map common Unicode quotes/dashes to their ASCII equivalents
+    return (name
+        .replace('\u2018', "'").replace('\u2019', "'")   # left/right single quotes
+        .replace('\u201c', '"').replace('\u201d', '"')   # left/right double quotes
+        .replace('\u2032', "'").replace('\u2035', "'")   # prime/reversed prime
+        .replace('\u02bc', "'")                          # modifier letter apostrophe
+    )
+
+
+def _merge_duplicate_player_rows(rows: list) -> list:
+    """
+    After normalizing steamid64 values, some players may appear twice —
+    once with a Steam32-stored-as-64 row and once with a real Steam64 row.
+    This merges them by summing numeric stats and keeping the most recent name.
+    """
+    merged: dict = {}
+    for row in rows:
+        sid = str(row.get('steamid64') or '0')
+        if sid == '0':
+            continue
+        if sid not in merged:
+            merged[sid] = dict(row)
+            continue
+        # Duplicate found — merge into existing
+        existing = merged[sid]
+        # Keep most recent name (non-empty wins, otherwise keep existing)
+        if row.get('name') and row['name'] != '?':
+            existing['name'] = row['name']
+        # Sum all numeric fields except steamid64 and name
+        for key, val in row.items():
+            if key in ('steamid64', 'name'):
+                continue
+            if isinstance(val, (int, float)) and isinstance(existing.get(key), (int, float)):
+                existing[key] = existing[key] + val
+        # Recalculate derived ratios after merging
+        kills  = existing.get('kills', 0) or 0
+        deaths = existing.get('deaths', 0) or 0
+        hs     = existing.get('headshots', existing.get('head_shot_kills', 0)) or 0
+        dmg    = existing.get('damage', existing.get('total_damage', 0)) or 0
+        maps   = existing.get('matches', 1) or 1
+        existing['kd']     = round(kills / deaths, 2) if deaths else float(kills)
+        existing['hs_pct'] = round(hs / kills * 100, 1) if kills else 0.0
+        existing['adr']    = round(dmg / maps / 30, 1)
+    return list(merged.values())
+
 
 # ── Steam avatar local cache ─────────────────────────────────────────────────
 # In-memory cache: steamid64 -> local URL or Steam CDN URL

@@ -1029,7 +1029,7 @@ function go(page, params, back) {
     if(page==='h2h')         loadH2H();
     if(page==='specialists') loadSpecialists();
     if(page==='demos')       loadDemos();
-    if(page==='player')      loadPlayer(params.name);
+    if(page==='player')      loadPlayer(normName(params.name));
     if(page==='match')       loadMatch(params.id);
     if(page==='predict')     loadPredict();
     if(page==='team')        loadTeam();
@@ -1239,13 +1239,13 @@ function emptyState(type, title, sub) {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const esc = s=>String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
-const escName = s => JSON.stringify(String(s||''));
-// Decode unicode escapes like \u0027 that may be stored literally in the DB
-const decodeUnicode = s => String(s||'').replace(/\\u([0-9a-fA-F]{4})/g, (_, h) => String.fromCharCode(parseInt(h, 16)));
-// Normalize player name: decode literal \uXXXX sequences stored in DB
-const normalizeName = s => decodeUnicode(String(s||''));
-const normalizePlayer = p => { if(p && p.name) p.name = normalizeName(p.name); return p; };
-const normalizePlayers = arr => Array.isArray(arr) ? arr.map(normalizePlayer) : arr;
+// Normalize Unicode punctuation to ASCII equivalents so names from JSONs
+// (which may contain \u2019 right-single-quote etc.) match DB values.
+const normName = s=>String(s||'')
+  .replace(/[\u2018\u2019\u201A\u201B\u02BC\u02BB\uFF07]/g,"'")
+  .replace(/[\u201C\u201D\u201E\u201F\uFF02]/g,'"')
+  .replace(/[\u2010\u2011\u2012\u2013\u2014\u2015]/g,'-')
+  .trim();
 const num = n=>n!=null?Number(n).toLocaleString():'-';
 const kdc = v=>{const f=parseFloat(v);return f>=1.3?'kd-g':f>=0.9?'kd-n':'kd-b'};
 const kdf = v=>{const f=parseFloat(v);return f>=1.3?'win':f>=0.9?'text':'loss'};
@@ -1361,7 +1361,7 @@ async function loadMatch(id) {
   window._currentMatchId = id;
   window._currentMatchData = d;
 
-  const meta=d.meta||{}, maps=d.maps||[], players=normalizePlayers(d.players||[]), demo=d.demo||{};
+  const meta=d.meta||{}, maps=d.maps||[], players=d.players||[], demo=d.demo||{};
 
   // ── Team split: players have team='team1' or 'team2' from fshost ──────────
   function splitTeams(arr) {
@@ -1541,7 +1541,7 @@ function sbRows(arr, steamCache={}) {
       ? `<img src="${steamCache[p.steamid64]}" style="width:22px;height:22px;border-radius:50%;object-fit:cover;vertical-align:middle;margin-right:7px;border:1px solid var(--border2)" onerror="this.style.display='none'">`
       : `<span style="display:inline-block;width:22px;height:22px;border-radius:50%;background:var(--surface2);line-height:22px;text-align:center;font-size:9px;font-family:'Rajdhani',sans-serif;font-weight:700;color:var(--muted2);vertical-align:middle;margin-right:7px">${initials(p.name)}</span>`;
     return `<tr>
-      <td onclick="go('player',{name:${escName(p.name)}},'match')" style="cursor:pointer"><div style="display:flex;align-items:center">${avatar}${esc(p.name)}</div></td>
+      <td onclick="go('player',{name:'${esc(p.name)}'},'match')" style="cursor:pointer"><div style="display:flex;align-items:center">${avatar}${esc(p.name)}</div></td>
       <td class="kda-cell">${p.kills??0}</td>
       <td class="kda-cell">${p.deaths??0}</td>
       <td class="kda-cell">${p.assists??0}</td>
@@ -1562,12 +1562,11 @@ function sbRows(arr, steamCache={}) {
 
 // ── Player Profile ────────────────────────────────────────────────────────────
 async function loadPlayer(name) {
+  name = normName(name);
   spin('p-player');
   const [data, ] = await Promise.all([
     fetch('/api/player/'+encodeURIComponent(name)).then(r=>r.json()).catch(()=>({})),
   ]);
-  if (data && data.career) data.career.name = normalizeName(data.career.name || name);
-  if (data && Array.isArray(data.recent_matches)) data.recent_matches.forEach(m => { if(m.name) m.name = normalizeName(m.name); });
   if (data.error) {
     document.getElementById('p-player').innerHTML = `<div class="empty">${data.error}</div>`;
     return;
@@ -1820,7 +1819,6 @@ async function loadH2H() {
   el.innerHTML=`<div class="loading"><span class="spin" style="display:inline-flex;align-items:center;justify-content:center;color:var(--orange)">${_spinnerSvg}</span></div>`;
   if (!_h2hPlayers) {
     const data = await apiFetch('/api/leaderboard', 'leaderboard.json');
-  normalizePlayers(data);
     // Fetch Steam avatars for all
     await Promise.all(data.slice(0,30).map(async p => {
       if (p.steamid64 && p.steamid64 !== '0') {
@@ -1968,12 +1966,12 @@ async function runH2H() {
   body.innerHTML = `
     <div style="border-top:1px solid rgba(var(--orange-rgb),.15);margin:0 -20px"></div>
     <div style="display:grid;grid-template-columns:1fr 60px 1fr;align-items:center;padding:20px 14px 14px">
-      <div style="display:flex;flex-direction:column;align-items:center;gap:8px;cursor:pointer" onclick="go('player',{name:${escName(d1.name)}},'h2h')">
+      <div style="display:flex;flex-direction:column;align-items:center;gap:8px;cursor:pointer" onclick="go('player',{name:'${esc(d1.name)}'},'h2h')">
         ${avatar(d1,st1)}
         <div style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:16px;color:var(--ct);text-align:center">${esc(st1.name||d1.name)}</div>
       </div>
       <div style="font-family:'Rajdhani',sans-serif;font-weight:800;font-size:20px;color:var(--muted);text-align:center">VS</div>
-      <div style="display:flex;flex-direction:column;align-items:center;gap:8px;cursor:pointer" onclick="go('player',{name:${escName(d2.name)}},'h2h')">
+      <div style="display:flex;flex-direction:column;align-items:center;gap:8px;cursor:pointer" onclick="go('player',{name:'${esc(d2.name)}'},'h2h')">
         ${avatar(d2,st2)}
         <div style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:16px;color:var(--t);text-align:center">${esc(st2.name||d2.name)}</div>
       </div>
@@ -2003,7 +2001,6 @@ async function loadLeaderboard() {
   const el = document.getElementById('p-leaderboard');
   el.innerHTML=`<div class="loading"><span class="spin" style="display:inline-flex;align-items:center;justify-content:center;color:var(--orange)">${_spinnerSvg}</span></div>`;
   const data = await apiFetch('/api/leaderboard', 'leaderboard.json');
-  normalizePlayers(data);
   if (!Array.isArray(data) || !data.length) {
     el.innerHTML = emptyState('leaderboard','No Player Data','Stats will appear after matches are completed');
     return;
@@ -2097,7 +2094,7 @@ function renderLeaderboard(data, sortKey) {
       const streakBadge = p._streak && p._streak.count >= 2
         ? `<span class="streak-badge ${p._streak.type==='W'?'streak-hot':'streak-cold'}">${p._streak.type}${p._streak.count}</span>`
         : '';
-      return `<tr class="${rankCls}" data-sid="${esc(p.steamid64||p.name)}" onclick="go('player',{name:${escName(p.name)}},'leaderboard')">
+      return `<tr class="${rankCls}" data-sid="${esc(p.steamid64||p.name)}" onclick="go('player',{name:'${esc(p.name)}'},'leaderboard')">
         <td style="${rankStyle}">${rank}</td>
         <td>${avatarEl}<span class="pname">${esc(p._steam_name||p.name)}</span>${streakBadge}</td>
         <td>${p.kills??0}</td>
@@ -2127,7 +2124,7 @@ function renderLeaderboard(data, sortKey) {
       const avatarEl = p._steam_avatar
         ? `<img src="${p._steam_avatar}" style="width:56px;height:56px;border-radius:50%;object-fit:cover;border:2px solid ${c};margin-bottom:10px" alt="${esc(p.name)}">`
         : `<div style="width:56px;height:56px;border-radius:50%;background:var(--surface);border:2px solid ${c};display:flex;align-items:center;justify-content:center;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:20px;color:${c};margin:0 auto 10px">${initials(p.name)}</div>`;
-      return `<div class="podium-card" data-rank="${rank}" style="--card-color:${c};--glow:${glowColors[rank]};--bdr:${borderColors[rank]};flex:1;background:${glowColors[rank]};backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border:1px solid ${borderColors[rank]};border-top:2px solid ${c};border-radius:6px;padding:18px 14px;text-align:center;cursor:pointer;position:relative;overflow:hidden;" onclick="go('player',{name:${escName(p.name)}},'leaderboard')">
+      return `<div class="podium-card" data-rank="${rank}" style="--card-color:${c};--glow:${glowColors[rank]};--bdr:${borderColors[rank]};flex:1;background:${glowColors[rank]};backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border:1px solid ${borderColors[rank]};border-top:2px solid ${c};border-radius:6px;padding:18px 14px;text-align:center;cursor:pointer;position:relative;overflow:hidden;" onclick="go('player',{name:'${esc(p.name)}'},'leaderboard')">
         <div class="podium-shine"></div>
         <div style="position:absolute;top:10px;left:14px;font-family:'Rajdhani',sans-serif;font-weight:800;font-size:11px;letter-spacing:2px;color:${c};opacity:.9">${rankLabels[rank]}</div>
         <div style="margin-top:6px;position:relative;z-index:1">${avatarEl}</div>
@@ -2340,7 +2337,7 @@ function renderSpecialists(data, tab) {
           const av = p._steam_avatar
             ? `<img src="${p._steam_avatar}" style="width:${avSize};height:${avSize};border-radius:50%;object-fit:cover;border:2px solid ${c.solid};box-shadow:0 0 16px ${c.glow}">`
             : `<div style="width:${avSize};height:${avSize};border-radius:50%;background:var(--surface2);border:2px solid ${c.solid};box-shadow:0 0 16px ${c.glow};display:flex;align-items:center;justify-content:center;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:${isFirst?'18px':'14px'};color:${c.solid}">${initials(p.name)}</div>`;
-          return `<div style="flex:1;max-width:155px;display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer" onclick="go('player',{name:${escName(p.name)}},'specialists')">
+          return `<div style="flex:1;max-width:155px;display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer" onclick="go('player',{name:'${esc(p.name)}'},'specialists')">
             ${isFirst ? `<div>${crownSvg}</div>` : `<div style="height:20px"></div>`}
             ${av}
             <div style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:${isFirst?'13px':'11px'};color:#fff;text-align:center;width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:0 4px;margin-top:2px">${esc(p.name)}</div>
@@ -2361,7 +2358,7 @@ function renderSpecialists(data, tab) {
     const av = p._steam_avatar
       ? `<img src="${p._steam_avatar}" style="width:32px;height:32px;border-radius:50%;object-fit:cover;border:1px solid var(--border2)" alt="">`
       : `<div style="width:32px;height:32px;border-radius:50%;background:var(--surface2);display:flex;align-items:center;justify-content:center;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:11px;color:var(--muted2)">${initials(p.name)}</div>`;
-    return `<div onclick="go('player',{name:${escName(p.name)}},'specialists')"
+    return `<div onclick="go('player',{name:'${esc(p.name)}'},'specialists')"
       style="display:flex;align-items:center;gap:12px;padding:10px 14px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .12s"
       onmouseover="this.style.background='rgba(var(--orange-rgb),.04)'" onmouseout="this.style.background=''">
       <span style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:13px;color:var(--muted2);width:22px;text-align:center;flex-shrink:0">${rank}</span>
@@ -2560,7 +2557,6 @@ async function loadPredict() {
   el.innerHTML=`<div class="loading"><span class="spin" style="display:inline-flex;align-items:center;justify-content:center;color:var(--orange)">${_spinnerSvg}</span></div>`;
   if (!_predictPlayers) {
     const data = await apiFetch('/api/leaderboard', 'leaderboard.json');
-  normalizePlayers(data);
     await Promise.all(data.slice(0,40).map(async p => {
       if (p.steamid64 && p.steamid64 !== '0') {
         const s = await fetch('/api/steam/'+p.steamid64).then(r=>r.json()).catch(()=>({}));
@@ -2824,7 +2820,6 @@ async function loadTeam() {
 
     const t1 = players.filter(p=>String(p.team||'').toLowerCase()==='team1');
     const t2 = players.filter(p=>String(p.team||'').toLowerCase()==='team2');
-    normalizePlayers(t1); normalizePlayers(t2);
 
     // Scores: prefer meta totals, fallback to first map
     const firstMap = mapsArr[0] || {};
@@ -3022,7 +3017,7 @@ function renderTeam(lineups) {
       const aliasBadge = allAliases.length
         ? `<span style="font-size:10px;color:var(--muted2);font-family:'Rajdhani',sans-serif;letter-spacing:.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="Also known as: ${allAliases.map(a=>esc(a)).join(', ')}">aka ${allAliases.map(a=>esc(a)).join(', ')}</span>`
         : '';
-      return `<div class="lineup-player" onclick="event.stopPropagation();go('player',{name:${escName(n)}},'team')">
+      return `<div class="lineup-player" onclick="event.stopPropagation();go('player',{name:'${esc(n)}'},'team')">
         ${avatarHtml}
         <div style="display:flex;flex-direction:column;min-width:0;overflow:hidden">
           <span style="font-family:'Rajdhani',sans-serif;font-weight:600;font-size:13px;color:var(--white)">${esc(n)}</span>
@@ -3821,12 +3816,11 @@ async function runSearch(q) {
   res.innerHTML = '<div style="padding:12px 14px;color:var(--muted2);font-size:12px">Searching...</div>';
   try {
     const data = await fetch('/api/search?q=' + encodeURIComponent(q)).then(r => r.json());
-    if (data && Array.isArray(data.players)) normalizePlayers(data.players);
     let html = '';
     if (data.players && data.players.length) {
       html += '<div class="search-section-hd">Players</div>';
       html += data.players.map(p => `
-        <div class="search-row" onclick="closeSearchOverlay();go('player',{name:${escName(p.name)}})">
+        <div class="search-row" onclick="closeSearchOverlay();go('player',{name:'${esc(p.name)}'})">
           <div style="width:32px;height:32px;border-radius:50%;background:var(--surface2);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:11px;color:var(--muted2)">${initials(p.name)}</div>
           <div style="flex:1;min-width:0">
             <div class="search-row-title">${esc(p.name)}</div>
