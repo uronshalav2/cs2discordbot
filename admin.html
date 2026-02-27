@@ -1,0 +1,689 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>RG Admin</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap');
+:root{
+  --bg:#080a0c;--surface:#0d1017;--surface2:#111520;--border:#1e2530;--border2:#2a3342;
+  --orange:#ff5500;--orange2:#ff7733;--orange-rgb:255,85,0;--orange-glow:rgba(255,85,0,.12);
+  --text:#c8d0dc;--white:#e8ecf2;--muted:#5a6578;--muted2:#7a8899;
+  --win:#22c55e;--loss:#ef4444;--nav-w:220px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Rajdhani',sans-serif;font-size:14px}
+a{color:inherit;text-decoration:none}
+button{cursor:pointer;font-family:'Rajdhani',sans-serif}
+
+/* ── Sidebar ── */
+.sidebar{position:fixed;top:0;left:0;bottom:0;width:var(--nav-w);background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;z-index:100}
+.sidebar-logo{padding:22px 20px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px}
+.logo-text{font-size:22px;font-weight:700;letter-spacing:-1px;color:var(--orange)}
+.logo-badge{font-size:9px;font-weight:700;letter-spacing:2px;text-transform:uppercase;background:var(--orange);color:#000;padding:2px 6px;border-radius:2px;margin-top:2px}
+.sidebar-nav{flex:1;padding:12px 0;overflow-y:auto}
+.nav-section{font-size:9px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--muted);padding:10px 20px 4px}
+.nav-item{display:flex;align-items:center;gap:10px;padding:10px 20px;color:var(--muted2);font-size:13px;font-weight:600;letter-spacing:.5px;cursor:pointer;border-left:3px solid transparent;transition:all .15s}
+.nav-item:hover{color:var(--white);background:rgba(255,255,255,.03)}
+.nav-item.active{color:var(--orange);background:var(--orange-glow);border-left-color:var(--orange)}
+.nav-item svg{width:15px;height:15px;flex-shrink:0}
+.sidebar-footer{padding:16px 20px;border-top:1px solid var(--border)}
+.user-pill{display:flex;align-items:center;gap:10px}
+.user-avatar{width:32px;height:32px;border-radius:50%;object-fit:cover;border:1px solid var(--border2);flex-shrink:0;background:var(--surface2)}
+.user-info{flex:1;min-width:0}
+.user-name{font-size:13px;font-weight:700;color:var(--white);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.user-role{font-size:10px;color:var(--orange);letter-spacing:1px;text-transform:uppercase}
+.logout-btn{background:transparent;border:1px solid var(--border);border-radius:4px;color:var(--muted2);padding:5px 8px;font-size:11px;letter-spacing:1px;text-transform:uppercase;transition:all .15s}
+.logout-btn:hover{color:var(--loss);border-color:var(--loss)}
+
+/* ── Main ── */
+.main{margin-left:var(--nav-w);padding:32px 28px;min-height:100vh}
+.page{display:none}
+.page.active{display:block}
+.page-title{font-size:22px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--white);margin-bottom:6px;display:flex;align-items:center;gap:10px}
+.page-sub{font-size:12px;color:var(--muted2);margin-bottom:24px;letter-spacing:.5px}
+
+/* ── Cards ── */
+.card{background:var(--surface);border:1px solid var(--border);border-radius:6px;overflow:hidden}
+.card-header{padding:14px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+.card-title{font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--muted2)}
+
+/* ── Stats row ── */
+.stats-row{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:24px}
+.stat-card{background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:16px 18px}
+.stat-val{font-size:28px;font-weight:700;color:var(--white);line-height:1}
+.stat-lbl{font-size:10px;color:var(--muted2);letter-spacing:1.5px;text-transform:uppercase;margin-top:4px}
+
+/* ── Tables ── */
+.admin-table{width:100%;border-collapse:collapse}
+.admin-table th{padding:10px 14px;text-align:left;font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:rgba(var(--orange-rgb),.7);border-bottom:1px solid var(--border);white-space:nowrap}
+.admin-table td{padding:11px 14px;border-bottom:1px solid var(--border);font-size:13px;vertical-align:middle}
+.admin-table tbody tr:hover td{background:rgba(255,255,255,.02)}
+.admin-table tbody tr:last-child td{border-bottom:none}
+
+/* ── Buttons ── */
+.btn{display:inline-flex;align-items:center;gap:6px;padding:7px 14px;border-radius:4px;font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;border:none;transition:all .15s}
+.btn-primary{background:var(--orange);color:#000}
+.btn-primary:hover{background:var(--orange2)}
+.btn-danger{background:rgba(239,68,68,.12);color:var(--loss);border:1px solid rgba(239,68,68,.3)}
+.btn-danger:hover{background:rgba(239,68,68,.22)}
+.btn-ghost{background:transparent;color:var(--muted2);border:1px solid var(--border)}
+.btn-ghost:hover{color:var(--white);border-color:var(--border2)}
+.btn-sm{padding:4px 10px;font-size:10px}
+
+/* ── Inputs ── */
+.input{background:var(--surface2);border:1px solid var(--border);border-radius:4px;color:var(--white);padding:8px 12px;font-size:13px;font-family:'Rajdhani',sans-serif;width:100%;outline:none;transition:border-color .15s}
+.input:focus{border-color:var(--orange)}
+.input-row{display:flex;gap:8px;align-items:center}
+
+/* ── Server panel ── */
+.server-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px}
+.player-row{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid var(--border)}
+.player-row:last-child{border-bottom:none}
+.player-name{font-weight:700;color:var(--white)}
+.player-ping{font-size:11px;color:var(--muted2)}
+
+/* ── Terminal ── */
+.terminal{background:#050608;border:1px solid var(--border);border-radius:6px;padding:14px;font-family:'JetBrains Mono',monospace;font-size:12px;height:200px;overflow-y:auto;color:#22c55e;margin-top:12px;white-space:pre-wrap;word-break:break-all}
+.terminal .err{color:var(--loss)}
+.terminal .sys{color:var(--muted2)}
+
+/* ── Quick actions ── */
+.quick-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:12px}
+.quick-btn{background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:14px;text-align:center;cursor:pointer;transition:all .15s;display:flex;flex-direction:column;align-items:center;gap:6px}
+.quick-btn:hover{border-color:rgba(var(--orange-rgb),.4);background:var(--orange-glow)}
+.quick-btn svg{color:var(--orange)}
+.quick-btn span{font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--muted2)}
+.quick-btn:hover span{color:var(--white)}
+
+/* ── Badge ── */
+.badge{display:inline-block;padding:2px 8px;border-radius:3px;font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase}
+.badge-green{background:rgba(34,197,94,.12);color:var(--win);border:1px solid rgba(34,197,94,.25)}
+.badge-orange{background:var(--orange-glow);color:var(--orange);border:1px solid rgba(var(--orange-rgb),.25)}
+.badge-red{background:rgba(239,68,68,.1);color:var(--loss);border:1px solid rgba(239,68,68,.2)}
+
+/* ── Login screen ── */
+.login-screen{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;gap:24px}
+.login-card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:40px;text-align:center;max-width:380px;width:100%}
+.steam-btn{display:inline-flex;align-items:center;gap:12px;background:#1b2838;border:1px solid #2a475e;border-radius:6px;padding:12px 24px;color:#c6d4df;font-size:14px;font-weight:700;letter-spacing:.5px;transition:all .2s;cursor:pointer}
+.steam-btn:hover{background:#2a475e;border-color:#4c91b0;color:#fff}
+.steam-btn svg{width:28px;height:28px;flex-shrink:0}
+.error-msg{color:var(--loss);font-size:12px;padding:8px 12px;background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.2);border-radius:4px}
+
+/* ── Map picker ── */
+.map-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:8px}
+.map-tile{background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:10px 8px;text-align:center;cursor:pointer;font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--muted2);transition:all .15s}
+.map-tile:hover{border-color:rgba(var(--orange-rgb),.4);color:var(--orange);background:var(--orange-glow)}
+
+/* ── Confirm modal ── */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);backdrop-filter:blur(4px);z-index:500;display:flex;align-items:center;justify-content:center;opacity:0;pointer-events:none;transition:opacity .2s}
+.modal-overlay.open{opacity:1;pointer-events:auto}
+.modal{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:28px;max-width:400px;width:90%;transform:translateY(10px);transition:transform .2s}
+.modal-overlay.open .modal{transform:translateY(0)}
+.modal-title{font-size:16px;font-weight:700;color:var(--white);margin-bottom:8px}
+.modal-body{font-size:13px;color:var(--muted2);margin-bottom:20px;line-height:1.5}
+.modal-actions{display:flex;gap:8px;justify-content:flex-end}
+
+/* ── Toast ── */
+.toast{position:fixed;bottom:24px;right:24px;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:12px 18px;font-size:13px;font-weight:600;z-index:999;opacity:0;transform:translateY(8px);transition:all .2s;pointer-events:none}
+.toast.show{opacity:1;transform:translateY(0)}
+.toast.ok{border-color:rgba(34,197,94,.4);color:var(--win)}
+.toast.err{border-color:rgba(239,68,68,.4);color:var(--loss)}
+
+/* ── Scrollbar ── */
+::-webkit-scrollbar{width:4px;height:4px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px}
+</style>
+</head>
+<body>
+
+<!-- LOGIN SCREEN -->
+<div id="login-screen" class="login-screen" style="display:none">
+  <div class="login-card">
+    <div style="font-size:28px;font-weight:700;letter-spacing:-1px;color:var(--orange);margin-bottom:4px">RG<span style="color:var(--white)"> Admin</span></div>
+    <div style="font-size:11px;letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin-bottom:28px">Reshtan Gaming</div>
+    <div id="login-error" class="error-msg" style="display:none;margin-bottom:16px"></div>
+    <a href="/auth/steam" class="steam-btn">
+      <svg viewBox="0 0 233 233" xmlns="http://www.w3.org/2000/svg" fill="currentColor"><path d="M116.5 0C52.1 0 0 52.1 0 116.5c0 55.4 38.7 101.8 90.6 113.5l30.9-72.7c-2.4.2-4.8.3-7.3.3-28.1 0-50.9-22.8-50.9-50.9s22.8-50.9 50.9-50.9 50.9 22.8 50.9 50.9c0 24.6-17.5 45.2-40.8 49.9l-29.8 70.1c1.9.1 3.7.2 5.6.2 64.4 0 116.5-52.2 116.5-116.5S180.9 0 116.5 0zm-2.6 150.8c-18.9 0-34.2-15.3-34.2-34.2s15.3-34.2 34.2-34.2 34.2 15.3 34.2 34.2-15.3 34.2-34.2 34.2z"/></svg>
+      Sign in with Steam
+    </a>
+    <div style="margin-top:16px;font-size:11px;color:var(--muted)">Admin access only</div>
+  </div>
+</div>
+
+<!-- ADMIN PANEL -->
+<div id="admin-panel" style="display:none">
+  <div class="sidebar">
+    <div class="sidebar-logo">
+      <div>
+        <div class="logo-text">RG</div>
+      </div>
+      <div class="logo-badge">Admin</div>
+    </div>
+    <nav class="sidebar-nav">
+      <div class="nav-section">Dashboard</div>
+      <div class="nav-item active" onclick="showPage('dashboard')" data-page="dashboard">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+        Overview
+      </div>
+      <div class="nav-section">Matches</div>
+      <div class="nav-item" onclick="showPage('matches')" data-page="matches">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+        Match Management
+      </div>
+      <div class="nav-section">Players</div>
+      <div class="nav-item" onclick="showPage('players')" data-page="players">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        Player Management
+      </div>
+      <div class="nav-section">Server</div>
+      <div class="nav-item" onclick="showPage('server')" data-page="server">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg>
+        Server Control
+      </div>
+    </nav>
+    <div class="sidebar-footer">
+      <div class="user-pill">
+        <img id="user-avatar" class="user-avatar" src="" alt="">
+        <div class="user-info">
+          <div id="user-name" class="user-name">—</div>
+          <div class="user-role">Administrator</div>
+        </div>
+        <form action="/auth/steam/logout" method="post" style="flex-shrink:0">
+          <button class="logout-btn" type="submit">Out</button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <main class="main">
+
+    <!-- DASHBOARD -->
+    <div id="page-dashboard" class="page active">
+      <div class="page-title">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--orange)" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+        Overview
+      </div>
+      <div class="page-sub">Reshtan Gaming admin dashboard</div>
+      <div class="stats-row" id="dash-stats">
+        <div class="stat-card"><div class="stat-val" id="s-matches">—</div><div class="stat-lbl">Total Matches</div></div>
+        <div class="stat-card"><div class="stat-val" id="s-players">—</div><div class="stat-lbl">Players</div></div>
+        <div class="stat-card"><div class="stat-val" id="s-edited">—</div><div class="stat-lbl">Edited Matches</div></div>
+        <div class="stat-card"><div class="stat-val" id="s-server" style="font-size:16px">—</div><div class="stat-lbl">Server Status</div></div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+        <div class="card">
+          <div class="card-header"><div class="card-title">Recent Matches</div></div>
+          <div id="dash-recent" style="max-height:320px;overflow-y:auto"></div>
+        </div>
+        <div class="card">
+          <div class="card-header"><div class="card-title">Live Server</div><button class="btn btn-ghost btn-sm" onclick="loadServer()">↺ Refresh</button></div>
+          <div id="dash-server-players" style="max-height:320px;overflow-y:auto">
+            <div style="padding:20px;text-align:center;color:var(--muted)">Loading...</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- MATCHES -->
+    <div id="page-matches" class="page">
+      <div class="page-title">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--orange)" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+        Match Management
+      </div>
+      <div class="page-sub">Edit or delete match records</div>
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">All Matches</div>
+          <input class="input" style="width:220px" placeholder="Search..." oninput="filterMatches(this.value)">
+        </div>
+        <div style="overflow-x:auto">
+          <table class="admin-table">
+            <thead><tr>
+              <th>#</th><th>Map</th><th>Teams</th><th>Score</th><th>Date</th><th>Edited</th><th>Actions</th>
+            </tr></thead>
+            <tbody id="matches-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- PLAYERS -->
+    <div id="page-players" class="page">
+      <div class="page-title">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--orange)" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
+        Player Management
+      </div>
+      <div class="page-sub">Rename players across all match records</div>
+      <div class="card" style="margin-bottom:16px">
+        <div class="card-header"><div class="card-title">Rename Player</div></div>
+        <div style="padding:16px;display:grid;grid-template-columns:1fr 1fr auto;gap:10px;align-items:end">
+          <div>
+            <div style="font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--muted2);margin-bottom:6px">Current Name</div>
+            <input id="rename-old" class="input" placeholder="Old name...">
+          </div>
+          <div>
+            <div style="font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--muted2);margin-bottom:6px">New Name</div>
+            <input id="rename-new" class="input" placeholder="New name...">
+          </div>
+          <button class="btn btn-primary" onclick="renamePlayer()">Rename</button>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">All Players</div>
+          <input class="input" style="width:220px" placeholder="Search..." oninput="filterPlayers(this.value)">
+        </div>
+        <div style="overflow-x:auto">
+          <table class="admin-table">
+            <thead><tr><th>Player</th><th>SteamID</th><th>Matches</th><th>Kills</th><th>K/D</th><th>Action</th></tr></thead>
+            <tbody id="players-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- SERVER -->
+    <div id="page-server" class="page">
+      <div class="page-title">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--orange)" stroke-width="2"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/></svg>
+        Server Control
+      </div>
+      <div class="page-sub">Manage your CS2 server in real time</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+        <!-- Quick Actions -->
+        <div class="card">
+          <div class="card-header"><div class="card-title">Quick Actions</div></div>
+          <div style="padding:14px">
+            <div class="quick-grid">
+              <div class="quick-btn" onclick="rcon('mp_restartgame 1')">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.5"/></svg>
+                <span>Restart</span>
+              </div>
+              <div class="quick-btn" onclick="rcon('mp_warmup_end')">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                <span>End Warmup</span>
+              </div>
+              <div class="quick-btn" onclick="rcon('bot_kick')">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+                <span>Kick Bots</span>
+              </div>
+              <div class="quick-btn" onclick="rcon('mp_pause_match')">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
+                <span>Pause</span>
+              </div>
+              <div class="quick-btn" onclick="rcon('mp_unpause_match')">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                <span>Unpause</span>
+              </div>
+              <div class="quick-btn" onclick="rcon('mp_swapteams')">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/></svg>
+                <span>Swap Teams</span>
+              </div>
+            </div>
+            <!-- Map change -->
+            <div style="margin-top:16px">
+              <div style="font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--muted2);margin-bottom:8px">Change Map</div>
+              <div class="map-grid">
+                ${['mirage','dust2','inferno','nuke','ancient','anubis','vertigo','overpass'].map(m=>`<div class="map-tile" onclick="rcon('changelevel de_${m}')">${m}</div>`).join('')}
+              </div>
+            </div>
+            <!-- Say -->
+            <div style="margin-top:16px">
+              <div style="font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--muted2);margin-bottom:8px">Server Message</div>
+              <div class="input-row">
+                <input id="say-input" class="input" placeholder="Message to all players...">
+                <button class="btn btn-primary" onclick="sendSay()">Send</button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <!-- Right col -->
+        <div style="display:flex;flex-direction:column;gap:16px">
+          <!-- Live players -->
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title">Live Players</div>
+              <button class="btn btn-ghost btn-sm" onclick="loadServer()">↺ Refresh</button>
+            </div>
+            <div id="server-players" style="max-height:220px;overflow-y:auto">
+              <div style="padding:20px;text-align:center;color:var(--muted)">Loading...</div>
+            </div>
+          </div>
+          <!-- Kick / Ban -->
+          <div class="card">
+            <div class="card-header"><div class="card-title">Kick Player</div></div>
+            <div style="padding:14px">
+              <div class="input-row">
+                <input id="kick-input" class="input" placeholder="Player name...">
+                <button class="btn btn-danger" onclick="kickPlayer()">Kick</button>
+              </div>
+            </div>
+          </div>
+          <!-- RCON Terminal -->
+          <div class="card">
+            <div class="card-header"><div class="card-title">RCON Console</div></div>
+            <div style="padding:14px">
+              <div class="input-row">
+                <input id="rcon-input" class="input" placeholder="Command..." onkeydown="if(event.key==='Enter')sendRcon()">
+                <button class="btn btn-primary" onclick="sendRcon()">Run</button>
+              </div>
+              <div class="terminal" id="rcon-output"><span class="sys">// Type a command and press Run</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<!-- Confirm Modal -->
+<div class="modal-overlay" id="confirm-modal">
+  <div class="modal">
+    <div class="modal-title" id="modal-title">Confirm</div>
+    <div class="modal-body" id="modal-body">Are you sure?</div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-danger" id="modal-confirm-btn">Delete</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<script>
+// ── State ──────────────────────────────────────────────────────────────────
+let _matches = [], _players = [];
+
+// ── Init ───────────────────────────────────────────────────────────────────
+async function init() {
+  const params = new URLSearchParams(location.search);
+  if (params.get('error') === 'auth_failed') showLoginError('Steam authentication failed.');
+  if (params.get('error') === 'not_admin')   showLoginError('Your Steam account is not authorized.');
+
+  const res = await fetch('/api/admin/me').catch(()=>null);
+  if (!res || !res.ok) {
+    document.getElementById('login-screen').style.display = 'flex';
+    return;
+  }
+  const me = await res.json();
+  document.getElementById('admin-panel').style.display = 'block';
+  loadUserProfile(me.steamid);
+  loadDashboard();
+}
+
+function showLoginError(msg) {
+  const el = document.getElementById('login-error');
+  el.textContent = msg; el.style.display = 'block';
+}
+
+async function loadUserProfile(steamid) {
+  try {
+    const s = await fetch('/api/steam/'+steamid).then(r=>r.json());
+    if (s.name)   document.getElementById('user-name').textContent = s.name;
+    if (s.avatar) { const img = document.getElementById('user-avatar'); img.src = s.avatar; }
+  } catch(_) {}
+}
+
+// ── Navigation ─────────────────────────────────────────────────────────────
+function showPage(id) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('page-'+id).classList.add('active');
+  document.querySelector(`[data-page="${id}"]`).classList.add('active');
+  if (id === 'matches') loadMatches();
+  if (id === 'players') loadPlayers();
+  if (id === 'server')  loadServer();
+}
+
+// ── Dashboard ──────────────────────────────────────────────────────────────
+async function loadDashboard() {
+  const [matches, players] = await Promise.all([
+    fetch('/api/admin/matches').then(r=>r.json()).catch(()=>[]),
+    fetch('/api/admin/players').then(r=>r.json()).catch(()=>[]),
+  ]);
+  _matches = Array.isArray(matches) ? matches : [];
+  _players = Array.isArray(players) ? players : [];
+
+  document.getElementById('s-matches').textContent = _matches.length;
+  document.getElementById('s-players').textContent = [...new Set(_players.map(p=>p.name))].length;
+  document.getElementById('s-edited').textContent  = _matches.filter(m=>m.edited_at).length;
+
+  // Recent matches
+  const tbody = document.getElementById('dash-recent');
+  tbody.innerHTML = _matches.slice(0,8).map(m => `
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid var(--border)">
+      <div>
+        <div style="font-weight:700;color:var(--white);font-size:13px">${esc(m.map||'unknown')}</div>
+        <div style="font-size:11px;color:var(--muted2)">${esc(m.team1||'?')} vs ${esc(m.team2||'?')}</div>
+      </div>
+      <div style="text-align:right">
+        <div style="font-weight:700;color:var(--orange)">${m.score1??0} : ${m.score2??0}</div>
+        <div style="font-size:10px;color:var(--muted2)">${fmtDate(m.fetched_at)}</div>
+      </div>
+    </div>`).join('');
+
+  loadServer();
+}
+
+// ── Matches ────────────────────────────────────────────────────────────────
+async function loadMatches() {
+  if (!_matches.length) {
+    const r = await fetch('/api/admin/matches').then(r=>r.json()).catch(()=>[]);
+    _matches = Array.isArray(r) ? r : [];
+  }
+  renderMatches(_matches);
+}
+
+function renderMatches(data) {
+  document.getElementById('matches-tbody').innerHTML = data.map(m => `
+    <tr>
+      <td style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--muted2)">${m.matchid}</td>
+      <td style="font-weight:700;color:var(--white)">${esc(m.map||'—')}</td>
+      <td style="color:var(--muted2)">${esc(m.team1||'?')} <span style="color:var(--muted)">vs</span> ${esc(m.team2||'?')}</td>
+      <td style="font-weight:700">${m.score1??0} : ${m.score2??0}</td>
+      <td style="font-size:11px;color:var(--muted2)">${fmtDate(m.fetched_at)}</td>
+      <td>${m.edited_at ? '<span class="badge badge-orange">Edited</span>' : '<span style="color:var(--muted);font-size:11px">—</span>'}</td>
+      <td>
+        <div style="display:flex;gap:6px">
+          <a href="/?match=${m.matchid}" target="_blank" class="btn btn-ghost btn-sm">View</a>
+          ${m.edited_at ? `<button class="btn btn-ghost btn-sm" onclick="revertMatch('${m.matchid}')">Revert</button>` : ''}
+          <button class="btn btn-danger btn-sm" onclick="confirmDelete('${m.matchid}')">Delete</button>
+        </div>
+      </td>
+    </tr>`).join('');
+}
+
+function filterMatches(q) {
+  const f = q.toLowerCase();
+  renderMatches(_matches.filter(m =>
+    (m.map||'').toLowerCase().includes(f) ||
+    (m.team1||'').toLowerCase().includes(f) ||
+    (m.team2||'').toLowerCase().includes(f) ||
+    String(m.matchid).includes(f)
+  ));
+}
+
+async function revertMatch(id) {
+  const r = await fetch(`/api/match/${id}/edit`, {method:'DELETE'}).then(r=>r.json()).catch(()=>({error:'network'}));
+  if (r.ok || r.reverted) { toast('Edits reverted', 'ok'); await loadMatches(); }
+  else toast(r.error||'Failed', 'err');
+}
+
+function confirmDelete(matchid) {
+  document.getElementById('modal-title').textContent = 'Delete Match';
+  document.getElementById('modal-body').textContent  = `Permanently delete match #${matchid}? This cannot be undone.`;
+  document.getElementById('modal-confirm-btn').onclick = () => deleteMatch(matchid);
+  document.getElementById('confirm-modal').classList.add('open');
+}
+
+async function deleteMatch(matchid) {
+  closeModal();
+  const r = await fetch(`/api/admin/match/${matchid}`, {method:'DELETE'}).then(r=>r.json()).catch(()=>({error:'network'}));
+  if (r.ok) { toast('Match deleted', 'ok'); _matches = _matches.filter(m=>m.matchid!=matchid); renderMatches(_matches); }
+  else toast(r.error||'Failed', 'err');
+}
+
+// ── Players ────────────────────────────────────────────────────────────────
+async function loadPlayers() {
+  if (!_players.length) {
+    const r = await fetch('/api/admin/players').then(r=>r.json()).catch(()=>[]);
+    _players = Array.isArray(r) ? r : [];
+  }
+  renderPlayers(_players);
+}
+
+function renderPlayers(data) {
+  document.getElementById('players-tbody').innerHTML = data.map(p => {
+    const kd = p.deaths > 0 ? (p.kills/p.deaths).toFixed(2) : p.kills > 0 ? '∞' : '0.00';
+    return `<tr>
+      <td style="font-weight:700;color:var(--white)">${esc(p.name)}</td>
+      <td style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--muted2)">${p.steamid64}</td>
+      <td>${p.matches}</td>
+      <td>${p.kills}</td>
+      <td style="color:${parseFloat(kd)>=1?'var(--win)':'var(--loss)'}">${kd}</td>
+      <td><button class="btn btn-ghost btn-sm" onclick="prefillRename('${esc(p.name)}')">Rename</button></td>
+    </tr>`;
+  }).join('');
+}
+
+function filterPlayers(q) {
+  const f = q.toLowerCase();
+  renderPlayers(_players.filter(p =>
+    (p.name||'').toLowerCase().includes(f) ||
+    String(p.steamid64).includes(f)
+  ));
+}
+
+function prefillRename(name) {
+  document.getElementById('rename-old').value = name;
+  document.getElementById('rename-new').focus();
+}
+
+async function renamePlayer() {
+  const old_name = document.getElementById('rename-old').value.trim();
+  const new_name = document.getElementById('rename-new').value.trim();
+  if (!old_name || !new_name) { toast('Fill both fields', 'err'); return; }
+  const r = await fetch('/api/admin/player/rename', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({old_name, new_name})
+  }).then(r=>r.json()).catch(()=>({error:'network'}));
+  if (r.ok) {
+    toast(`Renamed ${old_name} → ${new_name} (${r.rows_updated} rows)`, 'ok');
+    document.getElementById('rename-old').value = '';
+    document.getElementById('rename-new').value = '';
+    _players = [];
+    renderPlayers([]);
+    loadPlayers();
+  } else toast(r.error||'Failed', 'err');
+}
+
+// ── Server ─────────────────────────────────────────────────────────────────
+async function loadServer() {
+  const r = await fetch('/api/admin/server').then(r=>r.json()).catch(()=>({error:'network'}));
+  const renderList = (id) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    if (r.error) { el.innerHTML = `<div style="padding:20px;text-align:center;color:var(--muted2)">Server offline or RCON not configured</div>`; return; }
+    const players = Array.isArray(r.players) ? r.players : [];
+    if (!players.length) { el.innerHTML = `<div style="padding:20px;text-align:center;color:var(--muted2)">No players online</div>`; return; }
+    el.innerHTML = players.map(p => `
+      <div class="player-row">
+        <div>
+          <div class="player-name">${esc(typeof p === 'string' ? p : (p.name||p))}</div>
+        </div>
+        <button class="btn btn-danger btn-sm" onclick="rcon('css_kick \\'${esc(typeof p==='string'?p:(p.name||p))}\\'')">Kick</button>
+      </div>`).join('');
+  };
+  renderList('server-players');
+  renderList('dash-server-players');
+  const status = r.error ? '<span style="color:var(--loss)">Offline</span>' : `<span style="color:var(--win)">${Array.isArray(r.players)?r.players.length:0} online</span>`;
+  const el = document.getElementById('s-server');
+  if (el) el.innerHTML = status;
+}
+
+async function rcon(cmd) {
+  const r = await fetch('/api/admin/rcon', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({cmd})
+  }).then(r=>r.json()).catch(()=>({error:'network'}));
+  if (r.ok) toast('Command sent', 'ok');
+  else toast(r.error||'Failed', 'err');
+  appendTerminal(`> ${cmd}\n${r.result||r.error||''}`);
+}
+
+async function sendRcon() {
+  const input = document.getElementById('rcon-input');
+  const cmd = input.value.trim();
+  if (!cmd) return;
+  input.value = '';
+  const r = await fetch('/api/admin/rcon', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({cmd})
+  }).then(r=>r.json()).catch(()=>({error:'network'}));
+  appendTerminal(`> ${cmd}\n${r.result||r.error||'(no output)'}`);
+}
+
+async function kickPlayer() {
+  const name = document.getElementById('kick-input').value.trim();
+  if (!name) return;
+  await rcon(`css_kick "${name}"`);
+  document.getElementById('kick-input').value = '';
+  setTimeout(loadServer, 1500);
+}
+
+async function sendSay() {
+  const input = document.getElementById('say-input');
+  const msg = input.value.trim();
+  if (!msg) return;
+  await rcon(`css_say ${msg}`);
+  input.value = '';
+}
+
+function appendTerminal(text) {
+  const el = document.getElementById('rcon-output');
+  if (!el) return;
+  el.textContent += '\n' + text;
+  el.scrollTop = el.scrollHeight;
+}
+
+// ── Modal ──────────────────────────────────────────────────────────────────
+function closeModal() { document.getElementById('confirm-modal').classList.remove('open'); }
+document.getElementById('confirm-modal').addEventListener('click', e => { if(e.target.id==='confirm-modal') closeModal(); });
+
+// ── Toast ──────────────────────────────────────────────────────────────────
+let _toastTimer;
+function toast(msg, type='ok') {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = `toast show ${type}`;
+  clearTimeout(_toastTimer);
+  _toastTimer = setTimeout(() => el.classList.remove('show'), 3000);
+}
+
+// ── Helpers ────────────────────────────────────────────────────────────────
+const esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+function fmtDate(d) {
+  if (!d) return '—';
+  return new Date(d).toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'});
+}
+
+// ── Map quick actions ──────────────────────────────────────────────────────
+// Render map grid dynamically
+(function(){
+  const maps = ['mirage','dust2','inferno','nuke','ancient','anubis','vertigo','overpass'];
+  const grid = document.querySelector('.map-grid');
+  if (grid) {
+    grid.innerHTML = maps.map(m => `<div class="map-tile" onclick="rcon('changelevel de_${m}')">${m.charAt(0).toUpperCase()+m.slice(1)}</div>`).join('');
+  }
+})();
+
+// ── Boot ───────────────────────────────────────────────────────────────────
+init();
+</script>
+</body>
+</html>
