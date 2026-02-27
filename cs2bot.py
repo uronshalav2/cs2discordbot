@@ -218,8 +218,9 @@ async def handle_api_player(request):
         if career:
             career = dict(career)
             name_map = _edited_name_map()
-            sid = to_steamid64(str(career.get('steamid64') or ''))
-            career['steamid64'] = sid  # store the corrected value
+            raw_sid = str(career.get('steamid64') or '')  # original DB value (may be Steam32)
+            sid = to_steamid64(raw_sid)                   # converted Steam64 for output
+            career['steamid64'] = sid
             if sid in name_map:
                 career['name'] = name_map[sid]
             c.execute(f"""
@@ -250,7 +251,7 @@ async def handle_api_player(request):
                 WHERE p.steamid64 = %s AND p.steamid64 != '0'
                 ORDER BY p.matchid DESC, p.mapnumber DESC
                 LIMIT 20
-            """, (sid,))
+            """, (raw_sid,))  # use raw DB value so the WHERE clause actually matches
             recent = _patch_recent_matches(c.fetchall())
         c.close(); conn.close()
     except Exception:
