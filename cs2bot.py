@@ -1857,6 +1857,96 @@ async def handle_admin_api_rcon(request):
     except Exception as e:
         return _json_response({"error": str(e)})
 
+
+async def handle_admin_api_suggest_merges(request):
+    """GET /api/admin/players/suggest-merges — fuzzy duplicate detection."""
+    if not _get_admin_steamid(request):
+        return web.Response(text=json.dumps({"error": "Unauthorized"}), content_type="application/json", status=401)
+    try:
+        conn = get_db(); c = conn.cursor(dictionary=True)
+        c.execute("""
+            SELECT name, COUNT(*) AS matches, SUM(kills) AS kills
+            FROM matchzy_stats_players
+            GROUP BY name
+            ORDER BY matches DESC
+        """)
+        players = [dict(r) for r in c.fetchall()]
+        c.close(); conn.close()
+
+        # Fuzzy matching using simple edit distance
+        def edit_distance(a, b):
+            a, b = a.lower().strip(), b.lower().strip()
+            if a == b: return 0
+            if len(a) > len(b): a, b = b, a
+            distances = range(len(a) + 1)
+            for i2, c2 in enumerate(b):
+                new_distances = [i2 + 1]
+                for i1, c1 in enumerate(a):
+                    if c1 == c2:
+                        new_distances.append(distances[i1])
+                    else:
+                        new_distances.append(1 + min((distances[i1], distances[i1 + 1], new_distances[-1])))
+                distances = new_distances
+            return distances[-1]
+
+        names = [p["name"] for p in players]
+        name_map = {p["name"]: p for p in players}
+        suggestions = []
+        seen = set()
+
+        for i, n1 in enumerate(names):
+            for n2 in names[i+1:]:
+                key = tuple(sorted([n1, n2]))
+                if key in seen:
+                    continue
+                seen.add(key)
+                l1, l2 = len(n1), len(n2)
+                max_len = max(l1, l2)
+                if max_len == 0:
+                    continue
+                dist = edit_distance(n1, n2)
+                similarity = 1 - dist / max_len
+                # Also check if one starts with or contains the other
+                n1l, n2l = n1.lower(), n2.lower()
+                if n1l in n2l or n2l in n1l:
+                    similarity = max(similarity, 0.75)
+                if similarity >= 0.65:
+                    p1, p2 = name_map[n1], name_map[n2]
+                    suggestions.append({
+                        "name1": n1, "matches1": p1["matches"], "kills1": int(p1["kills"] or 0),
+                        "name2": n2, "matches2": p2["matches"], "kills2": int(p2["kills"] or 0),
+                        "similarity": round(similarity, 2),
+                    })
+
+        # Sort by similarity desc
+        suggestions.sort(key=lambda x: -x["similarity"])
+        return _json_response(suggestions[:30])
+    except Exception as e:
+        return _json_response({"error": str(e)})
+
+
+async def handle_admin_api_merge_players(request):
+    """POST /api/admin/players/merge — merge duplicate names into one."""
+    if not _get_admin_steamid(request):
+        return web.Response(text=json.dumps({"error": "Unauthorized"}), content_type="application/json", status=401)
+    try:
+        body = await request.json()
+        keep_name  = body.get("keep_name", "").strip()
+        merge_names = [n.strip() for n in body.get("merge_names", []) if n.strip()]
+        if not keep_name or not merge_names:
+            return _json_response({"error": "keep_name and merge_names[] required"})
+        conn = get_db(); c = conn.cursor()
+        total = 0
+        for name in merge_names:
+            if name == keep_name:
+                continue
+            c.execute("UPDATE matchzy_stats_players SET name = %s WHERE name = %s", (keep_name, name))
+            total += c.rowcount
+        conn.commit(); c.close(); conn.close()
+        return _json_response({"ok": True, "rows_updated": total, "keep_name": keep_name, "merged": merge_names})
+    except Exception as e:
+        return _json_response({"error": str(e)})
+
 async def start_http_server():
     app = web.Application()
     app.router.add_get('/api/specialists',             handle_api_specialists)
@@ -1895,6 +1985,8 @@ async def start_http_server():
     app.router.add_route('DELETE', '/api/admin/match/{matchid}', handle_admin_api_delete_match)
     app.router.add_get('/api/admin/players',            handle_admin_api_players)
     app.router.add_post('/api/admin/player/rename',     handle_admin_api_rename_player)
+    app.router.add_get('/api/admin/players/suggest-merges', handle_admin_api_suggest_merges)
+    app.router.add_post('/api/admin/players/merge',     handle_admin_api_merge_players)
     app.router.add_get('/api/admin/server',             handle_admin_api_server)
     app.router.add_post('/api/admin/rcon',              handle_admin_api_rcon)
     app.router.add_get('/stats',   handle_stats_page)
