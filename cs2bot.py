@@ -79,20 +79,6 @@ def _cache_bust(*keys):
 async def handle_api_player(request):
     """GET /api/player/{name} — full career stats, MatchZy primary / fshost fallback"""
     name = request.match_info.get('name', '')
-    # Normalize Unicode punctuation to ASCII so names from JSONs (e.g. \u2019 apostrophe)
-    # match what is stored in the database.
-    import unicodedata
-    name = unicodedata.normalize('NFKC', name)
-    _unicode_replacements = {
-        '\u2018': "'", '\u2019': "'", '\u201a': "'", '\u201b': "'",
-        '\u02bc': "'", '\u02bb': "'", '\uff07': "'",
-        '\u201c': '"', '\u201d': '"', '\u201e': '"', '\u201f': '"', '\uff02': '"',
-        '\u2010': '-', '\u2011': '-', '\u2012': '-', '\u2013': '-',
-        '\u2014': '-', '\u2015': '-',
-    }
-    for uc, asc in _unicode_replacements.items():
-        name = name.replace(uc, asc)
-    name = name.strip()
     loop = asyncio.get_running_loop()
 
     # ── Helper: build career + recent from fshost data ────────────────────────
@@ -103,12 +89,13 @@ async def handle_api_player(request):
         # reverse edited map: edited_name -> steamid
         edited_sid = next((s for s, n in name_map.items() if n == lookup_name), None)
         row = next((r for r in all_rows if r['name'] == lookup_name
-                    or r['steamid64'] == edited_sid), None)
+                    or to_steamid64(str(r['steamid64'])) == to_steamid64(str(edited_sid or ''))), None)
         if not row:
             return None, []
+        row_sid64 = to_steamid64(str(row['steamid64']))
         career = {
-            'name':           name_map.get(row['steamid64'], row['name']),
-            'steamid64':      row['steamid64'],
+            'name':           name_map.get(row_sid64, row['name']),
+            'steamid64':      row_sid64,
             'matches':        row['matches'],
             'kills':          row['kills'],
             'deaths':         row['deaths'],
@@ -127,7 +114,7 @@ async def handle_api_player(request):
         # Build recent matches from fshost
         recent = []
         matchid_map = build_matchid_to_demo_map()
-        sid = row['steamid64']
+        sid = to_steamid64(str(row['steamid64']))
         for mid, entry in matchid_map.items():
             meta = entry.get('metadata')
             if not meta:
@@ -135,7 +122,7 @@ async def handle_api_player(request):
             for team_key in ('team1', 'team2'):
                 team = meta.get(team_key, {})
                 for fp in team.get('players', []):
-                    fp_sid = str(fp.get('steam_id') or fp.get('steamid64') or '0')
+                    fp_sid = to_steamid64(str(fp.get('steam_id') or fp.get('steamid64') or '0'))
                     if fp_sid != sid:
                         continue
                     k = int(fp.get('kills',0) or 0)
@@ -175,52 +162,62 @@ async def handle_api_player(request):
     try:
         conn = get_db()
         c = conn.cursor(dictionary=True)
-        c.execute(f"""
-            SELECT name, steamid64,
-                COUNT(DISTINCT matchid) AS matches,
-                SUM(kills) AS kills, SUM(deaths) AS deaths, SUM(assists) AS assists,
-                SUM(head_shot_kills) AS headshots, SUM(damage) AS total_damage,
-                SUM(enemies5k) AS aces, SUM(enemies4k) AS quads,
-                SUM(v1_wins) AS clutch_1v1, SUM(v2_wins) AS clutch_1v2,
-                SUM(entry_wins) AS entry_wins, SUM(entry_count) AS entry_attempts,
-                SUM(flash_successes) AS flashes_thrown,
-                ROUND(SUM(kills)/NULLIF(SUM(deaths),0),2) AS kd,
-                ROUND(SUM(head_shot_kills)/NULLIF(SUM(kills),0)*100,1) AS hs_pct,
-                ROUND(SUM(damage)/NULLIF(COUNT(DISTINCT CONCAT(matchid,mapnumber)),0)/30,1) AS adr
-            FROM {MATCHZY_TABLES['players']}
-            WHERE name = %s AND steamid64 != '0'
-            GROUP BY steamid64, name
-        """, (name,))
-        career = c.fetchone()
 
-        if not career:
-            name_map = _edited_name_map()
-            sid_for_edited = next((sid for sid, n in name_map.items() if n == name), None)
-            if sid_for_edited:
-                c.execute(f"""
-                    SELECT name, steamid64,
-                        COUNT(DISTINCT matchid) AS matches,
-                        SUM(kills) AS kills, SUM(deaths) AS deaths, SUM(assists) AS assists,
-                        SUM(head_shot_kills) AS headshots, SUM(damage) AS total_damage,
-                        SUM(enemies5k) AS aces, SUM(enemies4k) AS quads,
-                        SUM(v1_wins) AS clutch_1v1, SUM(v2_wins) AS clutch_1v2,
-                        SUM(entry_wins) AS entry_wins, SUM(entry_count) AS entry_attempts,
-                        SUM(flash_successes) AS flashes_thrown,
-                        ROUND(SUM(kills)/NULLIF(SUM(deaths),0),2) AS kd,
-                        ROUND(SUM(head_shot_kills)/NULLIF(SUM(kills),0)*100,1) AS hs_pct,
-                        ROUND(SUM(damage)/NULLIF(COUNT(DISTINCT CONCAT(matchid,mapnumber)),0)/30,1) AS adr
-                    FROM {MATCHZY_TABLES['players']}
-                    WHERE steamid64 = %s AND steamid64 != '0'
-                    GROUP BY steamid64, name
-                """, (sid_for_edited,))
-                career = c.fetchone()
+        # Step 1: resolve steamid64 for this player name.
+        # A player may have changed their name, so rows exist under multiple names
+        # all sharing the same steamid64. We resolve the SID first, then aggregate
+        # ALL rows by SID so no matches are missed.
+        name_map = _edited_name_map()
+
+        # Check edited name map first (highest priority)
+        resolved_sid = next((sid for sid, n in name_map.items() if n == name), None)
+
+        # If not in edit map, look up any row with this exact name
+        if not resolved_sid:
+            c.execute(f"""
+                SELECT steamid64 FROM {MATCHZY_TABLES['players']}
+                WHERE name = %s AND steamid64 != '0'
+                LIMIT 1
+            """, (name,))
+            row = c.fetchone()
+            if row:
+                resolved_sid = to_steamid64(str(row['steamid64']))
+
+        # Aggregate ALL rows for this steamid64 regardless of name changes.
+        # Use sid_variants() so we match both SteamID64 and SteamID32 stored forms.
+        if resolved_sid:
+            sid64, sid32 = sid_variants(resolved_sid)
+            _sid_norm = "IF(CAST(steamid64 AS UNSIGNED) < 4294967296 AND CAST(steamid64 AS UNSIGNED) > 0, CAST(CAST(steamid64 AS UNSIGNED) + 76561197960265728 AS CHAR), steamid64)"
+            c.execute(f"""
+                SELECT
+                    {_sid_norm} AS steamid64,
+                    SUBSTRING_INDEX(GROUP_CONCAT(name ORDER BY matchid DESC), ',', 1) AS name,
+                    COUNT(DISTINCT matchid)                                      AS matches,
+                    SUM(kills)                                                   AS kills,
+                    SUM(deaths)                                                  AS deaths,
+                    SUM(assists)                                                 AS assists,
+                    SUM(head_shot_kills)                                         AS headshots,
+                    SUM(damage)                                                  AS total_damage,
+                    SUM(enemies5k)                                               AS aces,
+                    SUM(enemies4k)                                               AS quads,
+                    SUM(v1_wins)                                                 AS clutch_1v1,
+                    SUM(v2_wins)                                                 AS clutch_1v2,
+                    SUM(entry_wins)                                              AS entry_wins,
+                    SUM(entry_count)                                             AS entry_attempts,
+                    SUM(flash_successes)                                         AS flashes_thrown,
+                    ROUND(SUM(kills)/NULLIF(SUM(deaths),0),2)                   AS kd,
+                    ROUND(SUM(head_shot_kills)/NULLIF(SUM(kills),0)*100,1)      AS hs_pct,
+                    ROUND(SUM(damage)/NULLIF(
+                        COUNT(DISTINCT CONCAT(matchid,mapnumber)),0)/30,1)      AS adr
+                FROM {MATCHZY_TABLES['players']}
+                WHERE steamid64 IN (%s, %s) AND steamid64 != '0'
+                GROUP BY {_sid_norm}
+            """, (sid64, sid32))
+            career = c.fetchone()
 
         if career:
-            career = dict(career)
             name_map = _edited_name_map()
-            raw_sid = str(career.get('steamid64') or '')  # original DB value (may be Steam32)
-            sid = to_steamid64(raw_sid)                   # converted Steam64 for output
-            career['steamid64'] = sid
+            sid = sid64  # always SteamID64 form, set above
             if sid in name_map:
                 career['name'] = name_map[sid]
             c.execute(f"""
@@ -248,14 +245,14 @@ async def handle_api_player(request):
                 FROM {MATCHZY_TABLES['players']} p
                 LEFT JOIN {MATCHZY_TABLES['maps']} m ON p.matchid=m.matchid AND p.mapnumber=m.mapnumber
                 LEFT JOIN {MATCHZY_TABLES['matches']} mm ON p.matchid=mm.matchid
-                WHERE p.steamid64 = %s AND p.steamid64 != '0'
+                WHERE p.steamid64 IN (%s, %s) AND p.steamid64 != '0'
                 ORDER BY p.matchid DESC, p.mapnumber DESC
                 LIMIT 20
-            """, (raw_sid,))  # use raw DB value so the WHERE clause actually matches
+            """, sid_variants(sid))
             recent = _patch_recent_matches(c.fetchall())
         c.close(); conn.close()
-    except Exception:
-        pass
+    except Exception as _e:
+        print(f"[api/player] MatchZy query error for '{name}': {_e}")
 
     # ── Fallback to fshost ────────────────────────────────────────────────────
     if not career:
@@ -265,6 +262,126 @@ async def handle_api_player(request):
         return _json_response({"error": "Player not found"})
 
     return _json_response({"career": career, "recent_matches": recent})
+
+async def handle_api_player_by_sid(request):
+    """GET /api/player/sid/{steamid64} — look up player by SteamID (either form)."""
+    raw_sid = request.match_info.get('steamid64', '')
+    loop = asyncio.get_running_loop()
+
+    sid64, sid32 = sid_variants(to_steamid64(raw_sid))
+    _sid_norm = "IF(CAST(steamid64 AS UNSIGNED) < 4294967296 AND CAST(steamid64 AS UNSIGNED) > 0, CAST(CAST(steamid64 AS UNSIGNED) + 76561197960265728 AS CHAR), steamid64)"
+
+    career = None
+    recent = []
+    try:
+        conn = get_db()
+        c = conn.cursor(dictionary=True)
+
+        c.execute(f"""
+            SELECT
+                {_sid_norm} AS steamid64,
+                SUBSTRING_INDEX(GROUP_CONCAT(name ORDER BY matchid DESC), ',', 1) AS name,
+                COUNT(DISTINCT matchid)                                      AS matches,
+                SUM(kills)                                                   AS kills,
+                SUM(deaths)                                                  AS deaths,
+                SUM(assists)                                                 AS assists,
+                SUM(head_shot_kills)                                         AS headshots,
+                SUM(damage)                                                  AS total_damage,
+                SUM(enemies5k)                                               AS aces,
+                SUM(enemies4k)                                               AS quads,
+                SUM(v1_wins)                                                 AS clutch_1v1,
+                SUM(v2_wins)                                                 AS clutch_1v2,
+                SUM(entry_wins)                                              AS entry_wins,
+                SUM(entry_count)                                             AS entry_attempts,
+                SUM(flash_successes)                                         AS flashes_thrown,
+                ROUND(SUM(kills)/NULLIF(SUM(deaths),0),2)                   AS kd,
+                ROUND(SUM(head_shot_kills)/NULLIF(SUM(kills),0)*100,1)      AS hs_pct,
+                ROUND(SUM(damage)/NULLIF(
+                    COUNT(DISTINCT CONCAT(matchid,mapnumber)),0)/30,1)      AS adr
+            FROM {MATCHZY_TABLES['players']}
+            WHERE steamid64 IN (%s, %s) AND steamid64 != '0'
+            GROUP BY {_sid_norm}
+        """, (sid64, sid32))
+        career = c.fetchone()
+
+        if career:
+            career = dict(career)
+            career['steamid64'] = sid64
+            name_map = _edited_name_map()
+            if sid64 in name_map:
+                career['name'] = name_map[sid64]
+
+            c.execute(f"""
+                SELECT p.matchid, p.mapnumber, p.team, p.steamid64,
+                    p.kills, p.deaths, p.assists, p.damage, p.head_shot_kills,
+                    p.enemies5k, p.v1_wins,
+                    m.mapname, m.team1_score, m.team2_score,
+                    mm.team1_name, mm.team2_name, mm.winner,
+                    ROUND(p.damage/30,1) AS adr,
+                    ROUND(p.head_shot_kills/NULLIF(p.kills,0)*100,1) AS hs_pct,
+                    CASE
+                        WHEN LOWER(p.team) = LOWER(mm.team1_name) THEN 'team1'
+                        WHEN LOWER(p.team) = LOWER(mm.team2_name) THEN 'team2'
+                        WHEN LOWER(p.team) IN ('team1','team_1','1') THEN 'team1'
+                        WHEN LOWER(p.team) IN ('team2','team_2','2') THEN 'team2'
+                        ELSE NULL
+                    END AS player_team,
+                    CASE
+                        WHEN LOWER(p.team) = LOWER(mm.team1_name) THEN
+                            CASE WHEN LOWER(mm.winner) = LOWER(mm.team1_name) THEN 1 ELSE 0 END
+                        WHEN LOWER(p.team) = LOWER(mm.team2_name) THEN
+                            CASE WHEN LOWER(mm.winner) = LOWER(mm.team2_name) THEN 1 ELSE 0 END
+                        ELSE NULL
+                    END AS player_won
+                FROM {MATCHZY_TABLES['players']} p
+                LEFT JOIN {MATCHZY_TABLES['maps']} m ON p.matchid=m.matchid AND p.mapnumber=m.mapnumber
+                LEFT JOIN {MATCHZY_TABLES['matches']} mm ON p.matchid=mm.matchid
+                WHERE p.steamid64 IN (%s, %s) AND p.steamid64 != '0'
+                ORDER BY p.matchid DESC, p.mapnumber DESC
+                LIMIT 20
+            """, (sid64, sid32))
+            recent = _patch_recent_matches(c.fetchall())
+        c.close(); conn.close()
+    except Exception as _e:
+        print(f"[api/player/sid] error for '{raw_sid}': {_e}")
+
+    if not career:
+        return _json_response({"error": "Player not found"})
+
+    return _json_response({"career": career, "recent_matches": recent})
+
+
+async def handle_api_player_mapstats_by_sid(request):
+    """GET /api/player/sid/{steamid64}/mapstats"""
+    raw_sid = request.match_info.get('steamid64', '')
+    sid64, sid32 = sid_variants(to_steamid64(raw_sid))
+    try:
+        conn = get_db()
+        c = conn.cursor(dictionary=True)
+        c.execute(f"""
+            SELECT m.mapname,
+                COUNT(DISTINCT p.matchid)                                           AS matches,
+                SUM(p.kills) AS kills, SUM(p.deaths) AS deaths,
+                SUM(p.assists) AS assists, SUM(p.damage) AS damage,
+                SUM(p.head_shot_kills) AS headshots,
+                ROUND(SUM(p.kills)/NULLIF(SUM(p.deaths),0),2)                      AS kd,
+                ROUND(SUM(p.head_shot_kills)/NULLIF(SUM(p.kills),0)*100,1)         AS hs_pct,
+                ROUND(SUM(p.damage)/NULLIF(COUNT(DISTINCT p.matchid),0)/30,1)      AS adr,
+                SUM(CASE WHEN LOWER(mm.winner) = LOWER(p.team) THEN 1 ELSE 0 END) AS wins
+            FROM {MATCHZY_TABLES['players']} p
+            LEFT JOIN {MATCHZY_TABLES['maps']} m  ON p.matchid=m.matchid AND p.mapnumber=m.mapnumber
+            LEFT JOIN {MATCHZY_TABLES['matches']} mm ON p.matchid=mm.matchid
+            WHERE p.steamid64 IN (%s, %s) AND p.steamid64 != '0'
+              AND m.mapname IS NOT NULL AND m.mapname != ''
+            GROUP BY m.mapname
+            ORDER BY matches DESC
+        """, (sid64, sid32))
+        rows = [dict(r) for r in c.fetchall()]
+        c.close(); conn.close()
+        return _json_response(rows)
+    except Exception as e:
+        return _json_response({"error": str(e)})
+
 
 async def handle_api_matches(request):
     """
@@ -431,7 +548,7 @@ async def handle_api_match(request):
 
         # ── Merge manually-added players from edits ──────────────────────────
         added_players = edits.get('added_players', [])
-        added_sids    = {str(ap.get('steamid64') or '') for ap in added_players}
+        added_sids    = {to_steamid64(str(ap.get('steamid64') or '')) for ap in added_players}
         for ap in added_players:
             ap = dict(ap)
             ap['source']    = 'added'
@@ -594,8 +711,8 @@ def _players_from_fshost(data: dict, matchid: str) -> list:
             players.append({
                 'matchid':        matchid,
                 'mapnumber':      1,
-                'steamid64':      str(fp.get('steam_id', '0')),
-                'name':           normalize_name(fp.get('name', '?')),
+                'steamid64':      to_steamid64(str(fp.get('steam_id', '0'))),
+                'name':           fp.get('name', '?'),
                 'team':           team_key,
                 'team_name':      team_name,
                 'kills':          kills,
@@ -702,14 +819,15 @@ def _bust_edits_cache():
 def _edited_name_map():
     """
     Returns name_map = { steamid64: latest_edited_name }.
-    Used to patch player names on leaderboard / specialists / career pages.
+    Keys are always normalised to SteamID64 so lookups work regardless of
+    whether the DB or edit JSON stored SteamID32 or SteamID64.
     """
     all_edits = _get_all_edits()
     name_map = {}
     for mid, edits in all_edits.items():
         for sid, pe in edits.get('players', {}).items():
             if 'name' in pe:
-                name_map[str(sid)] = pe['name']
+                name_map[to_steamid64(str(sid))] = pe['name']
     return name_map
 
 
@@ -726,7 +844,7 @@ def _apply_match_player_edits(players: list, matchid: str) -> list:
         return players
     out = []
     for p in players:
-        sid = str(p.get('steamid64') or p.get('steam_id') or '')
+        sid = to_steamid64(str(p.get('steamid64') or p.get('steam_id') or ''))
         pe  = player_edits.get(sid, {})
         if pe:
             p = dict(p)
@@ -825,11 +943,11 @@ def _merge_missing_players(fshost_players: list, matchzy_players: list,
       - missing_players = MatchZy rows whose steamid64 is NOT in fshost list
         AND NOT already manually added via edits['added_players']
     """
-    fshost_sids = {str(p.get('steamid64') or '') for p in fshost_players}
+    fshost_sids = {to_steamid64(str(p.get('steamid64') or '')) for p in fshost_players}
     missing = [
         p for p in matchzy_players
-        if p['steamid64'] not in fshost_sids
-        and p['steamid64'] not in added_sids
+        if to_steamid64(str(p['steamid64'])) not in fshost_sids
+        and to_steamid64(str(p['steamid64'])) not in added_sids
         and p['steamid64'] != '0'
     ]
     return fshost_players, missing
@@ -848,10 +966,10 @@ def _patch_aggregate_rows(rows: list) -> list:
         return rows
     out = []
     for row in rows:
-        row = dict(row)
-        row['steamid64'] = to_steamid64(str(row.get('steamid64') or '0'))
-        sid = row['steamid64']
+        # Normalise to SteamID64 before name_map lookup (DB may store SteamID32)
+        sid = to_steamid64(str(row.get('steamid64') or ''))
         if sid in name_map:
+            row = dict(row)
             row['name'] = name_map[sid]
         out.append(row)
     return out
@@ -882,7 +1000,7 @@ def _patch_recent_matches(rows: list) -> list:
         if edits.get('map'):    row['mapname'] = edits['map']
         if edits.get('winner'): row['winner']  = edits['winner']
         # Patch this player's own stats if they were edited
-        sid = str(row.get('steamid64') or '')
+        sid = to_steamid64(str(row.get('steamid64') or ''))
         pe  = edits.get('players', {}).get(sid, {})
         if pe:
             row.update(pe)
@@ -908,10 +1026,10 @@ def _deep_merge(base: dict, overrides: dict) -> dict:
             merged_team = dict(result[key])
             for tk, tv in val.items():
                 if tk == 'players' and isinstance(tv, list):
-                    orig_players = {str(p.get('steam_id', p.get('steamid64', ''))): p
+                    orig_players = {to_steamid64(str(p.get('steam_id', p.get('steamid64', '')))): p
                                     for p in merged_team.get('players', [])}
                     for op in tv:
-                        pid = str(op.get('steam_id', op.get('steamid64', '')))
+                        pid = to_steamid64(str(op.get('steam_id', op.get('steamid64', ''))))
                         if pid and pid in orig_players:
                             orig_players[pid] = {**orig_players[pid], **op}
                         elif pid:
@@ -1040,10 +1158,10 @@ def _aggregate_stats_from_fshost() -> list:
             for team_key in ('team1', 'team2'):
                 team_data = meta.get(team_key, {})
                 for fp in team_data.get('players', []):
-                    sid = str(fp.get('steam_id') or fp.get('steamid64') or '0')
+                    sid = to_steamid64(str(fp.get('steam_id') or fp.get('steamid64') or '0'))
                     if sid == '0' or not sid:
                         continue
-                    name = normalize_name(fp.get('name') or '?')
+                    name = fp.get('name') or '?'
 
                     kills   = int(fp.get('kills', 0) or 0)
                     deaths  = int(fp.get('deaths', 0) or 0)
@@ -1117,9 +1235,10 @@ async def handle_api_leaderboard(request):
             return _json_response(cached, max_age=60)
         conn = get_db()
         c = conn.cursor(dictionary=True)
+        _sid_norm = "IF(CAST(steamid64 AS UNSIGNED) < 4294967296 AND CAST(steamid64 AS UNSIGNED) > 0, CAST(CAST(steamid64 AS UNSIGNED) + 76561197960265728 AS CHAR), steamid64)"
         c.execute(f"""
             SELECT
-                steamid64,
+                {_sid_norm} AS steamid64,
                 SUBSTRING_INDEX(GROUP_CONCAT(name ORDER BY matchid DESC), ',', 1) AS name,
                 COUNT(DISTINCT matchid)                                      AS matches,
                 SUM(kills)                                                   AS kills,
@@ -1139,14 +1258,16 @@ async def handle_api_leaderboard(request):
             FROM {MATCHZY_TABLES['players']}
             WHERE steamid64 != '0' AND steamid64 IS NOT NULL
               AND name != '' AND name IS NOT NULL
-            GROUP BY steamid64
+            GROUP BY {_sid_norm}
             ORDER BY kills DESC
         """)
         rows = c.fetchall()
         c.close(); conn.close()
+        # Normalise any SteamID32 → SteamID64 in output (DB may store either form)
+        for r in rows:
+            if r.get('steamid64'):
+                r['steamid64'] = to_steamid64(str(r['steamid64']))
         rows = _patch_aggregate_rows(rows)
-        # Merge rows that share the same normalized steamid64 (Steam32 vs Steam64 duplicates)
-        rows = _merge_duplicate_player_rows(rows)
         _cache_set('leaderboard', rows)
         return _json_response(rows, max_age=60)
     except Exception as e:
@@ -1161,9 +1282,10 @@ async def handle_api_specialists(request):
             return _json_response(cached, max_age=60)
         conn = get_db()
         c = conn.cursor(dictionary=True)
+        _sid_norm = "IF(CAST(steamid64 AS UNSIGNED) < 4294967296 AND CAST(steamid64 AS UNSIGNED) > 0, CAST(CAST(steamid64 AS UNSIGNED) + 76561197960265728 AS CHAR), steamid64)"
         c.execute(f"""
             SELECT
-                steamid64,
+                {_sid_norm} AS steamid64,
                 SUBSTRING_INDEX(GROUP_CONCAT(name ORDER BY matchid DESC), ',', 1) AS name,
                 COUNT(DISTINCT matchid)                                         AS matches,
                 SUM(v1_wins)                                                    AS clutch_1v1,
@@ -1179,14 +1301,16 @@ async def handle_api_specialists(request):
             FROM {MATCHZY_TABLES['players']}
             WHERE steamid64 != '0' AND steamid64 IS NOT NULL
               AND name != '' AND name IS NOT NULL
-            GROUP BY steamid64
+            GROUP BY {_sid_norm}
             HAVING matches >= 1
             ORDER BY clutch_total DESC
         """)
         rows = c.fetchall()
         c.close(); conn.close()
+        for r in rows:
+            if r.get('steamid64'):
+                r['steamid64'] = to_steamid64(str(r['steamid64']))
         rows = _patch_aggregate_rows(rows)
-        rows = _merge_duplicate_player_rows(rows)
         _cache_set('specialists', rows)
         return _json_response(rows, max_age=60)
     except Exception as e:
@@ -1205,59 +1329,23 @@ def to_steamid64(raw: str) -> str:
     except (ValueError, TypeError):
         return raw
 
-def normalize_name(name: str) -> str:
+def sid_variants(raw: str) -> tuple[str, str]:
     """
-    Normalize player names from JSON so they match DB names.
-    Converts Unicode lookalike apostrophes/quotes to plain ASCII equivalents.
-    e.g. \u2019 (right single quote) → plain apostrophe '
+    Return (steamid64, steamid32) for a given ID in either form.
+    The DB may store either form in the steamid64 column depending on the source
+    (MatchZy stores SteamID64, some fshost rows store SteamID32).
+    Use WHERE steamid64 IN (%s, %s) with both variants to match either.
     """
-    if not name:
-        return name
-    # Map common Unicode quotes/dashes to their ASCII equivalents
-    return (name
-        .replace('\u2018', "'").replace('\u2019', "'")   # left/right single quotes
-        .replace('\u201c', '"').replace('\u201d', '"')   # left/right double quotes
-        .replace('\u2032', "'").replace('\u2035', "'")   # prime/reversed prime
-        .replace('\u02bc', "'")                          # modifier letter apostrophe
-    )
-
-
-def _merge_duplicate_player_rows(rows: list) -> list:
-    """
-    After normalizing steamid64 values, some players may appear twice —
-    once with a Steam32-stored-as-64 row and once with a real Steam64 row.
-    This merges them by summing numeric stats and keeping the most recent name.
-    """
-    merged: dict = {}
-    for row in rows:
-        sid = str(row.get('steamid64') or '0')
-        if sid == '0':
-            continue
-        if sid not in merged:
-            merged[sid] = dict(row)
-            continue
-        # Duplicate found — merge into existing
-        existing = merged[sid]
-        # Keep most recent name (non-empty wins, otherwise keep existing)
-        if row.get('name') and row['name'] != '?':
-            existing['name'] = row['name']
-        # Sum all numeric fields except steamid64 and name
-        for key, val in row.items():
-            if key in ('steamid64', 'name'):
-                continue
-            if isinstance(val, (int, float)) and isinstance(existing.get(key), (int, float)):
-                existing[key] = existing[key] + val
-        # Recalculate derived ratios after merging
-        kills  = existing.get('kills', 0) or 0
-        deaths = existing.get('deaths', 0) or 0
-        hs     = existing.get('headshots', existing.get('head_shot_kills', 0)) or 0
-        dmg    = existing.get('damage', existing.get('total_damage', 0)) or 0
-        maps   = existing.get('matches', 1) or 1
-        existing['kd']     = round(kills / deaths, 2) if deaths else float(kills)
-        existing['hs_pct'] = round(hs / kills * 100, 1) if kills else 0.0
-        existing['adr']    = round(dmg / maps / 30, 1)
-    return list(merged.values())
-
+    try:
+        val = int(raw)
+        if val < 0x100000000:
+            # Input is SteamID32
+            return str(val + STEAMID64_BASE), str(val)
+        else:
+            # Input is SteamID64
+            return str(val), str(val - STEAMID64_BASE)
+    except (ValueError, TypeError):
+        return raw, raw
 
 # ── Steam avatar local cache ─────────────────────────────────────────────────
 # In-memory cache: steamid64 -> local URL or Steam CDN URL
@@ -1341,52 +1429,43 @@ async def handle_api_h2h(request):
         c = conn.cursor(dictionary=True)
         name_map = _edited_name_map()
 
-        def fetch_player(name):
-            # Try by stored name first
+        def fetch_player(pname):
+            # Resolve SID: edit map first, then any stored name row
+            psid = next((s for s, n in name_map.items() if n == pname), None)
+            if not psid:
+                c.execute(f"SELECT steamid64 FROM {MATCHZY_TABLES['players']} WHERE name = %s AND steamid64 != '0' LIMIT 1", (pname,))
+                r = c.fetchone()
+                if r:
+                    psid = to_steamid64(str(r['steamid64']))
+            if not psid:
+                return None
+            # Aggregate ALL rows for this SID regardless of name changes
             c.execute(f"""
-                SELECT name, steamid64,
-                    COUNT(DISTINCT matchid)                                     AS matches,
-                    SUM(kills)                                                  AS kills,
-                    SUM(deaths)                                                 AS deaths,
-                    SUM(assists)                                                AS assists,
-                    SUM(head_shot_kills)                                        AS headshots,
-                    SUM(damage)                                                 AS damage,
-                    SUM(enemies5k)                                              AS aces,
-                    SUM(enemies4k)                                              AS quads,
-                    SUM(v1_wins)                                                AS clutch_wins,
-                    SUM(entry_wins)                                             AS entry_wins,
-                    ROUND(SUM(kills)/NULLIF(SUM(deaths),0),2)                  AS kd,
-                    ROUND(SUM(head_shot_kills)/NULLIF(SUM(kills),0)*100,1)     AS hs_pct,
+                SELECT
+                    steamid64,
+                    SUBSTRING_INDEX(GROUP_CONCAT(name ORDER BY matchid DESC), ',', 1) AS name,
+                    COUNT(DISTINCT matchid)                                      AS matches,
+                    SUM(kills)                                                   AS kills,
+                    SUM(deaths)                                                  AS deaths,
+                    SUM(assists)                                                 AS assists,
+                    SUM(head_shot_kills)                                         AS headshots,
+                    SUM(damage)                                                  AS damage,
+                    SUM(enemies5k)                                               AS aces,
+                    SUM(enemies4k)                                               AS quads,
+                    SUM(v1_wins)                                                 AS clutch_wins,
+                    SUM(entry_wins)                                              AS entry_wins,
+                    ROUND(SUM(kills)/NULLIF(SUM(deaths),0),2)                   AS kd,
+                    ROUND(SUM(head_shot_kills)/NULLIF(SUM(kills),0)*100,1)      AS hs_pct,
                     ROUND(SUM(damage)/NULLIF(
-                        COUNT(DISTINCT CONCAT(matchid,'_',mapnumber)),0)/30,1) AS adr
+                        COUNT(DISTINCT CONCAT(matchid,'_',mapnumber)),0)/30,1)  AS adr
                 FROM {MATCHZY_TABLES['players']}
-                WHERE name = %s AND steamid64 != '0'
-                GROUP BY steamid64, name
-                LIMIT 1
-            """, (name,))
+                WHERE steamid64 IN (%s, %s) AND steamid64 != '0'
+            """, sid_variants(psid))
             row = c.fetchone()
             if row:
-                return row
-            # Try by steamid64 (in case name was edited)
-            sid = next((s for s, n in name_map.items() if n == name), None)
-            if sid:
-                c.execute(f"""
-                    SELECT name, steamid64,
-                        COUNT(DISTINCT matchid) AS matches,
-                        SUM(kills) AS kills, SUM(deaths) AS deaths,
-                        SUM(assists) AS assists, SUM(head_shot_kills) AS headshots,
-                        SUM(damage) AS damage, SUM(enemies5k) AS aces,
-                        SUM(enemies4k) AS quads, SUM(v1_wins) AS clutch_wins,
-                        SUM(entry_wins) AS entry_wins,
-                        ROUND(SUM(kills)/NULLIF(SUM(deaths),0),2) AS kd,
-                        ROUND(SUM(head_shot_kills)/NULLIF(SUM(kills),0)*100,1) AS hs_pct,
-                        ROUND(SUM(damage)/NULLIF(COUNT(DISTINCT CONCAT(matchid,'_',mapnumber)),0)/30,1) AS adr
-                    FROM {MATCHZY_TABLES['players']}
-                    WHERE steamid64 = %s AND steamid64 != '0'
-                    GROUP BY steamid64, name LIMIT 1
-                """, (sid,))
-                return c.fetchone()
-            return None
+                row = dict(row)
+                row['steamid64'] = to_steamid64(str(psid))
+            return row
 
         r1 = fetch_player(p1)
         r2 = fetch_player(p2)
@@ -1395,7 +1474,8 @@ async def handle_api_h2h(request):
         # Patch edited names
         for r in [r1, r2]:
             if r:
-                sid = str(r.get('steamid64') or '')
+                sid = to_steamid64(str(r.get('steamid64') or ''))
+                r['steamid64'] = sid  # normalise output too
                 if sid in name_map:
                     r['name'] = name_map[sid]
     except Exception as e:
@@ -1642,32 +1722,38 @@ async def handle_api_search(request):
         conn = get_db()
         c = conn.cursor(dictionary=True)
         like = f"%{q}%"
+        _sid_norm = "IF(CAST(steamid64 AS UNSIGNED) < 4294967296 AND CAST(steamid64 AS UNSIGNED) > 0, CAST(CAST(steamid64 AS UNSIGNED) + 76561197960265728 AS CHAR), steamid64)"
         c.execute(f"""
-            SELECT steamid64,
+            SELECT {_sid_norm} AS steamid64,
                 SUBSTRING_INDEX(GROUP_CONCAT(name ORDER BY matchid DESC), ',', 1) AS name,
                 COUNT(DISTINCT matchid) AS matches,
                 ROUND(SUM(kills)/NULLIF(SUM(deaths),0),2) AS kd,
                 ROUND(SUM(damage)/NULLIF(COUNT(DISTINCT CONCAT(matchid,'_',mapnumber)),0)/30,1) AS adr
             FROM {MATCHZY_TABLES['players']}
             WHERE name LIKE %s AND steamid64 != '0'
-            GROUP BY steamid64
+            GROUP BY {_sid_norm}
             ORDER BY matches DESC
             LIMIT 8
         """, (like,))
         players = [dict(r) for r in c.fetchall()]
+        # Normalise SteamID32 → SteamID64 in output
+        for p in players:
+            if p.get('steamid64'):
+                p['steamid64'] = to_steamid64(str(p['steamid64']))
         name_map = _edited_name_map()
         for p in players:
             sid = str(p.get('steamid64') or '')
             if sid in name_map:
                 p['name'] = name_map[sid]
         for sid, edited_name in [(s, n) for s, n in name_map.items() if q.lower() in n.lower()]:
-            if not any(p['steamid64'] == sid for p in players):
+            sid64_cmp = to_steamid64(str(sid))
+            if not any(to_steamid64(str(p.get('steamid64',''))) == sid64_cmp for p in players):
                 c.execute(f"""
                     SELECT steamid64, COUNT(DISTINCT matchid) AS matches,
                         ROUND(SUM(kills)/NULLIF(SUM(deaths),0),2) AS kd,
                         ROUND(SUM(damage)/NULLIF(COUNT(DISTINCT CONCAT(matchid,'_',mapnumber)),0)/30,1) AS adr
-                    FROM {MATCHZY_TABLES['players']} WHERE steamid64 = %s GROUP BY steamid64 LIMIT 1
-                """, (sid,))
+                    FROM {MATCHZY_TABLES['players']} WHERE steamid64 IN (%s, %s) LIMIT 1
+                """, sid_variants(sid))
                 row = c.fetchone()
                 if row:
                     row = dict(row); row['name'] = edited_name; players.append(row)
@@ -1704,14 +1790,14 @@ async def handle_api_player_mapstats(request):
     try:
         conn = get_db()
         c = conn.cursor(dictionary=True)
-        sid = None
-        c.execute(f"SELECT steamid64 FROM {MATCHZY_TABLES['players']} WHERE name = %s AND steamid64 != '0' LIMIT 1", (name,))
-        row = c.fetchone()
-        if row:
-            sid = str(row['steamid64'])
-        else:
-            name_map = _edited_name_map()
-            sid = next((s for s, n in name_map.items() if n == name), None)
+        # Resolve SID via edit map first (handles renamed players), then by any stored name
+        name_map = _edited_name_map()
+        sid = next((s for s, n in name_map.items() if n == name), None)
+        if not sid:
+            c.execute(f"SELECT steamid64 FROM {MATCHZY_TABLES['players']} WHERE name = %s AND steamid64 != '0' LIMIT 1", (name,))
+            row = c.fetchone()
+            if row:
+                sid = to_steamid64(str(row['steamid64']))
         if not sid:
             return _json_response([])
         c.execute(f"""
@@ -1727,11 +1813,11 @@ async def handle_api_player_mapstats(request):
             FROM {MATCHZY_TABLES['players']} p
             LEFT JOIN {MATCHZY_TABLES['maps']} m  ON p.matchid=m.matchid AND p.mapnumber=m.mapnumber
             LEFT JOIN {MATCHZY_TABLES['matches']} mm ON p.matchid=mm.matchid
-            WHERE p.steamid64 = %s AND p.steamid64 != '0'
+            WHERE p.steamid64 IN (%s, %s) AND p.steamid64 != '0'
               AND m.mapname IS NOT NULL AND m.mapname != ''
             GROUP BY m.mapname
             ORDER BY matches DESC
-        """, (sid,))
+        """, sid_variants(sid))
         rows = [dict(r) for r in c.fetchall()]
         c.close(); conn.close()
         return _json_response(rows)
@@ -2021,10 +2107,112 @@ async def handle_admin_api_merge_players(request):
     except Exception as e:
         return _json_response({"error": str(e)})
 
+async def handle_admin_api_merge_by_steamid(request):
+    """
+    POST /api/admin/players/merge-by-steamid
+    Two-step fix:
+      1. Convert any SteamID32 values in the steamid64 column to real SteamID64
+         (fshost JSONs store steam_id as SteamID32; MatchZy stores SteamID64 —
+          this caused the same player to appear twice with different IDs).
+      2. For each steamid64 with multiple name variants, unify all rows to
+         the most recent name so renamed players are merged into one profile.
+    Body (optional): { "steamid64": "765..." } to fix one player only.
+    """
+    if not _get_admin_steamid(request):
+        return web.Response(text=json.dumps({"error": "Unauthorized"}),
+                            content_type="application/json", status=401)
+    try:
+        body = {}
+        try:
+            body = await request.json()
+        except Exception:
+            pass
+        target_sid = (body.get("steamid64") or "").strip() or None
+
+        conn = get_db()
+        c = conn.cursor(dictionary=True)
+
+        # Find all steamid64s that have more than one distinct name
+        if target_sid:
+            c.execute(f"""
+                SELECT steamid64,
+                    COUNT(DISTINCT name) AS name_count,
+                    SUBSTRING_INDEX(GROUP_CONCAT(name ORDER BY matchid DESC), ',', 1) AS latest_name
+                FROM {MATCHZY_TABLES['players']}
+                WHERE steamid64 IN (%s, %s) AND steamid64 != '0'
+                GROUP BY steamid64
+                HAVING name_count > 1
+            """, sid_variants(target_sid))
+        else:
+            c.execute(f"""
+                SELECT steamid64,
+                    COUNT(DISTINCT name) AS name_count,
+                    SUBSTRING_INDEX(GROUP_CONCAT(name ORDER BY matchid DESC), ',', 1) AS latest_name
+                FROM {MATCHZY_TABLES['players']}
+                WHERE steamid64 != '0' AND steamid64 IS NOT NULL
+                GROUP BY steamid64
+                HAVING name_count > 1
+            """)
+
+        duplicates = [dict(r) for r in c.fetchall()]
+
+        # Apply edit-map overrides: if admin has explicitly renamed this player, use that
+        name_map = _edited_name_map()
+        total_updated = 0
+        merged = []
+
+        for dup in duplicates:
+            sid = str(dup['steamid64'])
+            canonical = name_map.get(sid) or dup['latest_name']
+
+            # Fetch old names for reporting
+            c.execute(f"""
+                SELECT DISTINCT name FROM {MATCHZY_TABLES['players']}
+                WHERE steamid64 IN (%s, %s) AND name != %s
+            """, (*sid_variants(sid), canonical))
+            old_names = [r['name'] for r in c.fetchall()]
+
+            # Update all rows for this SID to the canonical name (both stored forms)
+            c2 = conn.cursor()
+            c2.execute(f"""
+                UPDATE {MATCHZY_TABLES['players']}
+                SET name = %s
+                WHERE steamid64 IN (%s, %s) AND name != %s
+            """, (canonical, *sid_variants(sid), canonical))
+            rows_changed = c2.rowcount
+            c2.close()
+
+            total_updated += rows_changed
+            merged.append({
+                "steamid64":   sid,
+                "canonical":   canonical,
+                "old_names":   old_names,
+                "rows_updated": rows_changed,
+            })
+
+        conn.commit()
+        c.close()
+        conn.close()
+
+        # Bust all caches so leaderboard/profiles reflect the fix immediately
+        _bust_edits_cache()
+
+        return _json_response({
+            "ok":            True,
+            "players_fixed": len(merged),
+            "rows_updated":  total_updated,
+            "details":       merged,
+        })
+    except Exception as e:
+        return _json_response({"error": str(e)})
+
+
 async def start_http_server():
     app = web.Application()
     app.router.add_get('/api/specialists',             handle_api_specialists)
-    app.router.add_get('/api/player/{name}',           handle_api_player)
+    app.router.add_get('/api/player/sid/{steamid64}',         handle_api_player_by_sid)
+    app.router.add_get('/api/player/sid/{steamid64}/mapstats', handle_api_player_mapstats_by_sid)
+    app.router.add_get('/api/player/{name}',                   handle_api_player)
     app.router.add_get('/api/steam/{steamid64}',       handle_api_steam)
     app.router.add_get('/api/matches',                 handle_api_matches)
     app.router.add_get('/api/matches/full',            handle_api_matches_full)
@@ -2060,7 +2248,8 @@ async def start_http_server():
     app.router.add_get('/api/admin/players',            handle_admin_api_players)
     app.router.add_post('/api/admin/player/rename',     handle_admin_api_rename_player)
     app.router.add_get('/api/admin/players/suggest-merges', handle_admin_api_suggest_merges)
-    app.router.add_post('/api/admin/players/merge',     handle_admin_api_merge_players)
+    app.router.add_post('/api/admin/players/merge',             handle_admin_api_merge_players)
+    app.router.add_post('/api/admin/players/merge-by-steamid', handle_admin_api_merge_by_steamid)
     app.router.add_get('/api/admin/server',             handle_admin_api_server)
     app.router.add_post('/api/admin/rcon',              handle_admin_api_rcon)
     app.router.add_get('/stats',   handle_stats_page)
@@ -2236,11 +2425,11 @@ def get_matchzy_player_stats(steamid64: str = None, player_name: str = None) -> 
         table = MATCHZY_TABLES["players"]
 
         if steamid64:
-            where = "steamid64 = %s"
-            param = steamid64
+            where = "steamid64 IN (%s, %s)"
+            param = sid_variants(steamid64)
         elif player_name:
             where = "name = %s"
-            param = player_name
+            param = (player_name,)
         else:
             return None
 
@@ -2265,10 +2454,12 @@ def get_matchzy_player_stats(steamid64: str = None, player_name: str = None) -> 
                 )                                            AS hs_pct
             FROM {table}
             WHERE {where}
-            GROUP BY steamid64, name
-        ''', (param,))
+        ''', param)
 
         row = c.fetchone()
+        if row and steamid64:
+            row = dict(row)
+            row['steamid64'] = to_steamid64(str(row['steamid64']))
         c.close()
         return row
     except Exception as e:
