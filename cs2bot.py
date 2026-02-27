@@ -1397,23 +1397,21 @@ async def handle_options(request):
 
 
 async def handle_api_auth_edit(request):
-    """POST /api/auth/edit — verify EDIT_PASSWORD, return bearer token."""
-    try:
-        body = await request.json()
-        if body.get('password') == EDIT_PASSWORD:
-            import base64
-            token = base64.b64encode(f"edit:{EDIT_PASSWORD}".encode()).decode()
-            return _json_response({"ok": True, "token": token})
-        return web.Response(
-            text=json.dumps({"ok": False, "error": "Wrong password"}),
-            content_type='application/json', status=401,
-            headers={"Access-Control-Allow-Origin": "*"},
-        )
-    except Exception as e:
-        return _json_response({"ok": False, "error": str(e)})
+    """POST /api/auth/edit — check Steam admin session, return ok."""
+    if _get_admin_steamid(request):
+        return _json_response({"ok": True, "admin": True})
+    return web.Response(
+        text=json.dumps({"ok": False, "error": "Not logged in as admin"}),
+        content_type='application/json', status=401,
+        headers={"Access-Control-Allow-Origin": "*"},
+    )
 
 
 def _verify_edit_token(request) -> bool:
+    """Auth check: valid Steam admin session OR legacy bearer token."""    # Primary: Steam session cookie
+    if _get_admin_steamid(request):
+        return True
+    # Legacy fallback: bearer token (keep working during transition)
     import base64
     auth = request.headers.get('Authorization', '')
     if not auth.startswith('Bearer '):
@@ -1666,6 +1664,199 @@ async def handle_api_player_mapstats(request):
     except Exception as e:
         return _json_response({"error": str(e)})
 
+
+ADMIN_HTML_PATH = pathlib.Path(__file__).parent / "admin.html"
+# In-memory session store: {token: steamid64}
+_ADMIN_SESSIONS: dict = {}
+
+def _get_steam_openid_url(return_to: str) -> str:
+    """Build Steam OpenID redirect URL."""
+    import urllib.parse
+    params = {
+        "openid.ns":         "http://specs.openid.net/auth/2.0",
+        "openid.mode":       "checkid_setup",
+        "openid.return_to":  return_to,
+        "openid.realm":      return_to.split("/auth/")[0] + "/",
+        "openid.identity":   "http://specs.openid.net/auth/2.0/identifier_select",
+        "openid.claimed_id": "http://specs.openid.net/auth/2.0/identifier_select",
+    }
+    return "https://steamcommunity.com/openid/login?" + urllib.parse.urlencode(params)
+
+def _verify_steam_openid(params: dict, return_to: str) -> str | None:
+    """Verify Steam OpenID response. Returns steamid64 or None."""
+    import urllib.parse, re
+    check_params = dict(params)
+    check_params["openid.mode"] = "check_authentication"
+    body = urllib.parse.urlencode(check_params).encode()
+    try:
+        r = requests.post("https://steamcommunity.com/openid/login",
+                          data=body, timeout=10,
+                          headers={"Content-Type": "application/x-www-form-urlencoded"})
+        if "is_valid:true" not in r.text:
+            return None
+        identity = params.get("openid.claimed_id", "")
+        m = re.search(r"https://steamcommunity\.com/openid/id/(\d+)", identity)
+        return m.group(1) if m else None
+    except Exception:
+        return None
+
+async def handle_admin_page(request):
+    """GET /admin — serve admin.html"""
+    if ADMIN_HTML_PATH.exists():
+        return web.FileResponse(ADMIN_HTML_PATH)
+    return web.Response(text="Admin panel not found", status=404)
+
+async def handle_admin_steam_login(request):
+    """GET /auth/steam — redirect to Steam OpenID."""
+    scheme = request.headers.get("X-Forwarded-Proto", "https")
+    host   = request.headers.get("X-Forwarded-Host", request.host)
+    return_to = f"{scheme}://{host}/auth/steam/callback"
+    raise web.HTTPFound(location=_get_steam_openid_url(return_to))
+
+async def handle_admin_steam_callback(request):
+    """GET /auth/steam/callback — verify Steam OpenID, set session cookie."""
+    import secrets
+    scheme = request.headers.get("X-Forwarded-Proto", "https")
+    host   = request.headers.get("X-Forwarded-Host", request.host)
+    return_to = f"{scheme}://{host}/auth/steam/callback"
+    params = dict(request.rel_url.query)
+    steamid = await asyncio.get_running_loop().run_in_executor(
+        None, _verify_steam_openid, params, return_to
+    )
+    if not steamid:
+        raise web.HTTPFound(location="/admin?error=auth_failed")
+    if str(ADMIN_ID) and steamid != str(ADMIN_ID):
+        raise web.HTTPFound(location="/admin?error=not_admin")
+    token = secrets.token_hex(32)
+    _ADMIN_SESSIONS[token] = steamid
+    response = web.HTTPFound(location="/admin")
+    response.set_cookie("rg_admin", token, max_age=86400*7, httponly=True, samesite="Lax")
+    return response
+
+async def handle_admin_logout(request):
+    """POST /auth/steam/logout"""
+    token = request.cookies.get("rg_admin", "")
+    _ADMIN_SESSIONS.pop(token, None)
+    response = web.HTTPFound(location="/admin")
+    response.del_cookie("rg_admin")
+    return response
+
+def _get_admin_steamid(request) -> str | None:
+    """Return steamid64 if request has valid admin session, else None."""
+    token = request.cookies.get("rg_admin", "")
+    return _ADMIN_SESSIONS.get(token)
+
+async def handle_admin_api_me(request):
+    """GET /api/admin/me — return session info."""
+    sid = _get_admin_steamid(request)
+    if not sid:
+        return web.Response(text=json.dumps({"ok": False}), content_type="application/json", status=401)
+    return _json_response({"ok": True, "steamid": sid})
+
+async def handle_admin_api_matches(request):
+    """GET /api/admin/matches — all matches for admin management."""
+    if not _get_admin_steamid(request):
+        return web.Response(text=json.dumps({"error": "Unauthorized"}), content_type="application/json", status=401)
+    try:
+        conn = get_db(); c = conn.cursor(dictionary=True)
+        c.execute("""
+            SELECT f.matchid, f.fetched_at,
+                   JSON_UNQUOTE(JSON_EXTRACT(f.raw_json, '$.map'))        AS map,
+                   JSON_UNQUOTE(JSON_EXTRACT(f.raw_json, '$.winner'))     AS winner,
+                   JSON_UNQUOTE(JSON_EXTRACT(f.raw_json, '$.team1.name')) AS team1,
+                   JSON_UNQUOTE(JSON_EXTRACT(f.raw_json, '$.team2.name')) AS team2,
+                   JSON_UNQUOTE(JSON_EXTRACT(f.raw_json, '$.team1.score')) AS score1,
+                   JSON_UNQUOTE(JSON_EXTRACT(f.raw_json, '$.team2.score')) AS score2,
+                   e.edited_at
+            FROM fshost_matches f
+            LEFT JOIN match_edits e ON e.matchid = f.matchid
+            ORDER BY f.fetched_at DESC
+        """)
+        rows = [dict(r) for r in c.fetchall()]
+        c.close(); conn.close()
+        return _json_response(rows)
+    except Exception as e:
+        return _json_response({"error": str(e)})
+
+async def handle_admin_api_delete_match(request):
+    """DELETE /api/admin/match/{matchid} — delete match entirely."""
+    if not _get_admin_steamid(request):
+        return web.Response(text=json.dumps({"error": "Unauthorized"}), content_type="application/json", status=401)
+    matchid = request.match_info.get("matchid", "")
+    try:
+        conn = get_db(); c = conn.cursor()
+        c.execute("DELETE FROM match_edits WHERE matchid = %s", (matchid,))
+        c.execute("DELETE FROM fshost_matches WHERE matchid = %s", (matchid,))
+        conn.commit(); c.close(); conn.close()
+        return _json_response({"ok": True})
+    except Exception as e:
+        return _json_response({"error": str(e)})
+
+async def handle_admin_api_players(request):
+    """GET /api/admin/players — all players for management."""
+    if not _get_admin_steamid(request):
+        return web.Response(text=json.dumps({"error": "Unauthorized"}), content_type="application/json", status=401)
+    try:
+        conn = get_db(); c = conn.cursor(dictionary=True)
+        c.execute("""
+            SELECT steamid64, name,
+                   COUNT(*) AS matches,
+                   SUM(kills) AS kills, SUM(deaths) AS deaths
+            FROM matchzy_stats_players
+            GROUP BY steamid64, name
+            ORDER BY matches DESC
+        """)
+        rows = [dict(r) for r in c.fetchall()]
+        c.close(); conn.close()
+        return _json_response(rows)
+    except Exception as e:
+        return _json_response({"error": str(e)})
+
+async def handle_admin_api_rename_player(request):
+    """POST /api/admin/player/rename — rename player across all records."""
+    if not _get_admin_steamid(request):
+        return web.Response(text=json.dumps({"error": "Unauthorized"}), content_type="application/json", status=401)
+    try:
+        body = await request.json()
+        old_name = body.get("old_name", "").strip()
+        new_name = body.get("new_name", "").strip()
+        if not old_name or not new_name:
+            return _json_response({"error": "old_name and new_name required"})
+        conn = get_db(); c = conn.cursor()
+        c.execute("UPDATE matchzy_stats_players SET name = %s WHERE name = %s", (new_name, old_name))
+        affected = c.rowcount
+        conn.commit(); c.close(); conn.close()
+        return _json_response({"ok": True, "rows_updated": affected})
+    except Exception as e:
+        return _json_response({"error": str(e)})
+
+async def handle_admin_api_server(request):
+    """GET /api/admin/server — live server status + player list."""
+    if not _get_admin_steamid(request):
+        return web.Response(text=json.dumps({"error": "Unauthorized"}), content_type="application/json", status=401)
+    try:
+        loop = asyncio.get_running_loop()
+        players = await loop.run_in_executor(None, rcon_list_players)
+        status_txt = await loop.run_in_executor(None, send_rcon, "status")
+        return _json_response({"ok": True, "players": players, "status": status_txt})
+    except Exception as e:
+        return _json_response({"error": str(e)})
+
+async def handle_admin_api_rcon(request):
+    """POST /api/admin/rcon — run RCON command."""
+    if not _get_admin_steamid(request):
+        return web.Response(text=json.dumps({"error": "Unauthorized"}), content_type="application/json", status=401)
+    try:
+        body = await request.json()
+        cmd = body.get("cmd", "").strip()
+        if not cmd:
+            return _json_response({"error": "cmd required"})
+        loop = asyncio.get_running_loop()
+        result = await loop.run_in_executor(None, send_rcon, cmd)
+        return _json_response({"ok": True, "result": result})
+    except Exception as e:
+        return _json_response({"error": str(e)})
+
 async def start_http_server():
     app = web.Application()
     app.router.add_get('/api/specialists',             handle_api_specialists)
@@ -1694,6 +1885,18 @@ async def start_http_server():
     app.router.add_route('OPTIONS', '/api/match/{matchid}/edit',  handle_options)
     app.router.add_route('OPTIONS', '/api/match/{matchid}/edits', handle_options)
     # ── Static ────────────────────────────────────────────────────────────────
+    # ── Admin ─────────────────────────────────────────────────────────────────
+    app.router.add_get('/admin',                        handle_admin_page)
+    app.router.add_get('/auth/steam',                   handle_admin_steam_login)
+    app.router.add_get('/auth/steam/callback',          handle_admin_steam_callback)
+    app.router.add_post('/auth/steam/logout',           handle_admin_logout)
+    app.router.add_get('/api/admin/me',                 handle_admin_api_me)
+    app.router.add_get('/api/admin/matches',            handle_admin_api_matches)
+    app.router.add_route('DELETE', '/api/admin/match/{matchid}', handle_admin_api_delete_match)
+    app.router.add_get('/api/admin/players',            handle_admin_api_players)
+    app.router.add_post('/api/admin/player/rename',     handle_admin_api_rename_player)
+    app.router.add_get('/api/admin/server',             handle_admin_api_server)
+    app.router.add_post('/api/admin/rcon',              handle_admin_api_rcon)
     app.router.add_get('/stats',   handle_stats_page)
     app.router.add_get('/',        handle_stats_page)
     app.router.add_get('/health',  handle_health_check)
@@ -1719,7 +1922,7 @@ CHANNEL_ID = int(os.getenv("CHANNEL_ID", 0))
 SERVER_DEMOS_CHANNEL_ID = int(os.getenv("SERVER_DEMOS_CHANNEL_ID", 0))
 DEMOS_JSON_URL = os.getenv("DEMOS_JSON_URL")
 GUILD_ID = int(os.getenv("GUILD_ID", "0") or "0")
-OWNER_ID = int(os.getenv("OWNER_ID", 0))
+ADMIN_ID = int(os.getenv("ADMIN_ID", 0))
 SERVER_LOG_PATH = os.getenv("SERVER_LOG_PATH", "")
 MAP_WHITELIST = [
     "de_inferno", "de_mirage", "de_dust2", "de_overpass",
@@ -1730,7 +1933,7 @@ MAP_WHITELIST = [
 intents = discord.Intents.default()
 intents.message_content = True
 intents.messages = True
-bot = commands.Bot(command_prefix="!", intents=intents, owner_id=OWNER_ID)
+bot = commands.Bot(command_prefix="!", intents=intents, owner_id=ADMIN_ID)
 
 # ========== DATABASE SETUP (Railway MySQL via mysql-connector-python) ==========
 # Railway MySQL env vars:
@@ -2032,7 +2235,7 @@ class DemosView(View):
 
 def owner_only():
     async def predicate(interaction: discord.Interaction):
-        return interaction.user.id == OWNER_ID
+        return interaction.user.id == ADMIN_ID
     return app_commands.check(predicate)
 
 def is_bot_player(player_name: str) -> bool:
@@ -2478,7 +2681,7 @@ async def update_server_stats():
 async def on_ready():
     print(f"Bot online as {bot.user.name}")
     print(f"Bot ID: {bot.user.id}")
-    print(f"Owner ID from env: {OWNER_ID}")
+    print(f"Owner ID from env: {ADMIN_ID}")
     try:
         await start_http_server()
     except Exception as e:
@@ -2513,7 +2716,7 @@ async def on_ready():
 async def on_message(message):
     if message.author == bot.user:
         return
-    if message.content.startswith('!') and message.author.id == OWNER_ID:
+    if message.content.startswith('!') and message.author.id == ADMIN_ID:
         print(f"Owner command detected: {message.content}")
     await bot.process_commands(message)
 
