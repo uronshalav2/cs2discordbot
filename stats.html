@@ -71,6 +71,14 @@ nav{
 }
 .sidebar-item.active svg{opacity:1}
 .sidebar-spacer{flex:1}
+.sidebar-steam-btn{display:flex;align-items:center;gap:8px;padding:8px 14px;margin:0 8px 8px;border-radius:4px;background:#1b2838;border:1px solid #2a475e;color:#8ba3b8;font-family:'Rajdhani',sans-serif;font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;cursor:pointer;text-decoration:none;transition:all .15s}
+.sidebar-steam-btn:hover{background:#2a475e;color:#c6d4df}
+.sidebar-steam-btn svg{flex-shrink:0;opacity:.7}
+.sidebar-admin-user{display:flex;align-items:center;gap:8px;padding:8px 14px;margin:0 8px 8px}
+.sidebar-admin-avatar{width:24px;height:24px;border-radius:50%;object-fit:cover;border:1px solid var(--border2);flex-shrink:0;background:var(--surface2)}
+.sidebar-admin-name{font-size:12px;font-weight:700;color:var(--white);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sidebar-admin-out{background:transparent;border:none;color:var(--muted);font-size:10px;cursor:pointer;padding:2px 4px;letter-spacing:1px;font-family:'Rajdhani',sans-serif;text-transform:uppercase}
+.sidebar-admin-out:hover{color:var(--loss)}
 .sidebar-bottom{
   border-top:1px solid var(--border);padding:10px 8px;
   display:flex;align-items:center;gap:4px;flex-shrink:0;
@@ -711,6 +719,23 @@ nav{
     </a>
   </div>
 
+  <!-- Steam login / admin user -->
+  <div id="sidebar-steam-login" style="margin-top:8px">
+    <a href="/auth/steam" class="sidebar-steam-btn">
+      <svg width="14" height="14" viewBox="0 0 233 233" fill="currentColor"><path d="M116.5 0C52.1 0 0 52.1 0 116.5c0 55.4 38.7 101.8 90.6 113.5l30.9-72.7c-2.4.2-4.8.3-7.3.3-28.1 0-50.9-22.8-50.9-50.9s22.8-50.9 50.9-50.9 50.9 22.8 50.9 50.9c0 24.6-17.5 45.2-40.8 49.9l-29.8 70.1c1.9.1 3.7.2 5.6.2 64.4 0 116.5-52.2 116.5-116.5S180.9 0 116.5 0zm-2.6 150.8c-18.9 0-34.2-15.3-34.2-34.2s15.3-34.2 34.2-34.2 34.2 15.3 34.2 34.2-15.3 34.2-34.2 34.2z"/></svg>
+      Admin Login
+    </a>
+  </div>
+  <div id="sidebar-admin-user" style="display:none;margin-top:8px">
+    <div class="sidebar-admin-user">
+      <img id="sidebar-admin-avatar" class="sidebar-admin-avatar" src="" alt="">
+      <span id="sidebar-admin-name" class="sidebar-admin-name">Admin</span>
+      <form action="/auth/steam/logout" method="post" style="flex-shrink:0">
+        <button class="sidebar-admin-out" type="submit" title="Log out">✕</button>
+      </form>
+    </div>
+  </div>
+
   <div class="sidebar-spacer"></div>
 
   <!-- Bottom: search, notifications, settings -->
@@ -858,6 +883,19 @@ nav{
         // Show admin tab in sidebar
         const adminSection = document.getElementById('sidebar-admin-section');
         if (adminSection) adminSection.style.display = '';
+        // Swap login button → user pill
+        const loginEl = document.getElementById('sidebar-steam-login');
+        const userEl  = document.getElementById('sidebar-admin-user');
+        if (loginEl) loginEl.style.display = 'none';
+        if (userEl)  userEl.style.display = '';
+        // Load Steam profile for avatar + name
+        try {
+          const s = await fetch('/api/steam/' + d.steamid).then(r=>r.json());
+          const nameEl   = document.getElementById('sidebar-admin-name');
+          const avatarEl = document.getElementById('sidebar-admin-avatar');
+          if (nameEl && s.name)     nameEl.textContent = s.name;
+          if (avatarEl && s.avatar) avatarEl.src = s.avatar;
+        } catch(_) {}
       }
     }
   } catch(_) {}
