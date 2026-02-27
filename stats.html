@@ -702,6 +702,15 @@ nav{
     Predict
   </div>
 
+  <!-- Admin tab — only visible when logged in as admin -->
+  <div id="sidebar-admin-section" style="display:none">
+    <div class="sidebar-section">Admin</div>
+    <a href="/admin" class="sidebar-item" style="text-decoration:none" id="sidebar-admin-link">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+      Dashboard
+    </a>
+  </div>
+
   <div class="sidebar-spacer"></div>
 
   <!-- Bottom: search, notifications, settings -->
@@ -836,6 +845,24 @@ nav{
 </div>
 
 <script>
+// ── Admin session check ──────────────────────────────────────────────────────
+(async function checkAdminSession() {
+  try {
+    const r = await fetch('/api/admin/me');
+    if (r.ok) {
+      const d = await r.json();
+      if (d.ok) {
+        _isAdmin = true;
+        // Show edit buttons if any are hidden
+        document.querySelectorAll('.edit-match-btn').forEach(b => b.style.display = '');
+        // Show admin tab in sidebar
+        const adminSection = document.getElementById('sidebar-admin-section');
+        if (adminSection) adminSection.style.display = '';
+      }
+    }
+  } catch(_) {}
+})();
+
 // ── Router ────────────────────────────────────────────────────────────────────
 // Shared CS2 map image URLs (Steam CDN)
 const MAP_IMG_BASE = 'assets/maps';
@@ -3256,16 +3283,17 @@ else go('matches');
 
 // ── Match Edit Modal ──────────────────────────────────────────────────────────
 
-let _editToken = null;    // set after successful password auth
+let _editToken = null;    // kept for legacy bearer fallback
+let _isAdmin   = false;   // set after Steam session check on load
 let _editMatchId = null;  // current match being edited
 
-function openEditModal(matchId) {
+async function openEditModal(matchId) {
   _editMatchId = matchId || window._currentMatchId;
   document.getElementById('edit-overlay').classList.add('open');
-  if (_editToken) {
+  if (_isAdmin) {
     _renderEditForm();
   } else {
-    _renderPasswordGate();
+    _renderNotAdmin();
   }
 }
 
@@ -3277,43 +3305,19 @@ function editOverlayClick(e) {
   if (e.target === document.getElementById('edit-overlay')) closeEditModal();
 }
 
-function _renderPasswordGate() {
+function _renderNotAdmin() {
   document.getElementById('edit-modal-content').innerHTML = `
     <div class="edit-pw-gate">
       <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="var(--orange)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="opacity:.6">
         <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
       </svg>
-      <div style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:13px;letter-spacing:1px;color:var(--muted2)">Enter Edit Password</div>
-      <input type="password" id="edit-pw-input" placeholder="••••••••" onkeydown="if(event.key==='Enter')_submitPassword()">
-      <div id="edit-pw-err" class="edit-pw-err" style="display:none"></div>
-      <button class="edit-pw-btn" onclick="_submitPassword()">Unlock</button>
+      <div style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:13px;letter-spacing:1px;color:var(--muted2)">Admin access required</div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:8px">Sign in with your Steam admin account to edit matches</div>
+      <a href="/auth/steam" class="edit-pw-btn" style="display:inline-flex;align-items:center;gap:8px;text-decoration:none;background:#1b2838;border-color:#2a475e;color:#c6d4df">
+        <svg width="18" height="18" viewBox="0 0 233 233" fill="currentColor"><path d="M116.5 0C52.1 0 0 52.1 0 116.5c0 55.4 38.7 101.8 90.6 113.5l30.9-72.7c-2.4.2-4.8.3-7.3.3-28.1 0-50.9-22.8-50.9-50.9s22.8-50.9 50.9-50.9 50.9 22.8 50.9 50.9c0 24.6-17.5 45.2-40.8 49.9l-29.8 70.1c1.9.1 3.7.2 5.6.2 64.4 0 116.5-52.2 116.5-116.5S180.9 0 116.5 0zm-2.6 150.8c-18.9 0-34.2-15.3-34.2-34.2s15.3-34.2 34.2-34.2 34.2 15.3 34.2 34.2-15.3 34.2-34.2 34.2z"/></svg>
+        Sign in with Steam
+      </a>
     </div>`;
-  setTimeout(()=>document.getElementById('edit-pw-input')?.focus(), 80);
-}
-
-async function _submitPassword() {
-  const pw = document.getElementById('edit-pw-input')?.value || '';
-  const errEl = document.getElementById('edit-pw-err');
-  errEl.style.display = 'none';
-  try {
-    const r = await fetch('/api/auth/edit', {
-      method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({password: pw})
-    });
-    const data = await r.json();
-    if (data.ok && data.token) {
-      _editToken = data.token;
-      _renderEditForm();
-    } else {
-      errEl.textContent = '✕ Wrong password';
-      errEl.style.display = 'block';
-      document.getElementById('edit-pw-input').value = '';
-      document.getElementById('edit-pw-input').focus();
-    }
-  } catch(e) {
-    errEl.textContent = '✕ Connection error';
-    errEl.style.display = 'block';
-  }
 }
 
 async function _renderEditForm() {
@@ -3632,7 +3636,7 @@ async function _saveEdits() {
 
     const r = await fetch(`/api/match/${_editMatchId}/edit`, {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${_editToken}` },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({edits}),
     });
     const data = await r.json();
@@ -3658,7 +3662,7 @@ async function _revertEdits() {
   try {
     const r = await fetch(`/api/match/${_editMatchId}/edit`, {
       method: 'DELETE',
-      headers: {'Authorization': `Bearer ${_editToken}`},
+      headers: {},
     });
     const data = await r.json();
     if (data.ok) {
