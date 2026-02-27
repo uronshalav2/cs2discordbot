@@ -131,6 +131,49 @@ button{cursor:pointer;font-family:'Rajdhani',sans-serif}
 .toast.ok{border-color:rgba(34,197,94,.4);color:var(--win)}
 .toast.err{border-color:rgba(239,68,68,.4);color:var(--loss)}
 
+/* ── Merge UI ── */
+.merge-suggestion{display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--border);transition:background .12s}
+.merge-suggestion:hover{background:rgba(255,255,255,.02)}
+.merge-suggestion:last-child{border-bottom:none}
+.merge-name{font-weight:700;color:var(--white);font-size:13px}
+.merge-meta{font-size:11px;color:var(--muted2)}
+.merge-arrow{color:var(--muted);font-size:16px;flex-shrink:0}
+.similarity-bar{height:3px;border-radius:2px;background:var(--border2);width:60px;flex-shrink:0;overflow:hidden}
+.similarity-fill{height:100%;border-radius:2px}
+.merge-actions{display:flex;gap:6px;flex-shrink:0;margin-left:auto}
+.merge-tag{display:inline-flex;align-items:center;gap:4px;background:var(--surface2);border:1px solid var(--border);border-radius:3px;padding:3px 8px;font-size:11px;color:var(--white);font-weight:600}
+.merge-tag button{background:transparent;border:none;color:var(--muted);cursor:pointer;font-size:12px;padding:0 0 0 4px;line-height:1}
+.merge-tag button:hover{color:var(--loss)}
+.merge-select{background:var(--surface2);border:1px solid var(--border);border-radius:3px;color:var(--white);padding:5px 8px;font-size:12px;flex:1;min-width:0;font-family:'Rajdhani',sans-serif}
+
+/* ── Edit form ── */
+.edit-section{margin-bottom:20px}
+.edit-section-title{font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--orange);margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid rgba(var(--orange-rgb),.15)}
+.edit-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.edit-field label{display:block;font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--muted2);margin-bottom:5px}
+.edit-player-hdr{display:grid;grid-template-columns:140px repeat(6,1fr) 22px;gap:4px;font-size:9px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--muted);margin-bottom:4px;padding:0 2px}
+.edit-player-row{display:grid;grid-template-columns:140px repeat(6,1fr) 22px;gap:4px;margin-bottom:4px;align-items:center}
+.edit-player-row input{background:var(--surface2);border:1px solid var(--border);border-radius:3px;color:var(--white);padding:5px 7px;font-size:12px;font-family:'JetBrains Mono',monospace;width:100%;outline:none}
+.edit-player-row input:focus{border-color:var(--orange)}
+.edit-player-row.is-added{opacity:.85}
+.edit-player-name-cell input{font-family:'Rajdhani',sans-serif!important;font-weight:700}
+.remove-player-btn{background:transparent;border:none;color:var(--muted);cursor:pointer;font-size:13px;padding:0;width:22px;text-align:center}
+.remove-player-btn:hover{color:var(--loss)}
+.edit-revert-btn,.edit-save-btn{padding:7px 16px;border-radius:4px;font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;cursor:pointer}
+.edit-status{font-size:12px;font-weight:700}
+.edit-status.ok{color:var(--win)}
+.edit-status.err{color:var(--loss)}
+.missing-player-row{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)}
+.missing-player-row:last-child{border-bottom:none}
+.missing-player-name{font-weight:700;color:var(--white);font-size:13px}
+.missing-player-stats{font-size:11px;color:var(--muted2)}
+.add-player-btn{background:var(--orange-glow);border:1px solid rgba(var(--orange-rgb),.3);color:var(--orange);border-radius:3px;padding:4px 10px;font-size:11px;font-weight:700;cursor:pointer;flex-shrink:0}
+.missing-player-team-select{background:var(--surface2);border:1px solid var(--border);border-radius:3px;color:var(--white);padding:4px 8px;font-size:11px;flex-shrink:0}
+.manual-add-row{display:flex;gap:8px;margin-top:10px;align-items:center}
+.manual-add-btn{background:var(--surface2);border:1px solid var(--border);color:var(--muted2);border-radius:3px;padding:5px 10px;font-size:11px;cursor:pointer;white-space:nowrap}
+.manual-add-btn:hover{color:var(--white);border-color:var(--border2)}
+.missing-badge{background:rgba(var(--orange-rgb),.15);color:var(--orange);border:1px solid rgba(var(--orange-rgb),.3);border-radius:10px;padding:1px 7px;font-size:10px;font-weight:700}
+
 /* ── Scrollbar ── */
 ::-webkit-scrollbar{width:4px;height:4px}
 ::-webkit-scrollbar-track{background:transparent}
@@ -256,7 +299,50 @@ button{cursor:pointer;font-family:'Rajdhani',sans-serif}
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--orange)" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
         Player Management
       </div>
-      <div class="page-sub">Rename players across all match records</div>
+      <div class="page-sub">Rename, merge, and manage players across all match records</div>
+
+      <!-- Merge Duplicates -->
+      <div class="card" style="margin-bottom:16px">
+        <div class="card-header">
+          <div class="card-title">Merge Duplicates</div>
+          <button class="btn btn-ghost btn-sm" onclick="loadSuggestions()">↺ Refresh Suggestions</button>
+        </div>
+        <!-- Fuzzy suggestions -->
+        <div style="border-bottom:1px solid var(--border);padding:12px 14px">
+          <div style="font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--muted2);margin-bottom:10px">Auto-detected similar names</div>
+          <div id="merge-suggestions"><div style="color:var(--muted);font-size:12px;padding:8px 0">Loading suggestions...</div></div>
+        </div>
+        <!-- Manual merge -->
+        <div style="padding:14px 16px">
+          <div style="font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--muted2);margin-bottom:10px">Manual merge</div>
+          <div style="display:flex;gap:10px;align-items:flex-start;flex-wrap:wrap">
+            <div style="flex:1;min-width:200px">
+              <div style="font-size:10px;color:var(--muted2);margin-bottom:5px;letter-spacing:.5px">Keep this name</div>
+              <select id="merge-keep" class="merge-select" onchange="updateMergeDropdowns()">
+                <option value="">— select player —</option>
+              </select>
+            </div>
+            <div style="flex:2;min-width:260px">
+              <div style="font-size:10px;color:var(--muted2);margin-bottom:5px;letter-spacing:.5px">Merge these names into it</div>
+              <div id="merge-into-tags" style="display:flex;flex-wrap:wrap;gap:6px;min-height:34px;background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:6px 8px;align-items:center">
+                <span style="color:var(--muted);font-size:11px" id="merge-tags-placeholder">Add names to merge...</span>
+              </div>
+              <div style="margin-top:8px;display:flex;gap:8px">
+                <select id="merge-add-select" class="merge-select">
+                  <option value="">+ add name to merge</option>
+                </select>
+                <button class="btn btn-ghost btn-sm" onclick="addMergeTag()">Add</button>
+              </div>
+            </div>
+            <div style="display:flex;align-items:flex-end;padding-bottom:2px">
+              <button class="btn btn-primary" onclick="executeMerge()" id="merge-btn">Merge</button>
+            </div>
+          </div>
+          <div id="merge-status" style="margin-top:10px;font-size:12px;font-weight:700"></div>
+        </div>
+      </div>
+
+      <!-- Rename -->
       <div class="card" style="margin-bottom:16px">
         <div class="card-header"><div class="card-title">Rename Player</div></div>
         <div style="padding:16px;display:grid;grid-template-columns:1fr 1fr auto;gap:10px;align-items:end">
@@ -271,6 +357,8 @@ button{cursor:pointer;font-family:'Rajdhani',sans-serif}
           <button class="btn btn-primary" onclick="renamePlayer()">Rename</button>
         </div>
       </div>
+
+      <!-- All players table -->
       <div class="card">
         <div class="card-header">
           <div class="card-title">All Players</div>
@@ -380,6 +468,24 @@ button{cursor:pointer;font-family:'Rajdhani',sans-serif}
   </main>
 </div>
 
+<!-- Edit Modal -->
+<div class="modal-overlay" id="edit-modal-overlay">
+  <div class="modal" style="max-width:780px;width:95%;max-height:90vh;display:flex;flex-direction:column;padding:0">
+    <div style="padding:18px 22px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-shrink:0">
+      <div style="font-size:14px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--orange)" id="edit-modal-title">Edit Match</div>
+      <button onclick="closeEdit()" style="background:transparent;border:1px solid var(--border);border-radius:4px;color:var(--muted2);width:28px;height:28px;cursor:pointer;font-size:16px">✕</button>
+    </div>
+    <div id="edit-modal-body" style="overflow-y:auto;flex:1;padding:20px"></div>
+    <div style="padding:14px 22px;border-top:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-shrink:0">
+      <button class="btn btn-ghost" onclick="revertCurrentEdit()">↺ Revert to Original</button>
+      <div style="display:flex;align-items:center;gap:12px">
+        <span id="edit-status" style="font-size:12px;font-weight:700"></span>
+        <button class="btn btn-primary" id="edit-save-btn" onclick="saveEdits()">Save Changes</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- Confirm Modal -->
 <div class="modal-overlay" id="confirm-modal">
   <div class="modal">
@@ -436,7 +542,7 @@ function showPage(id) {
   document.getElementById('page-'+id).classList.add('active');
   document.querySelector(`[data-page="${id}"]`).classList.add('active');
   if (id === 'matches') loadMatches();
-  if (id === 'players') loadPlayers();
+  if (id === 'players') { loadPlayers(); loadSuggestions(); }
   if (id === 'server')  loadServer();
 }
 
@@ -491,6 +597,7 @@ function renderMatches(data) {
       <td>
         <div style="display:flex;gap:6px">
           <a href="/?match=${m.matchid}" target="_blank" class="btn btn-ghost btn-sm">View</a>
+          <button class="btn btn-primary btn-sm" onclick="openEdit('${m.matchid}')">Edit</button>
           ${m.edited_at ? `<button class="btn btn-ghost btn-sm" onclick="revertMatch('${m.matchid}')">Revert</button>` : ''}
           <button class="btn btn-danger btn-sm" onclick="confirmDelete('${m.matchid}')">Delete</button>
         </div>
@@ -538,6 +645,16 @@ async function loadPlayers() {
 }
 
 function renderPlayers(data) {
+  // Populate merge dropdowns
+  const keepSel = document.getElementById('merge-keep');
+  const addSel  = document.getElementById('merge-add-select');
+  if (keepSel) {
+    const keepVal = keepSel.value;
+    keepSel.innerHTML = '<option value="">— select player —</option>' +
+      data.map(p => `<option value="${esc(p.name)}">${esc(p.name)} (${p.matches}m)</option>`).join('');
+    if (keepVal) keepSel.value = keepVal;
+  }
+  if (addSel) updateMergeDropdowns();
   document.getElementById('players-tbody').innerHTML = data.map(p => {
     const kd = p.deaths > 0 ? (p.kills/p.deaths).toFixed(2) : p.kills > 0 ? '∞' : '0.00';
     return `<tr>
@@ -681,6 +798,382 @@ function fmtDate(d) {
     grid.innerHTML = maps.map(m => `<div class="map-tile" onclick="rcon('changelevel de_${m}')">${m.charAt(0).toUpperCase()+m.slice(1)}</div>`).join('');
   }
 })();
+
+// ── Merge Duplicates ──────────────────────────────────────────────────────
+let _mergeTags = []; // names queued to be merged into keep
+
+async function loadSuggestions() {
+  document.getElementById('merge-suggestions').innerHTML =
+    '<div style="color:var(--muted);font-size:12px;padding:8px 0">Scanning for duplicates...</div>';
+  const data = await fetch('/api/admin/players/suggest-merges').then(r=>r.json()).catch(()=>[]);
+  if (!Array.isArray(data) || !data.length) {
+    document.getElementById('merge-suggestions').innerHTML =
+      '<div style="color:var(--win);font-size:12px;padding:8px 0">✓ No duplicate names detected</div>';
+    return;
+  }
+  document.getElementById('merge-suggestions').innerHTML = data.map(s => {
+    const pct  = Math.round(s.similarity * 100);
+    const col  = pct >= 85 ? '#ef4444' : pct >= 75 ? 'var(--orange)' : '#eab308';
+    return `<div class="merge-suggestion">
+      <div style="flex:1;min-width:0">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          <span class="merge-name">${esc(s.name1)}</span>
+          <span style="color:var(--muted);font-size:11px">${s.matches1}m · ${s.kills1}k</span>
+          <span class="merge-arrow">↔</span>
+          <span class="merge-name">${esc(s.name2)}</span>
+          <span style="color:var(--muted);font-size:11px">${s.matches2}m · ${s.kills2}k</span>
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
+        <div>
+          <div style="font-size:9px;color:var(--muted2);text-align:right;margin-bottom:2px">${pct}% match</div>
+          <div class="similarity-bar"><div class="similarity-fill" style="width:${pct}%;background:${col}"></div></div>
+        </div>
+        <button class="btn btn-ghost btn-sm" onclick="prefillMerge('${esc(s.name1)}','${esc(s.name2)}')">Merge</button>
+        <button class="btn btn-ghost btn-sm" style="color:var(--muted)" onclick="this.closest('.merge-suggestion').style.display='none'" title="Dismiss">✕</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function prefillMerge(name1, name2) {
+  // Pick the one with more matches as the keeper
+  const p1 = _players.find(p=>p.name===name1);
+  const p2 = _players.find(p=>p.name===name2);
+  const keep = (p1?.matches||0) >= (p2?.matches||0) ? name1 : name2;
+  const merge = keep === name1 ? name2 : name1;
+  // Set keep dropdown
+  const keepSel = document.getElementById('merge-keep');
+  keepSel.value = keep;
+  // Add merge tag
+  _mergeTags = [];
+  renderMergeTags();
+  addMergeTagByName(merge);
+  // Scroll to merge section
+  document.getElementById('merge-keep').scrollIntoView({behavior:'smooth', block:'center'});
+}
+
+function updateMergeDropdowns() {
+  const keep = document.getElementById('merge-keep').value;
+  const addSel = document.getElementById('merge-add-select');
+  const current = addSel.value;
+  addSel.innerHTML = '<option value="">+ add name to merge</option>' +
+    _players.filter(p => p.name !== keep && !_mergeTags.includes(p.name))
+      .map(p => `<option value="${esc(p.name)}">${esc(p.name)} (${p.matches}m)</option>`)
+      .join('');
+  if (current) addSel.value = current;
+}
+
+function addMergeTag() {
+  const sel = document.getElementById('merge-add-select');
+  addMergeTagByName(sel.value);
+  sel.value = '';
+}
+
+function addMergeTagByName(name) {
+  if (!name || _mergeTags.includes(name)) return;
+  _mergeTags.push(name);
+  renderMergeTags();
+  updateMergeDropdowns();
+}
+
+function removeMergeTag(name) {
+  _mergeTags = _mergeTags.filter(n => n !== name);
+  renderMergeTags();
+  updateMergeDropdowns();
+}
+
+function renderMergeTags() {
+  const container = document.getElementById('merge-into-tags');
+  const placeholder = document.getElementById('merge-tags-placeholder');
+  if (!_mergeTags.length) {
+    if (placeholder) placeholder.style.display = '';
+    container.innerHTML = '<span style="color:var(--muted);font-size:11px" id="merge-tags-placeholder">Add names to merge...</span>';
+    return;
+  }
+  container.innerHTML = _mergeTags.map(n =>
+    `<div class="merge-tag">${esc(n)}<button onclick="removeMergeTag('${esc(n)}')" title="Remove">✕</button></div>`
+  ).join('');
+}
+
+async function executeMerge() {
+  const keep = document.getElementById('merge-keep').value;
+  if (!keep) { toast('Select a name to keep', 'err'); return; }
+  if (!_mergeTags.length) { toast('Add at least one name to merge', 'err'); return; }
+  const statusEl = document.getElementById('merge-status');
+  statusEl.textContent = 'Merging...'; statusEl.style.color = 'var(--muted2)';
+  const r = await fetch('/api/admin/players/merge', {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({keep_name: keep, merge_names: _mergeTags})
+  }).then(r=>r.json()).catch(()=>({error:'network'}));
+  if (r.ok) {
+    statusEl.textContent = `✓ Merged ${r.merged.join(', ')} → ${r.keep_name} (${r.rows_updated} rows updated)`;
+    statusEl.style.color = 'var(--win)';
+    _mergeTags = [];
+    renderMergeTags();
+    document.getElementById('merge-keep').value = '';
+    _players = []; loadPlayers();
+    loadSuggestions();
+    toast('Players merged successfully', 'ok');
+  } else {
+    statusEl.textContent = '✕ ' + (r.error || 'Failed');
+    statusEl.style.color = 'var(--loss)';
+    toast(r.error || 'Merge failed', 'err');
+  }
+}
+
+// ── Edit Match ────────────────────────────────────────────────────────────
+let _editMatchId = null;
+let _currentMatchData = null;
+let _pendingAddedPlayers = [];
+
+async function openEdit(matchid) {
+  _editMatchId = matchid;
+  document.getElementById('edit-modal-title').textContent = `Edit Match #${matchid}`;
+  document.getElementById('edit-modal-body').innerHTML = '<div style="padding:40px;text-align:center;color:var(--muted2)">Loading...</div>';
+  document.getElementById('edit-modal-overlay').classList.add('open');
+
+  // Fetch match data + existing edits in parallel
+  const [matchData, editsData] = await Promise.all([
+    fetch(`/api/match/${matchid}`).then(r=>r.json()).catch(()=>({})),
+    fetch(`/api/match/${matchid}/edits`).then(r=>r.json()).catch(()=>({})),
+  ]);
+  _currentMatchData = matchData;
+  renderEditForm(matchData, editsData.edits || {});
+}
+
+function closeEdit() {
+  document.getElementById('edit-modal-overlay').classList.remove('open');
+  _editMatchId = null;
+  _currentMatchData = null;
+  _pendingAddedPlayers = [];
+}
+document.getElementById('edit-modal-overlay').addEventListener('click', e => {
+  if (e.target.id === 'edit-modal-overlay') closeEdit();
+});
+
+function renderEditForm(d, existingEdits) {
+  const meta    = d.meta    || {};
+  const players = d.players || [];
+  const maps    = d.maps    || [];
+  const missing = d.missing_players || [];
+
+  const ev = (path, fallback) => {
+    const parts = path.split('.');
+    let obj = existingEdits;
+    for (const p of parts) obj = (obj||{})[p];
+    return obj !== undefined ? obj : (fallback ?? '');
+  };
+
+  const t1name  = ev('team1.name',  meta.team1_name);
+  const t2name  = ev('team2.name',  meta.team2_name);
+  const t1score = ev('team1.score', meta.team1_score);
+  const t2score = ev('team2.score', meta.team2_score);
+  const mapname = ev('map',         maps[0]?.mapname || '');
+  const winner  = ev('winner',      meta.winner || '');
+
+  const alreadyAdded = existingEdits.added_players || [];
+  const alreadyAddedSids = new Set(alreadyAdded.map(p => String(p.steamid64||'')));
+  _pendingAddedPlayers = [...alreadyAdded];
+
+  const mkRow = (p, isAdded=false) => {
+    const sid = String(p.steamid64||p.steam_id||'');
+    const pe  = (existingEdits.players||{})[sid] || {};
+    const gv  = (f, fb) => pe[f] !== undefined ? pe[f] : (p[f]??fb??'');
+    return `<div class="edit-player-row${isAdded?' is-added':''}" data-sid="${esc(sid)}" data-team="${esc(p.team||'')}" data-is-added="${isAdded}">
+      <div class="edit-player-name-cell"><input type="text" value="${esc(String(gv('name',p.name)))}" data-field="name" placeholder="Name" style="width:100%;text-align:left"></div>
+      <input type="number" value="${esc(String(gv('kills',p.kills)??''))}" data-field="kills" min="0" placeholder="K">
+      <input type="number" value="${esc(String(gv('deaths',p.deaths)??''))}" data-field="deaths" min="0" placeholder="D">
+      <input type="number" value="${esc(String(gv('assists',p.assists)??''))}" data-field="assists" min="0" placeholder="A">
+      <input type="number" value="${esc(String(gv('damage',p.damage)??''))}" data-field="damage" min="0" placeholder="DMG">
+      <input type="number" value="${esc(String(gv('rating',p.rating)??''))}" data-field="rating" step="0.01" placeholder="Rtg">
+      <input type="number" value="${esc(String(gv('kast',p.kast)??''))}" data-field="kast" step="0.1" placeholder="KAST">
+      ${isAdded ? `<button class="remove-player-btn" onclick="_removeRow('${sid}',this)" type="button">✕</button>` : '<div></div>'}
+    </div>`;
+  };
+
+  const mkSection = (teamPlayers, addedForTeam, label, color) => {
+    const rows = [...teamPlayers.map(p=>mkRow(p,false)), ...addedForTeam.map(p=>mkRow(p,true))].join('');
+    if (!rows) return '';
+    return `<div class="edit-section">
+      <div class="edit-section-title" style="color:var(${color})">${label}</div>
+      <div class="edit-player-hdr"><div>Player</div><div>K</div><div>D</div><div>A</div><div>DMG</div><div>Rtg</div><div>KAST</div><div></div></div>
+      <div id="rows-${label.replace(/\s+/g,'-')}">${rows}</div>
+    </div>`;
+  };
+
+  const t1p = players.filter(p=>String(p.team||'').toLowerCase()==='team1');
+  const t2p = players.filter(p=>String(p.team||'').toLowerCase()==='team2');
+  const a1  = alreadyAdded.filter(p=>String(p.team||'').toLowerCase()==='team1');
+  const a2  = alreadyAdded.filter(p=>String(p.team||'').toLowerCase()==='team2');
+
+  const stillMissing = missing.filter(mp => !alreadyAddedSids.has(String(mp.steamid64||'')));
+  const missingHtml = stillMissing.length ? `<div class="edit-section">
+    <div class="edit-section-title" style="display:flex;align-items:center;gap:8px">
+      Missing Players <span class="missing-badge">${stillMissing.length}</span>
+    </div>
+    <div style="font-size:11px;color:var(--muted2);margin-bottom:10px">Found in MatchZy but not in fshost — click Add to include.</div>
+    ${stillMissing.map(mp => {
+      const sid = String(mp.steamid64||'');
+      return `<div class="missing-player-row" id="mpr-${esc(sid)}">
+        <div style="flex:1"><div class="missing-player-name">${esc(mp.name||'?')}</div>
+        <div class="missing-player-stats">${mp.kills}K/${mp.deaths}D/${mp.assists}A · ${mp.damage}DMG</div></div>
+        <select class="missing-player-team-select" id="mpt-${esc(sid)}">
+          <option value="team1">${esc(t1name)}</option>
+          <option value="team2">${esc(t2name)}</option>
+        </select>
+        <button class="add-player-btn" onclick="_addMissing(${JSON.stringify(mp).replace(/"/g,'&quot;')},'${esc(sid)}')">+ Add</button>
+      </div>`;
+    }).join('')}
+  </div>` : '';
+
+  document.getElementById('edit-modal-body').innerHTML = `
+    <div class="edit-section">
+      <div class="edit-section-title">Match Info</div>
+      <div class="edit-grid">
+        <div class="edit-field"><label>Team 1 Name</label><input class="input" id="ef-t1name" value="${esc(String(t1name))}"></div>
+        <div class="edit-field"><label>Team 2 Name</label><input class="input" id="ef-t2name" value="${esc(String(t2name))}"></div>
+        <div class="edit-field"><label>Team 1 Score</label><input class="input" type="number" id="ef-t1score" value="${esc(String(t1score??''))}" min="0"></div>
+        <div class="edit-field"><label>Team 2 Score</label><input class="input" type="number" id="ef-t2score" value="${esc(String(t2score??''))}" min="0"></div>
+        <div class="edit-field"><label>Map</label><input class="input" id="ef-map" value="${esc(String(mapname))}"></div>
+        <div class="edit-field"><label>Winner</label><input class="input" id="ef-winner" value="${esc(String(winner))}"></div>
+      </div>
+    </div>
+    ${mkSection(t1p, a1, t1name+' Players', '--ct')}
+    ${mkSection(t2p, a2, t2name+' Players', '--t')}
+    ${missingHtml}
+    <div class="edit-section">
+      <div class="manual-add-row">
+        <input class="input" id="manual-name" placeholder="Add player manually...">
+        <select class="missing-player-team-select" id="manual-team">
+          <option value="team1">${esc(String(t1name))}</option>
+          <option value="team2">${esc(String(t2name))}</option>
+        </select>
+        <button class="manual-add-btn" onclick="_addManual()">+ Add Row</button>
+      </div>
+    </div>`;
+}
+
+function _addMissing(mp, sid) {
+  const teamSel = document.getElementById(`mpt-${sid}`);
+  const team = teamSel ? teamSel.value : (mp.team||'team1');
+  _insertRow({...mp, team, steamid64: sid, source:'added'});
+  const mpr = document.getElementById(`mpr-${sid}`);
+  if (mpr) mpr.style.display = 'none';
+}
+
+function _addManual() {
+  const nameEl = document.getElementById('manual-name');
+  const teamEl = document.getElementById('manual-team');
+  const name = nameEl?.value?.trim();
+  if (!name) { nameEl?.focus(); return; }
+  const sid = 'manual_'+Date.now();
+  _insertRow({steamid64:sid, name, team:teamEl?.value||'team1', kills:0, deaths:0, assists:0, damage:0, source:'added'});
+  if (nameEl) nameEl.value = '';
+}
+
+function _insertRow(p) {
+  const sid   = String(p.steamid64||'');
+  const team  = String(p.team||'team1').toLowerCase();
+  const meta  = (_currentMatchData||{}).meta||{};
+  const t1n   = document.getElementById('ef-t1name')?.value || meta.team1_name || 'Team 1';
+  const t2n   = document.getElementById('ef-t2name')?.value || meta.team2_name || 'Team 2';
+  const label = team==='team1' ? t1n+' Players' : t2n+' Players';
+  const rowsId = 'rows-'+label.replace(/\s+/g,'-');
+  let container = document.getElementById(rowsId);
+  if (!container) {
+    const color = team==='team1' ? '--ct' : '--t';
+    const body  = document.getElementById('edit-modal-body');
+    const sec   = document.createElement('div');
+    sec.className = 'edit-section';
+    sec.innerHTML = `<div class="edit-section-title" style="color:var(${color})">${label}</div>
+      <div class="edit-player-hdr"><div>Player</div><div>K</div><div>D</div><div>A</div><div>DMG</div><div>Rtg</div><div>KAST</div><div></div></div>
+      <div id="${rowsId}"></div>`;
+    body.insertBefore(sec, body.lastElementChild);
+    container = document.getElementById(rowsId);
+  }
+  const row = document.createElement('div');
+  row.className='edit-player-row is-added';
+  row.dataset.sid=sid; row.dataset.team=team; row.dataset.isAdded='true';
+  row.innerHTML=`<div class="edit-player-name-cell"><input type="text" value="${esc(String(p.name||''))}" data-field="name" style="width:100%;text-align:left"></div>
+    <input type="number" value="${p.kills||0}" data-field="kills" min="0">
+    <input type="number" value="${p.deaths||0}" data-field="deaths" min="0">
+    <input type="number" value="${p.assists||0}" data-field="assists" min="0">
+    <input type="number" value="${p.damage||0}" data-field="damage" min="0">
+    <input type="number" value="" data-field="rating" step="0.01">
+    <input type="number" value="" data-field="kast" step="0.1">
+    <button class="remove-player-btn" onclick="_removeRow('${sid}',this)" type="button">✕</button>`;
+  container.appendChild(row);
+  _pendingAddedPlayers = _pendingAddedPlayers.filter(ap=>String(ap.steamid64)!==sid);
+  _pendingAddedPlayers.push({...p});
+}
+
+function _removeRow(sid, btn) {
+  btn.closest('.edit-player-row')?.remove();
+  const mpr = document.getElementById(`mpr-${sid}`);
+  if (mpr) mpr.style.display='';
+  _pendingAddedPlayers = _pendingAddedPlayers.filter(ap=>String(ap.steamid64)!==sid);
+}
+
+async function saveEdits() {
+  const btn = document.getElementById('edit-save-btn');
+  const statusEl = document.getElementById('edit-status');
+  btn.disabled = true;
+  statusEl.textContent = 'Saving…'; statusEl.className = 'edit-status';
+
+  const edits = {
+    team1:  {name: document.getElementById('ef-t1name')?.value, score: Number(document.getElementById('ef-t1score')?.value||0)},
+    team2:  {name: document.getElementById('ef-t2name')?.value, score: Number(document.getElementById('ef-t2score')?.value||0)},
+    map:    document.getElementById('ef-map')?.value,
+    winner: document.getElementById('ef-winner')?.value,
+    players: {}, added_players: [],
+  };
+
+  document.querySelectorAll('#edit-modal-body .edit-player-row').forEach(row => {
+    const sid = row.dataset.sid;
+    const isAdded = row.dataset.isAdded === 'true';
+    if (!sid) return;
+    const pEdit = {};
+    row.querySelectorAll('input[data-field]').forEach(inp => {
+      const val = inp.type==='number' ? (inp.value!==''?Number(inp.value):null) : inp.value;
+      if (val !== null && val !== '') pEdit[inp.dataset.field] = val;
+    });
+    if (isAdded) {
+      const base = _pendingAddedPlayers.find(ap=>String(ap.steamid64)===sid)||{};
+      edits.added_players.push({...base, ...pEdit, steamid64:sid, team:row.dataset.team, source:'added'});
+    } else {
+      if (Object.keys(pEdit).length) edits.players[sid] = pEdit;
+    }
+  });
+
+  try {
+    const r = await fetch(`/api/match/${_editMatchId}/edit`, {
+      method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify({edits})
+    }).then(r=>r.json());
+    if (r.ok) {
+      statusEl.textContent='✓ Saved!'; statusEl.className='edit-status ok';
+      btn.disabled=false;
+      _matches = _matches.map(m => m.matchid==_editMatchId ? {...m, edited_at: new Date().toISOString()} : m);
+      renderMatches(_matches);
+      setTimeout(closeEdit, 1000);
+    } else throw new Error(r.error||'Save failed');
+  } catch(e) {
+    statusEl.textContent='✕ '+e.message; statusEl.className='edit-status err'; btn.disabled=false;
+  }
+}
+
+async function revertCurrentEdit() {
+  if (!confirm('Revert all edits to original data?')) return;
+  const statusEl = document.getElementById('edit-status');
+  statusEl.textContent='Reverting…'; statusEl.className='edit-status';
+  const r = await fetch(`/api/match/${_editMatchId}/edit`,{method:'DELETE'}).then(r=>r.json()).catch(()=>({error:'network'}));
+  if (r.ok) {
+    statusEl.textContent='✓ Reverted!'; statusEl.className='edit-status ok';
+    _matches = _matches.map(m => m.matchid==_editMatchId ? {...m, edited_at:null} : m);
+    renderMatches(_matches);
+    setTimeout(closeEdit, 800);
+  } else { statusEl.textContent='✕ '+(r.error||'Failed'); statusEl.className='edit-status err'; }
+}
 
 // ── Boot ───────────────────────────────────────────────────────────────────
 init();
