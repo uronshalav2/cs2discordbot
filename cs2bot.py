@@ -210,14 +210,18 @@ async def handle_api_player(request):
                         COUNT(DISTINCT CONCAT(matchid,mapnumber)),0)/30,1)      AS adr
                 FROM {MATCHZY_TABLES['players']}
                 WHERE steamid64 IN (%s, %s) AND steamid64 != '0'
-                GROUP BY steamid64
             """, (sid64, sid32))
             career = c.fetchone()
+            # Ensure we always expose the SteamID64 form (larger value)
+            if career:
+                career = dict(career)
+                career['steamid64'] = sid64
 
         if career:
             career = dict(career)
             name_map = _edited_name_map()
-            sid = str(career.get('steamid64') or '')
+            # Always use the SteamID64 form for subsequent queries
+            sid = sid64 if resolved_sid else str(career.get('steamid64') or '')
             if sid in name_map:
                 career['name'] = name_map[sid]
             c.execute(f"""
@@ -251,8 +255,8 @@ async def handle_api_player(request):
             """, sid_variants(sid))
             recent = _patch_recent_matches(c.fetchall())
         c.close(); conn.close()
-    except Exception:
-        pass
+    except Exception as _e:
+        print(f"[api/player] MatchZy query error for '{name}': {_e}")
 
     # ── Fallback to fshost ────────────────────────────────────────────────────
     if not career:
@@ -1336,9 +1340,12 @@ async def handle_api_h2h(request):
                         COUNT(DISTINCT CONCAT(matchid,'_',mapnumber)),0)/30,1)  AS adr
                 FROM {MATCHZY_TABLES['players']}
                 WHERE steamid64 IN (%s, %s) AND steamid64 != '0'
-                GROUP BY steamid64
             """, sid_variants(psid))
-            return c.fetchone()
+            row = c.fetchone()
+            if row:
+                row = dict(row)
+                row['steamid64'] = to_steamid64(str(psid))
+            return row
 
         r1 = fetch_player(p1)
         r2 = fetch_player(p2)
