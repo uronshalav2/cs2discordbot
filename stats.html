@@ -1586,7 +1586,25 @@ async function loadPlayer(name) {
 
   const countryFlag = '';
 
-  const statsGrid = [
+  // Collect old names (aliases) for this player from team cache
+  const playerAliases = [];
+  if (window._teamCache) {
+    for (const lu of window._teamCache) {
+      if (lu.playerAliases && lu.playerAliases[name]) {
+        [...lu.playerAliases[name]].filter(a => a !== name).forEach(a => {
+          if (!playerAliases.includes(a)) playerAliases.push(a);
+        });
+      }
+    }
+  }
+  const aliasSection = playerAliases.length
+    ? `<div style="margin-top:7px;display:flex;align-items:center;flex-wrap:wrap;gap:5px">
+        <span style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted2)">Previously known as</span>
+        ${playerAliases.map(a => `<span style="padding:1px 8px;border-radius:2px;background:var(--surface2);border:1px solid var(--border2);color:var(--text);font-family:'Rajdhani',sans-serif;font-size:12px;font-weight:600">${esc(a)}</span>`).join('')}
+      </div>`
+    : '';
+
+
     {label:'Kills',     raw: c.kills,         dec:0},
     {label:'Deaths',    raw: c.deaths,        dec:0},
     {label:'Assists',   raw: c.assists,       dec:0},
@@ -1648,6 +1666,7 @@ async function loadPlayer(name) {
         <div class="p-name">${countryFlag}${esc(steam.name || name)}</div>
         <div class="p-sub">${steam.real_name ? esc(steam.real_name)+' • ' : ''}${c.matches??0} matches played</div>
         <div style="margin-top:6px">${profileLink}</div>
+        ${aliasSection}
       </div>
     </div>
     <div class="card" style="margin-bottom:12px">
@@ -2811,17 +2830,35 @@ async function loadTeam() {
       const key = teamName.toLowerCase();
       if (!lineupMap[key]) {
         lineupMap[key] = {teamName, aliases: new Set([teamName]), playerSet: new Set(),
-          playerSids: {}, matchRosters:[], names:[], wins:0, losses:0, draws:0,
+          playerSids: {}, sidToName: {}, playerAliases: {},
+          matchRosters:[], names:[], wins:0, losses:0, draws:0,
           maps:{}, roundsFor:0, roundsAgainst:0};
       }
       const lu = lineupMap[key];
       lu.teamName = teamName;
       lu.aliases.add(teamName);
       roster.forEach(p => {
-        if (p.name) {
-          lu.playerSet.add(p.name);
-          // Map name → steamid64 so we can load Steam avatars
-          if (p.steamid64 && p.steamid64 !== '0') lu.playerSids[p.name] = p.steamid64;
+        if (!p.name) return;
+        const sid = (p.steamid64 && p.steamid64 !== '0') ? p.steamid64 : null;
+        if (sid) {
+          if (!lu.sidToName[sid]) {
+            // First time we see this SID — register canonical name
+            lu.sidToName[sid] = p.name;
+            lu.playerSet.add(p.name);
+            lu.playerSids[p.name] = sid;
+            lu.playerAliases[p.name] = lu.playerAliases[p.name] || new Set([p.name]);
+          } else {
+            // Same SID, different name = renamed player — track as alias
+            const canonName = lu.sidToName[sid];
+            lu.playerAliases[canonName] = lu.playerAliases[canonName] || new Set([canonName]);
+            if (p.name !== canonName) lu.playerAliases[canonName].add(p.name);
+          }
+        } else {
+          // No SID: fall back to name-based deduplication
+          if (!lu.playerSet.has(p.name)) {
+            lu.playerSet.add(p.name);
+            lu.playerAliases[p.name] = lu.playerAliases[p.name] || new Set([p.name]);
+          }
         }
       });
       // Roster signature is SCOPED TO THIS MATCH (matchKey prefix).
@@ -2885,6 +2922,11 @@ async function loadTeam() {
         secondary.aliases.forEach(a => primary.aliases.add(a));
         secondary.playerSet.forEach(p => primary.playerSet.add(p));
         Object.assign(primary.playerSids, secondary.playerSids || {});
+        Object.assign(primary.sidToName, secondary.sidToName || {});
+        Object.entries(secondary.playerAliases || {}).forEach(([n, aliases]) => {
+          primary.playerAliases[n] = primary.playerAliases[n] || new Set([n]);
+          aliases.forEach(a => primary.playerAliases[n].add(a));
+        });
         Object.entries(secondary.maps).forEach(([map, {w,l}]) => {
           if (!primary.maps[map]) primary.maps[map] = {w:0, l:0};
           primary.maps[map].w += w;
@@ -2962,9 +3004,17 @@ function renderTeam(lineups) {
       const avatarHtml = cached
         ? `<img class="lineup-avatar" src="${cached}" alt="">`
         : `<div class="lineup-avatar-placeholder"${avatarId ? ` id="${avatarId}"` : ''}>${initials(n)}</div>`;
+      // Old names (aliases excluding current canonical name)
+      const allAliases = lu.playerAliases ? [...(lu.playerAliases[n] || [])].filter(a => a !== n) : [];
+      const aliasBadge = allAliases.length
+        ? `<span style="font-size:10px;color:var(--muted2);font-family:'Rajdhani',sans-serif;letter-spacing:.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="Also known as: ${allAliases.map(a=>esc(a)).join(', ')}">aka ${allAliases.map(a=>esc(a)).join(', ')}</span>`
+        : '';
       return `<div class="lineup-player" onclick="event.stopPropagation();go('player',{name:'${esc(n)}'},'team')">
         ${avatarHtml}
-        <span style="font-family:'Rajdhani',sans-serif;font-weight:600;font-size:13px;color:var(--white)">${esc(n)}</span>
+        <div style="display:flex;flex-direction:column;min-width:0;overflow:hidden">
+          <span style="font-family:'Rajdhani',sans-serif;font-weight:600;font-size:13px;color:var(--white)">${esc(n)}</span>
+          ${aliasBadge}
+        </div>
       </div>`;
     }).join('');
 
