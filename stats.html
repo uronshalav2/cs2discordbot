@@ -1513,11 +1513,7 @@ async function loadMatch(id) {
          Demo${demo.size?' ('+demo.size+')':''}</a></div>`
     : '';
 
-  // Auto-save raw fshost JSON to DB (fire-and-forget, best-effort)
-  fetch('/api/match/'+id+'/save', {
-    method:'POST', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({raw_json: d._raw || d})
-  }).catch(()=>{});
+  // Data is already in DB via background sync — no auto-save needed.
 
   const isEdited = !!(meta.is_edited);
   const editedBadge = isEdited
