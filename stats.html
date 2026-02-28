@@ -710,28 +710,30 @@ nav{
     Predict
   </div>
 
-  <!-- Admin tab — only visible when logged in as admin -->
-  <div id="sidebar-admin-section" style="display:none">
-    <div class="sidebar-section">Admin</div>
-    <a href="/admin" class="sidebar-item" style="text-decoration:none" id="sidebar-admin-link">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-      Dashboard
+  <!-- My Profile — only visible when logged in via Steam -->
+  <div id="sidebar-my-profile-section" style="display:none">
+    <div class="sidebar-section">My Account</div>
+    <div class="sidebar-item" id="sidebar-my-profile-btn" onclick="_goMyProfile()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
+      My Profile
+    </div>
+  </div>
+
+  <!-- Steam login button (shown when not logged in) -->
+  <div id="sidebar-steam-login" style="margin-top:8px">
+    <a href="/auth/steam/player" class="sidebar-steam-btn">
+      <svg width="14" height="14" viewBox="0 0 233 233" fill="currentColor"><path d="M116.5 0C52.1 0 0 52.1 0 116.5c0 55.4 38.7 101.8 90.6 113.5l30.9-72.7c-2.4.2-4.8.3-7.3.3-28.1 0-50.9-22.8-50.9-50.9s22.8-50.9 50.9-50.9 50.9 22.8 50.9 50.9c0 24.6-17.5 45.2-40.8 49.9l-29.8 70.1c1.9.1 3.7.2 5.6.2 64.4 0 116.5-52.2 116.5-116.5S180.9 0 116.5 0zm-2.6 150.8c-18.9 0-34.2-15.3-34.2-34.2s15.3-34.2 34.2-34.2 34.2 15.3 34.2 34.2-15.3 34.2-34.2 34.2z"/></svg>
+      Sign in with Steam
     </a>
   </div>
 
-  <!-- Steam login / admin user -->
-  <div id="sidebar-steam-login" style="margin-top:8px">
-    <a href="/auth/steam" class="sidebar-steam-btn">
-      <svg width="14" height="14" viewBox="0 0 233 233" fill="currentColor"><path d="M116.5 0C52.1 0 0 52.1 0 116.5c0 55.4 38.7 101.8 90.6 113.5l30.9-72.7c-2.4.2-4.8.3-7.3.3-28.1 0-50.9-22.8-50.9-50.9s22.8-50.9 50.9-50.9 50.9 22.8 50.9 50.9c0 24.6-17.5 45.2-40.8 49.9l-29.8 70.1c1.9.1 3.7.2 5.6.2 64.4 0 116.5-52.2 116.5-116.5S180.9 0 116.5 0zm-2.6 150.8c-18.9 0-34.2-15.3-34.2-34.2s15.3-34.2 34.2-34.2 34.2 15.3 34.2 34.2-15.3 34.2-34.2 34.2z"/></svg>
-      Admin Login
-    </a>
-  </div>
-  <div id="sidebar-admin-user" style="display:none;margin-top:8px">
+  <!-- Logged-in player pill (shown when signed in) -->
+  <div id="sidebar-player-user" style="display:none;margin-top:8px">
     <div class="sidebar-admin-user">
-      <img id="sidebar-admin-avatar" class="sidebar-admin-avatar" src="" alt="">
-      <span id="sidebar-admin-name" class="sidebar-admin-name">Admin</span>
-      <form action="/auth/steam/logout" method="post" style="flex-shrink:0">
-        <button class="sidebar-admin-out" type="submit" title="Log out">✕</button>
+      <img id="sidebar-player-avatar" class="sidebar-admin-avatar" src="" alt="">
+      <span id="sidebar-player-name" class="sidebar-admin-name"></span>
+      <form action="/auth/steam/player/logout" method="post" style="flex-shrink:0">
+        <button class="sidebar-admin-out" type="submit" title="Sign out">✕</button>
       </form>
     </div>
   </div>
@@ -792,6 +794,26 @@ nav{
     <div class="mobile-section">Files</div>
     <div class="mobile-tab" data-p="demos" onclick="_navStack=[];go('demos');closeMenu()">Demos</div>
 
+    <!-- My Profile (shown when signed in via Steam) -->
+    <div id="mobile-my-profile-section" style="display:none">
+      <div class="mobile-section">My Account</div>
+      <div class="mobile-tab" id="mobile-my-profile-btn" onclick="_goMyProfile();closeMenu()">My Profile</div>
+      <div id="mobile-player-info" style="display:none;padding:8px 24px 12px;display:flex;align-items:center;gap:10px">
+        <img id="mobile-player-avatar" style="width:28px;height:28px;border-radius:50%;object-fit:cover;border:1px solid var(--border2);flex-shrink:0" src="" alt="">
+        <span id="mobile-player-name" style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:13px;color:var(--white);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></span>
+        <form action="/auth/steam/player/logout" method="post">
+          <button style="background:transparent;border:none;color:var(--muted2);font-size:10px;cursor:pointer;font-family:'Rajdhani',sans-serif;letter-spacing:1px;text-transform:uppercase" type="submit">Sign out</button>
+        </form>
+      </div>
+    </div>
+
+    <!-- Steam login (shown when not signed in) -->
+    <div id="mobile-steam-login" style="padding:12px 24px">
+      <a href="/auth/steam/player" style="display:inline-flex;align-items:center;gap:8px;padding:8px 16px;border-radius:4px;background:#1b2838;border:1px solid #2a475e;color:#8ba3b8;font-family:'Rajdhani',sans-serif;font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;text-decoration:none">
+        <svg width="14" height="14" viewBox="0 0 233 233" fill="currentColor"><path d="M116.5 0C52.1 0 0 52.1 0 116.5c0 55.4 38.7 101.8 90.6 113.5l30.9-72.7c-2.4.2-4.8.3-7.3.3-28.1 0-50.9-22.8-50.9-50.9s22.8-50.9 50.9-50.9 50.9 22.8 50.9 50.9c0 24.6-17.5 45.2-40.8 49.9l-29.8 70.1c1.9.1 3.7.2 5.6.2 64.4 0 116.5-52.2 116.5-116.5S180.9 0 116.5 0zm-2.6 150.8c-18.9 0-34.2-15.3-34.2-34.2s15.3-34.2 34.2-34.2 34.2 15.3 34.2 34.2-15.3 34.2-34.2 34.2z"/></svg>
+        Sign in with Steam
+      </a>
+    </div>
 
   </div>
 </div>
@@ -870,32 +892,63 @@ nav{
 </div>
 
 <script>
-// ── Admin session check ──────────────────────────────────────────────────────
-(async function checkAdminSession() {
+// ── Player Steam session check ────────────────────────────────────────────────
+let _playerSteamId = null;  // steamid64 of logged-in player (if any)
+
+function _goMyProfile() {
+  if (_playerSteamId) {
+    _navStack = [];
+    go('player', { sid: _playerSteamId });
+  }
+}
+
+(async function checkSteamSession() {
+  // Check player session first (any Steam user)
+  try {
+    const r = await fetch('/api/auth/steam/me');
+    if (r.ok) {
+      const d = await r.json();
+      if (d.ok && d.steamid) {
+        _playerSteamId = d.steamid;
+        // Show "My Profile" in sidebar
+        const profileSection = document.getElementById('sidebar-my-profile-section');
+        if (profileSection) profileSection.style.display = '';
+        // Hide login button, show user pill
+        const loginEl  = document.getElementById('sidebar-steam-login');
+        const playerEl = document.getElementById('sidebar-player-user');
+        if (loginEl)  loginEl.style.display = 'none';
+        if (playerEl) playerEl.style.display = '';
+        // Mobile nav
+        const mobileSection = document.getElementById('mobile-my-profile-section');
+        const mobileLogin   = document.getElementById('mobile-steam-login');
+        const mobileInfo    = document.getElementById('mobile-player-info');
+        if (mobileSection) mobileSection.style.display = '';
+        if (mobileLogin)   mobileLogin.style.display = 'none';
+        if (mobileInfo)    mobileInfo.style.display = 'flex';
+        // Load Steam avatar + name
+        try {
+          const s = await fetch('/api/steam/' + d.steamid).then(r => r.json());
+          const nameEl    = document.getElementById('sidebar-player-name');
+          const avatarEl  = document.getElementById('sidebar-player-avatar');
+          const mNameEl   = document.getElementById('mobile-player-name');
+          const mAvatarEl = document.getElementById('mobile-player-avatar');
+          if (nameEl   && s.name)   nameEl.textContent   = s.name;
+          if (avatarEl && s.avatar) avatarEl.src          = s.avatar;
+          if (mNameEl  && s.name)   mNameEl.textContent  = s.name;
+          if (mAvatarEl && s.avatar) mAvatarEl.src        = s.avatar;
+        } catch(_) {}
+      }
+    }
+  } catch(_) {}
+
+  // Also check admin session (keeps edit buttons + admin access working)
   try {
     const r = await fetch('/api/admin/me');
     if (r.ok) {
       const d = await r.json();
       if (d.ok) {
         _isAdmin = true;
-        // Show edit buttons if any are hidden
         document.querySelectorAll('.edit-match-btn').forEach(b => b.style.display = '');
-        // Show admin tab in sidebar
-        const adminSection = document.getElementById('sidebar-admin-section');
-        if (adminSection) adminSection.style.display = '';
-        // Swap login button → user pill
-        const loginEl = document.getElementById('sidebar-steam-login');
-        const userEl  = document.getElementById('sidebar-admin-user');
-        if (loginEl) loginEl.style.display = 'none';
-        if (userEl)  userEl.style.display = '';
-        // Load Steam profile for avatar + name
-        try {
-          const s = await fetch('/api/steam/' + d.steamid).then(r=>r.json());
-          const nameEl   = document.getElementById('sidebar-admin-name');
-          const avatarEl = document.getElementById('sidebar-admin-avatar');
-          if (nameEl && s.name)     nameEl.textContent = s.name;
-          if (avatarEl && s.avatar) avatarEl.src = s.avatar;
-        } catch(_) {}
       }
     }
   } catch(_) {}
