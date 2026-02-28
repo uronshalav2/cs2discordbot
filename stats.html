@@ -1513,7 +1513,11 @@ async function loadMatch(id) {
          Demo${demo.size?' ('+demo.size+')':''}</a></div>`
     : '';
 
-  // Data is already in DB via background sync — no auto-save needed.
+  // Auto-save raw fshost JSON to DB (fire-and-forget, best-effort)
+  fetch('/api/match/'+id+'/save', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({raw_json: d._raw || d})
+  }).catch(()=>{});
 
   const isEdited = !!(meta.is_edited);
   const editedBadge = isEdited
@@ -3095,7 +3099,7 @@ function renderTeam(lineups) {
         ${bg}
         <div style="position:absolute;inset:0;background:linear-gradient(to right,rgba(4,5,7,.82) 0%,rgba(4,5,7,.72) 40%,rgba(4,5,7,.45) 70%,rgba(4,5,7,.2) 100%);z-index:1"></div>
         <div style="position:absolute;left:0;top:0;bottom:0;width:2px;background:${accentColor};z-index:2"></div>
-        <div class="map-photo-content" style="z-index:2">
+        <div class="map-photo-content" style="z-index:3">
           <span class="map-photo-label">${label}</span>
           <div class="map-photo-bar-track">
             <div class="map-photo-bar-fill" style="width:${pct.toFixed(0)}%;background:${barColor}"></div>
