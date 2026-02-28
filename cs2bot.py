@@ -1857,6 +1857,8 @@ async def handle_api_player_mapstats(request):
 ADMIN_HTML_PATH = pathlib.Path(__file__).parent / "admin.html"
 # In-memory session store: {token: steamid64}
 _ADMIN_SESSIONS: dict = {}
+# Player session store (any Steam user, not just admin): {token: steamid64}
+_PLAYER_SESSIONS: dict = {}
 
 def _get_steam_openid_url(return_to: str) -> str:
     """Build Steam OpenID redirect URL."""
@@ -1929,6 +1931,53 @@ async def handle_admin_logout(request):
     response = web.HTTPFound(location="/admin")
     response.del_cookie("rg_admin")
     return response
+
+# ── Player Steam login (any Steam user) ──────────────────────────────────────
+
+async def handle_player_steam_login(request):
+    """GET /auth/steam/player — redirect to Steam OpenID (open to all players)."""
+    scheme = request.headers.get("X-Forwarded-Proto", "https")
+    host   = request.headers.get("X-Forwarded-Host", request.host)
+    return_to = f"{scheme}://{host}/auth/steam/player/callback"
+    raise web.HTTPFound(location=_get_steam_openid_url(return_to))
+
+async def handle_player_steam_callback(request):
+    """GET /auth/steam/player/callback — verify Steam OpenID, set player session cookie."""
+    import secrets
+    scheme = request.headers.get("X-Forwarded-Proto", "https")
+    host   = request.headers.get("X-Forwarded-Host", request.host)
+    return_to = f"{scheme}://{host}/auth/steam/player/callback"
+    params = dict(request.rel_url.query)
+    steamid = await asyncio.get_running_loop().run_in_executor(
+        None, _verify_steam_openid, params, return_to
+    )
+    if not steamid:
+        raise web.HTTPFound(location="/?error=auth_failed")
+    token = secrets.token_hex(32)
+    _PLAYER_SESSIONS[token] = steamid
+    response = web.HTTPFound(location="/")
+    response.set_cookie("rg_player", token, max_age=86400*30, httponly=True, samesite="Lax")
+    return response
+
+async def handle_player_steam_logout(request):
+    """POST /auth/steam/player/logout"""
+    token = request.cookies.get("rg_player", "")
+    _PLAYER_SESSIONS.pop(token, None)
+    response = web.HTTPFound(location="/")
+    response.del_cookie("rg_player")
+    return response
+
+def _get_player_steamid(request) -> str | None:
+    """Return steamid64 if request has valid player session, else None."""
+    token = request.cookies.get("rg_player", "")
+    return _PLAYER_SESSIONS.get(token)
+
+async def handle_player_api_me(request):
+    """GET /api/auth/steam/me — return player session info (any logged-in Steam user)."""
+    sid = _get_player_steamid(request)
+    if not sid:
+        return web.Response(text=json.dumps({"ok": False}), content_type="application/json", status=401)
+    return _json_response({"ok": True, "steamid": sid})
 
 def _get_admin_steamid(request) -> str | None:
     """Return steamid64 if request has valid admin session, else None."""
@@ -2282,6 +2331,11 @@ async def start_http_server():
     app.router.add_post('/api/admin/players/merge-by-steamid', handle_admin_api_merge_by_steamid)
     app.router.add_get('/api/admin/server',             handle_admin_api_server)
     app.router.add_post('/api/admin/rcon',              handle_admin_api_rcon)
+    # ── Player Steam login (open to any Steam user) ───────────────────────────
+    app.router.add_get('/auth/steam/player',            handle_player_steam_login)
+    app.router.add_get('/auth/steam/player/callback',   handle_player_steam_callback)
+    app.router.add_post('/auth/steam/player/logout',    handle_player_steam_logout)
+    app.router.add_get('/api/auth/steam/me',            handle_player_api_me)
     app.router.add_get('/stats',   handle_stats_page)
     app.router.add_get('/',        handle_stats_page)
     app.router.add_get('/health',  handle_health_check)
