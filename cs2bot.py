@@ -208,8 +208,8 @@ async def handle_api_player(request):
                     ROUND(SUM(damage)/NULLIF(
                         COUNT(DISTINCT CONCAT(matchid,mapnumber)),0)/30,1)      AS adr
                 FROM {MATCHZY_TABLES['players']}
-                WHERE steamid64 IN (%s, %s) AND steamid64 != '0'
-            """, (sid64, sid32))
+                WHERE CAST(steamid64 AS UNSIGNED) IN (%s, %s) AND steamid64 != '0'
+            """, (int(sid64), int(sid32)))
             career = c.fetchone()
 
         if career:
@@ -242,10 +242,10 @@ async def handle_api_player(request):
                 FROM {MATCHZY_TABLES['players']} p
                 LEFT JOIN {MATCHZY_TABLES['maps']} m ON p.matchid=m.matchid AND p.mapnumber=m.mapnumber
                 LEFT JOIN {MATCHZY_TABLES['matches']} mm ON p.matchid=mm.matchid
-                WHERE p.steamid64 IN (%s, %s) AND p.steamid64 != '0'
+                WHERE CAST(p.steamid64 AS UNSIGNED) IN (%s, %s) AND p.steamid64 != '0'
                 ORDER BY p.matchid DESC, p.mapnumber DESC
                 LIMIT 20
-            """, sid_variants(sid))
+            """, (int(sid_variants(sid)[0]), int(sid_variants(sid)[1])))
             recent = _patch_recent_matches(c.fetchall())
         c.close(); conn.close()
     except Exception as _e:
@@ -296,8 +296,9 @@ async def handle_api_player_by_sid(request):
                 ROUND(SUM(damage)/NULLIF(
                     COUNT(DISTINCT CONCAT(matchid,mapnumber)),0)/30,1)      AS adr
             FROM {MATCHZY_TABLES['players']}
-            WHERE steamid64 IN (%s, %s) AND steamid64 != '0'
-        """, (sid64, sid32))
+            WHERE CAST(steamid64 AS UNSIGNED) IN (%s, %s)
+              AND steamid64 != '0' AND steamid64 IS NOT NULL
+        """, (int(sid64), int(sid32)))
         career = c.fetchone()
 
         if career:
@@ -333,10 +334,11 @@ async def handle_api_player_by_sid(request):
                 FROM {MATCHZY_TABLES['players']} p
                 LEFT JOIN {MATCHZY_TABLES['maps']} m ON p.matchid=m.matchid AND p.mapnumber=m.mapnumber
                 LEFT JOIN {MATCHZY_TABLES['matches']} mm ON p.matchid=mm.matchid
-                WHERE p.steamid64 IN (%s, %s) AND p.steamid64 != '0'
+                WHERE CAST(p.steamid64 AS UNSIGNED) IN (%s, %s)
+                  AND p.steamid64 != '0'
                 ORDER BY p.matchid DESC, p.mapnumber DESC
                 LIMIT 20
-            """, (sid64, sid32))
+            """, (int(sid64), int(sid32)))
             recent = _patch_recent_matches(c.fetchall())
         c.close(); conn.close()
     except Exception as _e:
@@ -368,11 +370,11 @@ async def handle_api_player_mapstats_by_sid(request):
             FROM {MATCHZY_TABLES['players']} p
             LEFT JOIN {MATCHZY_TABLES['maps']} m  ON p.matchid=m.matchid AND p.mapnumber=m.mapnumber
             LEFT JOIN {MATCHZY_TABLES['matches']} mm ON p.matchid=mm.matchid
-            WHERE p.steamid64 IN (%s, %s) AND p.steamid64 != '0'
+            WHERE CAST(p.steamid64 AS UNSIGNED) IN (%s, %s) AND p.steamid64 != '0'
               AND m.mapname IS NOT NULL AND m.mapname != ''
             GROUP BY m.mapname
             ORDER BY matches DESC
-        """, (sid64, sid32))
+        """, (int(sid64), int(sid32)))
         rows = [dict(r) for r in c.fetchall()]
         c.close(); conn.close()
         return _json_response(rows)
@@ -1487,8 +1489,8 @@ async def handle_api_h2h(request):
                     ROUND(SUM(damage)/NULLIF(
                         COUNT(DISTINCT CONCAT(matchid,'_',mapnumber)),0)/30,1)  AS adr
                 FROM {MATCHZY_TABLES['players']}
-                WHERE steamid64 IN (%s, %s) AND steamid64 != '0'
-            """, sid_variants(psid))
+                WHERE CAST(steamid64 AS UNSIGNED) IN (%s, %s) AND steamid64 != '0'
+            """, (int(sid_variants(psid)[0]), int(sid_variants(psid)[1])))
             row = c.fetchone()
             if row:
                 row = dict(row)
@@ -1779,8 +1781,8 @@ async def handle_api_search(request):
                     SELECT steamid64, COUNT(DISTINCT matchid) AS matches,
                         ROUND(SUM(kills)/NULLIF(SUM(deaths),0),2) AS kd,
                         ROUND(SUM(damage)/NULLIF(COUNT(DISTINCT CONCAT(matchid,'_',mapnumber)),0)/30,1) AS adr
-                    FROM {MATCHZY_TABLES['players']} WHERE steamid64 IN (%s, %s) LIMIT 1
-                """, sid_variants(sid))
+                    FROM {MATCHZY_TABLES['players']} WHERE CAST(steamid64 AS UNSIGNED) IN (%s, %s) LIMIT 1
+                """, (int(sid_variants(sid)[0]), int(sid_variants(sid)[1])))
                 row = c.fetchone()
                 if row:
                     row = dict(row); row['name'] = edited_name; players.append(row)
@@ -1840,11 +1842,11 @@ async def handle_api_player_mapstats(request):
             FROM {MATCHZY_TABLES['players']} p
             LEFT JOIN {MATCHZY_TABLES['maps']} m  ON p.matchid=m.matchid AND p.mapnumber=m.mapnumber
             LEFT JOIN {MATCHZY_TABLES['matches']} mm ON p.matchid=mm.matchid
-            WHERE p.steamid64 IN (%s, %s) AND p.steamid64 != '0'
+            WHERE CAST(p.steamid64 AS UNSIGNED) IN (%s, %s) AND p.steamid64 != '0'
               AND m.mapname IS NOT NULL AND m.mapname != ''
             GROUP BY m.mapname
             ORDER BY matches DESC
-        """, sid_variants(sid))
+        """, (int(sid_variants(sid)[0]), int(sid_variants(sid)[1])))
         rows = [dict(r) for r in c.fetchall()]
         c.close(); conn.close()
         return _json_response(rows)
