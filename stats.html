@@ -1407,7 +1407,7 @@ async function loadMatch(id) {
     <div class="mvp-card">
       ${playerAvatar(mvp, 64)}
       <div class="mvp-info">
-        <div class="mvp-name">${esc(mvp.name)}</div>
+        <div class="mvp-name">${esc(mvp._steam_name||mvp.name)}</div>
         <div class="mvp-stats">
           <div class="mvp-stat"><div class="mvp-val">${mvp.kills??0} / ${mvp.deaths??0} / ${mvp.assists??0}</div><div class="mvp-lbl">K / D / A</div></div>
           <div class="mvp-stat"><div class="mvp-val"><span data-count="${mvp.adr!=null?parseFloat(mvp.adr):0}" data-dec="1">${mvp.adr!=null?parseFloat(mvp.adr).toFixed(1):'—'}</span></div><div class="mvp-lbl">ADR</div></div>
@@ -1695,7 +1695,7 @@ async function loadPlayer(name, sid) {
 
   // Load map stats async after profile renders
   const mapStatsEl = document.getElementById('player-mapstats-section');
-  if (mapStatsEl) loadPlayerMapStats(name, mapStatsEl);
+  if (mapStatsEl) loadPlayerMapStats(name, mapStatsEl, sid);
 }
 
 // ── Map Stats ─────────────────────────────────────────────────────────────────
@@ -2344,7 +2344,7 @@ function renderSpecialists(data, tab) {
           return `<div style="flex:1;max-width:155px;display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer" onclick="go('player',{sid:${escName(p.steamid64)}},'specialists')">
             ${isFirst ? `<div>${crownSvg}</div>` : `<div style="height:20px"></div>`}
             ${av}
-            <div style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:${isFirst?'13px':'11px'};color:#fff;text-align:center;width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:0 4px;margin-top:2px">${esc(p.name)}</div>
+            <div style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:${isFirst?'13px':'11px'};color:#fff;text-align:center;width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:0 4px;margin-top:2px">${esc(p._steam_name||p.name)}</div>
             <div style="font-family:'Rajdhani',sans-serif;font-weight:900;font-size:${isFirst?'30px':'22px'};color:${c.solid};line-height:1">${primaryVal(p)}</div>
             <div style="font-size:9px;color:var(--muted2);letter-spacing:1px;text-transform:uppercase;margin-top:-2px">${primaryLabel}</div>
             <div style="font-size:10px;color:var(--muted2);font-family:'Rajdhani',sans-serif;margin-bottom:8px">${secondaryVal(p)}</div>
@@ -2367,7 +2367,7 @@ function renderSpecialists(data, tab) {
       onmouseover="this.style.background='rgba(var(--orange-rgb),.04)'" onmouseout="this.style.background=''">
       <span style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:13px;color:var(--muted2);width:22px;text-align:center;flex-shrink:0">${rank}</span>
       ${av}
-      <span style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:14px;color:var(--white);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(p.name)}</span>
+      <span style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:14px;color:var(--white);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(p._steam_name||p.name)}</span>
       <div style="text-align:right;flex-shrink:0">
         <div style="font-family:'Rajdhani',sans-serif;font-weight:800;font-size:17px;color:var(--orange)">${primaryVal(p)}</div>
         <div style="font-size:10px;color:var(--muted2)">${secondaryVal(p)}</div>
@@ -2632,8 +2632,8 @@ function predictOpenPicker(teamIdx) {
   const listEl   = document.getElementById('predict-picker-list');
   if (!pickerEl || !listEl) return;
   const [t1, t2] = _predictTeams;
-  const allSelected = new Set([...t1, ...t2].map(p => p.name));
-  const available = (_predictPlayers || []).filter(p => !allSelected.has(p.name));
+  const allSelected = new Set([...t1, ...t2].map(p => p.steamid64||p.name));
+  const available = (_predictPlayers || []).filter(p => !allSelected.has(p.steamid64||p.name));
 
   const rows = available.length ? available.map(p => {
     const globalIdx = _predictPlayers.indexOf(p);
@@ -2670,7 +2670,7 @@ function predictOpenPicker(teamIdx) {
 function predictAdd(teamIdx, playerIdx) {
   const p = _predictPlayers[playerIdx];
   const team = _predictTeams[teamIdx];
-  if (team.length < 5 && !team.some(x=>x.name===p.name)) team.push(p);
+  if (team.length < 5 && !team.some(x=>(x.steamid64||x.name)===(p.steamid64||p.name))) team.push(p);
   document.getElementById('predict-picker').style.display = 'none';
   renderPredict();
 }
@@ -3830,7 +3830,7 @@ async function runSearch(q) {
         <div class="search-row" onclick="closeSearchOverlay();go('player',{sid:${escName(p.steamid64||p.name)}})">
           <div style="width:32px;height:32px;border-radius:50%;background:var(--surface2);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:11px;color:var(--muted2)">${initials(p.name)}</div>
           <div style="flex:1;min-width:0">
-            <div class="search-row-title">${esc(p.name)}</div>
+            <div class="search-row-title">${esc(p._steam_name||p.name)}</div>
             <div class="search-row-sub">${p.matches} matches · ${parseFloat(p.kd??0).toFixed(2)} K/D · ${parseFloat(p.adr??0).toFixed(0)} ADR</div>
           </div>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--muted2)" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
@@ -3994,7 +3994,8 @@ async function runTeamH2H() {
 }
 
 // ── PLAYER MAP STATS (appended to player profile) ─────────────────────────────
-async function loadPlayerMapStats(name, containerEl) {
+async function loadPlayerMapStats(name, containerEl, sid) {
+  sid = sid || '';
   const rows = await fetch(sid ? '/api/player/sid/'+encodeURIComponent(sid)+'/mapstats' : '/api/player/'+encodeURIComponent(name)+'/mapstats').then(r => r.json()).catch(() => []);
   if (!Array.isArray(rows) || !rows.length) { containerEl.style.display = 'none'; return; }
 
