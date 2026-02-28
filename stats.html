@@ -1239,7 +1239,7 @@ function emptyState(type, title, sub) {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const esc = s=>String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
-const escName = s => JSON.stringify(String(s||''));
+const escName = s => "'" + String(s||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'") + "'";
 // Decode unicode escapes like \u0027 that may be stored literally in the DB
 const decodeUnicode = s => String(s||'').replace(/\\u([0-9a-fA-F]{4})/g, (_, h) => String.fromCharCode(parseInt(h, 16)));
 // Normalize player name: decode literal \uXXXX sequences stored in DB
