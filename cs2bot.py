@@ -187,10 +187,8 @@ async def handle_api_player(request):
         # Use sid_variants() so we match both SteamID64 and SteamID32 stored forms.
         if resolved_sid:
             sid64, sid32 = sid_variants(resolved_sid)
-            _sid_norm = "IF(CAST(steamid64 AS UNSIGNED) < 4294967296 AND CAST(steamid64 AS UNSIGNED) > 0, CAST(CAST(steamid64 AS UNSIGNED) + 76561197960265728 AS CHAR), steamid64)"
             c.execute(f"""
                 SELECT
-                    {_sid_norm} AS steamid64,
                     SUBSTRING_INDEX(GROUP_CONCAT(name ORDER BY matchid DESC), ',', 1) AS name,
                     COUNT(DISTINCT matchid)                                      AS matches,
                     SUM(kills)                                                   AS kills,
@@ -211,7 +209,6 @@ async def handle_api_player(request):
                         COUNT(DISTINCT CONCAT(matchid,mapnumber)),0)/30,1)      AS adr
                 FROM {MATCHZY_TABLES['players']}
                 WHERE steamid64 IN (%s, %s) AND steamid64 != '0'
-                GROUP BY {_sid_norm}
             """, (sid64, sid32))
             career = c.fetchone()
 
@@ -269,7 +266,6 @@ async def handle_api_player_by_sid(request):
     loop = asyncio.get_running_loop()
 
     sid64, sid32 = sid_variants(to_steamid64(raw_sid))
-    _sid_norm = "IF(CAST(steamid64 AS UNSIGNED) < 4294967296 AND CAST(steamid64 AS UNSIGNED) > 0, CAST(CAST(steamid64 AS UNSIGNED) + 76561197960265728 AS CHAR), steamid64)"
 
     career = None
     recent = []
@@ -277,9 +273,10 @@ async def handle_api_player_by_sid(request):
         conn = get_db()
         c = conn.cursor(dictionary=True)
 
+        # WHERE IN (sid64, sid32) covers both forms stored in DB.
+        # No GROUP BY needed — we already filter to one player's rows.
         c.execute(f"""
             SELECT
-                {_sid_norm} AS steamid64,
                 SUBSTRING_INDEX(GROUP_CONCAT(name ORDER BY matchid DESC), ',', 1) AS name,
                 COUNT(DISTINCT matchid)                                      AS matches,
                 SUM(kills)                                                   AS kills,
@@ -300,12 +297,12 @@ async def handle_api_player_by_sid(request):
                     COUNT(DISTINCT CONCAT(matchid,mapnumber)),0)/30,1)      AS adr
             FROM {MATCHZY_TABLES['players']}
             WHERE steamid64 IN (%s, %s) AND steamid64 != '0'
-            GROUP BY {_sid_norm}
         """, (sid64, sid32))
         career = c.fetchone()
 
         if career:
             career = dict(career)
+            # Always expose the real SteamID64 regardless of what DB stores
             career['steamid64'] = sid64
             name_map = _edited_name_map()
             if sid64 in name_map:
@@ -379,6 +376,39 @@ async def handle_api_player_mapstats_by_sid(request):
         rows = [dict(r) for r in c.fetchall()]
         c.close(); conn.close()
         return _json_response(rows)
+    except Exception as e:
+        return _json_response({"error": str(e)})
+
+
+async def handle_api_debug_player(request):
+    """GET /api/debug/player/{steamid64} — raw DB lookup for debugging"""
+    raw_sid = request.match_info.get('steamid64', '')
+    sid64, sid32 = sid_variants(to_steamid64(raw_sid))
+    try:
+        conn = get_db()
+        c = conn.cursor(dictionary=True)
+        # Show all raw rows for both SID forms
+        c.execute(f"""
+            SELECT steamid64, name, matchid, kills, deaths
+            FROM {MATCHZY_TABLES['players']}
+            WHERE steamid64 IN (%s, %s)
+            LIMIT 20
+        """, (sid64, sid32))
+        rows = [dict(r) for r in c.fetchall()]
+        # Also show count with each form individually
+        c.execute(f"SELECT COUNT(*) AS cnt FROM {MATCHZY_TABLES['players']} WHERE steamid64 = %s", (sid64,))
+        cnt64 = c.fetchone()['cnt']
+        c.execute(f"SELECT COUNT(*) AS cnt FROM {MATCHZY_TABLES['players']} WHERE steamid64 = %s", (sid32,))
+        cnt32 = c.fetchone()['cnt']
+        c.close(); conn.close()
+        return _json_response({
+            "input": raw_sid,
+            "sid64": sid64,
+            "sid32": sid32,
+            "count_by_sid64": cnt64,
+            "count_by_sid32": cnt32,
+            "rows": rows
+        })
     except Exception as e:
         return _json_response({"error": str(e)})
 
@@ -1235,10 +1265,9 @@ async def handle_api_leaderboard(request):
             return _json_response(cached, max_age=60)
         conn = get_db()
         c = conn.cursor(dictionary=True)
-        _sid_norm = "IF(CAST(steamid64 AS UNSIGNED) < 4294967296 AND CAST(steamid64 AS UNSIGNED) > 0, CAST(CAST(steamid64 AS UNSIGNED) + 76561197960265728 AS CHAR), steamid64)"
         c.execute(f"""
             SELECT
-                {_sid_norm} AS steamid64,
+                steamid64,
                 SUBSTRING_INDEX(GROUP_CONCAT(name ORDER BY matchid DESC), ',', 1) AS name,
                 COUNT(DISTINCT matchid)                                      AS matches,
                 SUM(kills)                                                   AS kills,
@@ -1258,7 +1287,7 @@ async def handle_api_leaderboard(request):
             FROM {MATCHZY_TABLES['players']}
             WHERE steamid64 != '0' AND steamid64 IS NOT NULL
               AND name != '' AND name IS NOT NULL
-            GROUP BY {_sid_norm}
+            GROUP BY steamid64
             ORDER BY kills DESC
         """)
         rows = c.fetchall()
@@ -1282,10 +1311,9 @@ async def handle_api_specialists(request):
             return _json_response(cached, max_age=60)
         conn = get_db()
         c = conn.cursor(dictionary=True)
-        _sid_norm = "IF(CAST(steamid64 AS UNSIGNED) < 4294967296 AND CAST(steamid64 AS UNSIGNED) > 0, CAST(CAST(steamid64 AS UNSIGNED) + 76561197960265728 AS CHAR), steamid64)"
         c.execute(f"""
             SELECT
-                {_sid_norm} AS steamid64,
+                steamid64,
                 SUBSTRING_INDEX(GROUP_CONCAT(name ORDER BY matchid DESC), ',', 1) AS name,
                 COUNT(DISTINCT matchid)                                         AS matches,
                 SUM(v1_wins)                                                    AS clutch_1v1,
@@ -1301,7 +1329,7 @@ async def handle_api_specialists(request):
             FROM {MATCHZY_TABLES['players']}
             WHERE steamid64 != '0' AND steamid64 IS NOT NULL
               AND name != '' AND name IS NOT NULL
-            GROUP BY {_sid_norm}
+            GROUP BY steamid64
             HAVING matches >= 1
             ORDER BY clutch_total DESC
         """)
@@ -1722,16 +1750,15 @@ async def handle_api_search(request):
         conn = get_db()
         c = conn.cursor(dictionary=True)
         like = f"%{q}%"
-        _sid_norm = "IF(CAST(steamid64 AS UNSIGNED) < 4294967296 AND CAST(steamid64 AS UNSIGNED) > 0, CAST(CAST(steamid64 AS UNSIGNED) + 76561197960265728 AS CHAR), steamid64)"
         c.execute(f"""
-            SELECT {_sid_norm} AS steamid64,
+            SELECT steamid64,
                 SUBSTRING_INDEX(GROUP_CONCAT(name ORDER BY matchid DESC), ',', 1) AS name,
                 COUNT(DISTINCT matchid) AS matches,
                 ROUND(SUM(kills)/NULLIF(SUM(deaths),0),2) AS kd,
                 ROUND(SUM(damage)/NULLIF(COUNT(DISTINCT CONCAT(matchid,'_',mapnumber)),0)/30,1) AS adr
             FROM {MATCHZY_TABLES['players']}
             WHERE name LIKE %s AND steamid64 != '0'
-            GROUP BY {_sid_norm}
+            GROUP BY steamid64
             ORDER BY matches DESC
             LIMIT 8
         """, (like,))
@@ -2210,6 +2237,7 @@ async def handle_admin_api_merge_by_steamid(request):
 async def start_http_server():
     app = web.Application()
     app.router.add_get('/api/specialists',             handle_api_specialists)
+    app.router.add_get('/api/debug/player/{steamid64}',      handle_api_debug_player)
     app.router.add_get('/api/player/sid/{steamid64}',         handle_api_player_by_sid)
     app.router.add_get('/api/player/sid/{steamid64}/mapstats', handle_api_player_mapstats_by_sid)
     app.router.add_get('/api/player/{name}',                   handle_api_player)
