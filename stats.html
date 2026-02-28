@@ -600,12 +600,12 @@ nav{
 /* Map photo rows */
 .map-photo-row{position:relative;overflow:hidden;border-bottom:1px solid rgba(255,255,255,.06);height:44px;flex-shrink:0}
 .map-photo-row:last-child{border-bottom:none}
-.map-photo-bg{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:center 35%;opacity:.28;filter:saturate(1.2)}
-.map-photo-content{position:relative;z-index:2;display:flex;align-items:center;gap:10px;padding:0 14px;height:44px}
-.map-photo-label{font-family:'Rajdhani',sans-serif;font-weight:800;font-size:11px;letter-spacing:2px;text-transform:uppercase;color:rgba(255,255,255,.9);width:56px;flex-shrink:0}
+.map-photo-bg{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:center 35%;opacity:.55;filter:saturate(1.1)}
+.map-photo-content{position:relative;z-index:3;display:flex;align-items:center;gap:10px;padding:0 14px;height:44px}
+.map-photo-label{font-family:'Rajdhani',sans-serif;font-weight:800;font-size:11px;letter-spacing:2px;text-transform:uppercase;color:#fff;width:56px;flex-shrink:0;text-shadow:0 1px 4px rgba(0,0,0,.8)}
 .map-photo-bar-track{flex:1;height:3px;border-radius:3px;background:rgba(255,255,255,.1);overflow:hidden}
 .map-photo-bar-fill{height:100%;border-radius:3px;transition:width .6s cubic-bezier(.4,0,.2,1)}
-.map-photo-wl{font-size:11px;font-family:'Rajdhani',sans-serif;font-weight:700;width:44px;text-align:right;flex-shrink:0;color:rgba(255,255,255,.55);letter-spacing:.5px}
+.map-photo-wl{font-size:11px;font-family:'Rajdhani',sans-serif;font-weight:700;width:44px;text-align:right;flex-shrink:0;color:rgba(255,255,255,.9);letter-spacing:.5px;text-shadow:0 1px 4px rgba(0,0,0,.8)}
 .win-rate-ring{position:relative;width:46px;height:46px;flex-shrink:0}
 .win-rate-ring svg{transform:rotate(-90deg)}
 .win-rate-ring-label{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:'Rajdhani',sans-serif;font-weight:800;font-size:11px;color:var(--white)}
@@ -647,7 +647,7 @@ nav{
 .search-row-title{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:14px;color:#fff}
 .search-row-sub{font-size:11px;color:var(--muted2)}
 /* ── Team H2H ─────────────────────────────────────────────────────────────── */
-.th2h-team-btn{flex:1;padding:10px 14px;background:var(--surface);border:1px solid var(--border);border-radius:5px;cursor:pointer;transition:all .15s;min-width:0}
+.th2h-team-btn{padding:10px 16px;background:var(--surface);border:1px solid var(--border);border-radius:5px;cursor:pointer;transition:all .15s;white-space:nowrap}
 .th2h-team-btn:hover,.th2h-team-btn.active{border-color:rgba(var(--orange-rgb),.5);background:rgba(var(--orange-rgb),.06)}
 .th2h-slot{flex:1;display:flex;flex-direction:column;align-items:center;gap:8px;padding:14px}
 .th2h-score-box{background:var(--surface2);border-radius:8px;padding:12px 24px;text-align:center;border:1px solid var(--border)}
@@ -3093,8 +3093,9 @@ function renderTeam(lineups) {
         : '';
       return `<div class="map-photo-row" style="background:var(--surface2)">
         ${bg}
-        <div style="position:absolute;left:0;top:0;bottom:0;width:2px;background:${accentColor}"></div>
-        <div class="map-photo-content">
+        <div style="position:absolute;inset:0;background:linear-gradient(to right,rgba(4,5,7,.82) 0%,rgba(4,5,7,.72) 40%,rgba(4,5,7,.45) 70%,rgba(4,5,7,.2) 100%);z-index:1"></div>
+        <div style="position:absolute;left:0;top:0;bottom:0;width:2px;background:${accentColor};z-index:2"></div>
+        <div class="map-photo-content" style="z-index:2">
           <span class="map-photo-label">${label}</span>
           <div class="map-photo-bar-track">
             <div class="map-photo-bar-fill" style="width:${pct.toFixed(0)}%;background:${barColor}"></div>
@@ -3946,7 +3947,7 @@ function renderTeamH2HPicker() {
       : isSel1 ? `<span style="font-size:9px;padding:1px 6px;border-radius:2px;background:rgba(91,196,245,.2);border:1px solid rgba(91,196,245,.4);color:#5bc4f5;font-family:'Rajdhani',sans-serif;font-weight:700">T2</span>` : '';
     return `<div class="th2h-team-btn${isSel0||isSel1?' active':''}" onclick="th2hSelect('${esc(t)}')">
       <div style="display:flex;align-items:center;justify-content:space-between;gap:6px">
-        <span style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:14px;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(t)}</span>
+        <span style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:14px;color:#fff">${esc(t)}</span>
         ${badge}
       </div>
     </div>`;
@@ -3964,7 +3965,7 @@ function renderTeamH2HPicker() {
       </button>
       <div class="h2h-result-body" id="th2h-result-body"></div>
     </div>
-    <div class="card" style="padding:8px;display:flex;flex-wrap:wrap;gap:6px">${teamBtns}</div>`;
+    <div class="card" style="padding:10px;display:flex;flex-wrap:wrap;gap:8px;align-content:flex-start">${teamBtns}</div>`;
 }
 
 function th2hSelect(name) {
