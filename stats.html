@@ -2301,12 +2301,13 @@ async function loadSpecialists() {
   if (!Array.isArray(data) || !data.length) {
     el.innerHTML = emptyState('specialists','No Specialist Data','Clutch kings, entry fraggers and more will appear here'); return;
   }
-  // Fetch Steam avatars for all players
+  // Fetch Steam avatars + names for all players
   await Promise.all(data.map(async p => {
     if (p.steamid64 && p.steamid64 !== '0') {
       try {
         const s = await fetch('/api/steam/'+p.steamid64).then(r=>r.json()).catch(()=>({}));
         if (s.avatar) p._steam_avatar = s.avatar;
+        if (s.name)   p._steam_name   = s.name;
       } catch(_) {}
     }
   }));
@@ -3076,7 +3077,7 @@ function renderTeam(lineups) {
       const aliasBadge = allAliases.length
         ? `<span style="font-size:10px;color:var(--muted2);font-family:'Rajdhani',sans-serif;letter-spacing:.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="Also known as: ${allAliases.map(a=>esc(a)).join(', ')}">aka ${allAliases.map(a=>esc(a)).join(', ')}</span>`
         : '';
-      return `<div class="lineup-player" onclick="event.stopPropagation();go('player',{sid:${escName(p.steamid64||n)}},'team')">
+      return `<div class="lineup-player" onclick="event.stopPropagation();go('player',{sid:${escName(sid||n)}},'team')">
         ${avatarHtml}
         <div style="display:flex;flex-direction:column;min-width:0;overflow:hidden">
           <span style="font-family:'Rajdhani',sans-serif;font-weight:600;font-size:13px;color:var(--white)">${esc(n)}</span>
