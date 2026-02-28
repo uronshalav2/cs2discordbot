@@ -184,9 +184,8 @@ async def handle_api_player(request):
                 resolved_sid = to_steamid64(str(row['steamid64']))
 
         # Aggregate ALL rows for this steamid64 regardless of name changes.
-        # Use sid_variants() so we match both SteamID64 and SteamID32 stored forms.
         if resolved_sid:
-            sid64, sid32 = sid_variants(resolved_sid)
+            sid64 = to_steamid64(resolved_sid)
             c.execute(f"""
                 SELECT
                     SUBSTRING_INDEX(GROUP_CONCAT(name ORDER BY matchid DESC), ',', 1) AS name,
@@ -208,8 +207,8 @@ async def handle_api_player(request):
                     ROUND(SUM(damage)/NULLIF(
                         COUNT(DISTINCT CONCAT(matchid,mapnumber)),0)/30,1)      AS adr
                 FROM {MATCHZY_TABLES['players']}
-                WHERE CAST(steamid64 AS UNSIGNED) IN (%s, %s) AND steamid64 != '0'
-            """, (int(sid64), int(sid32)))
+                WHERE steamid64 = %s AND steamid64 != '0'
+            """, (sid64,))
             career = c.fetchone()
 
         if career:
@@ -242,10 +241,10 @@ async def handle_api_player(request):
                 FROM {MATCHZY_TABLES['players']} p
                 LEFT JOIN {MATCHZY_TABLES['maps']} m ON p.matchid=m.matchid AND p.mapnumber=m.mapnumber
                 LEFT JOIN {MATCHZY_TABLES['matches']} mm ON p.matchid=mm.matchid
-                WHERE CAST(p.steamid64 AS UNSIGNED) IN (%s, %s) AND p.steamid64 != '0'
+                WHERE p.steamid64 = %s AND p.steamid64 != '0'
                 ORDER BY p.matchid DESC, p.mapnumber DESC
                 LIMIT 20
-            """, (int(sid_variants(sid)[0]), int(sid_variants(sid)[1])))
+            """, (sid,))
             recent = _patch_recent_matches(c.fetchall())
         c.close(); conn.close()
     except Exception as _e:
@@ -265,7 +264,7 @@ async def handle_api_player_by_sid(request):
     raw_sid = request.match_info.get('steamid64', '')
     loop = asyncio.get_running_loop()
 
-    sid64, sid32 = sid_variants(to_steamid64(raw_sid))
+    sid64 = to_steamid64(raw_sid)
 
     career = None
     recent = []
@@ -296,9 +295,8 @@ async def handle_api_player_by_sid(request):
                 ROUND(SUM(damage)/NULLIF(
                     COUNT(DISTINCT CONCAT(matchid,mapnumber)),0)/30,1)      AS adr
             FROM {MATCHZY_TABLES['players']}
-            WHERE CAST(steamid64 AS UNSIGNED) IN (%s, %s)
-              AND steamid64 != '0' AND steamid64 IS NOT NULL
-        """, (int(sid64), int(sid32)))
+            WHERE steamid64 = %s AND steamid64 != '0'
+        """, (sid64,))
         career = c.fetchone()
 
         if career:
@@ -334,11 +332,10 @@ async def handle_api_player_by_sid(request):
                 FROM {MATCHZY_TABLES['players']} p
                 LEFT JOIN {MATCHZY_TABLES['maps']} m ON p.matchid=m.matchid AND p.mapnumber=m.mapnumber
                 LEFT JOIN {MATCHZY_TABLES['matches']} mm ON p.matchid=mm.matchid
-                WHERE CAST(p.steamid64 AS UNSIGNED) IN (%s, %s)
-                  AND p.steamid64 != '0'
+                WHERE p.steamid64 = %s AND p.steamid64 != '0'
                 ORDER BY p.matchid DESC, p.mapnumber DESC
                 LIMIT 20
-            """, (int(sid64), int(sid32)))
+            """, (sid64,))
             recent = _patch_recent_matches(c.fetchall())
         c.close(); conn.close()
     except Exception as _e:
@@ -353,7 +350,7 @@ async def handle_api_player_by_sid(request):
 async def handle_api_player_mapstats_by_sid(request):
     """GET /api/player/sid/{steamid64}/mapstats"""
     raw_sid = request.match_info.get('steamid64', '')
-    sid64, sid32 = sid_variants(to_steamid64(raw_sid))
+    sid64 = to_steamid64(raw_sid)
     try:
         conn = get_db()
         c = conn.cursor(dictionary=True)
@@ -370,49 +367,17 @@ async def handle_api_player_mapstats_by_sid(request):
             FROM {MATCHZY_TABLES['players']} p
             LEFT JOIN {MATCHZY_TABLES['maps']} m  ON p.matchid=m.matchid AND p.mapnumber=m.mapnumber
             LEFT JOIN {MATCHZY_TABLES['matches']} mm ON p.matchid=mm.matchid
-            WHERE CAST(p.steamid64 AS UNSIGNED) IN (%s, %s) AND p.steamid64 != '0'
+            WHERE p.steamid64 = %s AND p.steamid64 != '0'
               AND m.mapname IS NOT NULL AND m.mapname != ''
             GROUP BY m.mapname
             ORDER BY matches DESC
-        """, (int(sid64), int(sid32)))
+        """, (sid64,))
         rows = [dict(r) for r in c.fetchall()]
         c.close(); conn.close()
         return _json_response(rows)
     except Exception as e:
         return _json_response({"error": str(e)})
 
-
-async def handle_api_debug_player(request):
-    """GET /api/debug/player/{steamid64} — raw DB lookup for debugging"""
-    raw_sid = request.match_info.get('steamid64', '')
-    sid64, sid32 = sid_variants(to_steamid64(raw_sid))
-    try:
-        conn = get_db()
-        c = conn.cursor(dictionary=True)
-        # Show all raw rows for both SID forms
-        c.execute(f"""
-            SELECT steamid64, name, matchid, kills, deaths
-            FROM {MATCHZY_TABLES['players']}
-            WHERE steamid64 IN (%s, %s)
-            LIMIT 20
-        """, (sid64, sid32))
-        rows = [dict(r) for r in c.fetchall()]
-        # Also show count with each form individually
-        c.execute(f"SELECT COUNT(*) AS cnt FROM {MATCHZY_TABLES['players']} WHERE steamid64 = %s", (sid64,))
-        cnt64 = c.fetchone()['cnt']
-        c.execute(f"SELECT COUNT(*) AS cnt FROM {MATCHZY_TABLES['players']} WHERE steamid64 = %s", (sid32,))
-        cnt32 = c.fetchone()['cnt']
-        c.close(); conn.close()
-        return _json_response({
-            "input": raw_sid,
-            "sid64": sid64,
-            "sid32": sid32,
-            "count_by_sid64": cnt64,
-            "count_by_sid32": cnt32,
-            "rows": rows
-        })
-    except Exception as e:
-        return _json_response({"error": str(e)})
 
 
 async def handle_api_matches(request):
@@ -1359,23 +1324,7 @@ def to_steamid64(raw: str) -> str:
     except (ValueError, TypeError):
         return raw
 
-def sid_variants(raw: str) -> tuple[str, str]:
-    """
-    Return (steamid64, steamid32) for a given ID in either form.
-    The DB may store either form in the steamid64 column depending on the source
-    (MatchZy stores SteamID64, some fshost rows store SteamID32).
-    Use WHERE steamid64 IN (%s, %s) with both variants to match either.
-    """
-    try:
-        val = int(raw)
-        if val < 0x100000000:
-            # Input is SteamID32
-            return str(val + STEAMID64_BASE), str(val)
-        else:
-            # Input is SteamID64
-            return str(val), str(val - STEAMID64_BASE)
-    except (ValueError, TypeError):
-        return raw, raw
+
 
 # ── Steam avatar local cache ─────────────────────────────────────────────────
 # In-memory cache: steamid64 -> local URL or Steam CDN URL
@@ -1489,8 +1438,8 @@ async def handle_api_h2h(request):
                     ROUND(SUM(damage)/NULLIF(
                         COUNT(DISTINCT CONCAT(matchid,'_',mapnumber)),0)/30,1)  AS adr
                 FROM {MATCHZY_TABLES['players']}
-                WHERE CAST(steamid64 AS UNSIGNED) IN (%s, %s) AND steamid64 != '0'
-            """, (int(sid_variants(psid)[0]), int(sid_variants(psid)[1])))
+                WHERE steamid64 = %s AND steamid64 != '0'
+            """, (psid,))
             row = c.fetchone()
             if row:
                 row = dict(row)
@@ -1781,8 +1730,8 @@ async def handle_api_search(request):
                     SELECT steamid64, COUNT(DISTINCT matchid) AS matches,
                         ROUND(SUM(kills)/NULLIF(SUM(deaths),0),2) AS kd,
                         ROUND(SUM(damage)/NULLIF(COUNT(DISTINCT CONCAT(matchid,'_',mapnumber)),0)/30,1) AS adr
-                    FROM {MATCHZY_TABLES['players']} WHERE CAST(steamid64 AS UNSIGNED) IN (%s, %s) LIMIT 1
-                """, (int(sid_variants(sid)[0]), int(sid_variants(sid)[1])))
+                    FROM {MATCHZY_TABLES['players']} WHERE steamid64 = %s LIMIT 1
+                """, (sid,))
                 row = c.fetchone()
                 if row:
                     row = dict(row); row['name'] = edited_name; players.append(row)
@@ -1842,11 +1791,11 @@ async def handle_api_player_mapstats(request):
             FROM {MATCHZY_TABLES['players']} p
             LEFT JOIN {MATCHZY_TABLES['maps']} m  ON p.matchid=m.matchid AND p.mapnumber=m.mapnumber
             LEFT JOIN {MATCHZY_TABLES['matches']} mm ON p.matchid=mm.matchid
-            WHERE CAST(p.steamid64 AS UNSIGNED) IN (%s, %s) AND p.steamid64 != '0'
+            WHERE p.steamid64 = %s AND p.steamid64 != '0'
               AND m.mapname IS NOT NULL AND m.mapname != ''
             GROUP BY m.mapname
             ORDER BY matches DESC
-        """, (int(sid_variants(sid)[0]), int(sid_variants(sid)[1])))
+        """, (sid,))
         rows = [dict(r) for r in c.fetchall()]
         c.close(); conn.close()
         return _json_response(rows)
@@ -2217,10 +2166,10 @@ async def handle_admin_api_merge_by_steamid(request):
                     COUNT(DISTINCT name) AS name_count,
                     SUBSTRING_INDEX(GROUP_CONCAT(name ORDER BY matchid DESC), ',', 1) AS latest_name
                 FROM {MATCHZY_TABLES['players']}
-                WHERE steamid64 IN (%s, %s) AND steamid64 != '0'
+                WHERE steamid64 = %s AND steamid64 != '0'
                 GROUP BY steamid64
                 HAVING name_count > 1
-            """, sid_variants(target_sid))
+            """, (target_sid,))
         else:
             c.execute(f"""
                 SELECT steamid64,
@@ -2246,8 +2195,8 @@ async def handle_admin_api_merge_by_steamid(request):
             # Fetch old names for reporting
             c.execute(f"""
                 SELECT DISTINCT name FROM {MATCHZY_TABLES['players']}
-                WHERE steamid64 IN (%s, %s) AND name != %s
-            """, (*sid_variants(sid), canonical))
+                WHERE steamid64 = %s AND name != %s
+            """, (sid, canonical))
             old_names = [r['name'] for r in c.fetchall()]
 
             # Update all rows for this SID to the canonical name (both stored forms)
@@ -2255,8 +2204,8 @@ async def handle_admin_api_merge_by_steamid(request):
             c2.execute(f"""
                 UPDATE {MATCHZY_TABLES['players']}
                 SET name = %s
-                WHERE steamid64 IN (%s, %s) AND name != %s
-            """, (canonical, *sid_variants(sid), canonical))
+                WHERE steamid64 = %s AND name != %s
+            """, (sid, canonical))
             rows_changed = c2.rowcount
             c2.close()
 
@@ -2288,7 +2237,6 @@ async def handle_admin_api_merge_by_steamid(request):
 async def start_http_server():
     app = web.Application()
     app.router.add_get('/api/specialists',             handle_api_specialists)
-    app.router.add_get('/api/debug/player/{steamid64}',      handle_api_debug_player)
     app.router.add_get('/api/player/sid/{steamid64}',         handle_api_player_by_sid)
     app.router.add_get('/api/player/sid/{steamid64}/mapstats', handle_api_player_mapstats_by_sid)
     app.router.add_get('/api/player/{name}',                   handle_api_player)
@@ -2509,8 +2457,8 @@ def get_matchzy_player_stats(steamid64: str = None, player_name: str = None) -> 
         table = MATCHZY_TABLES["players"]
 
         if steamid64:
-            where = "steamid64 IN (%s, %s)"
-            param = sid_variants(steamid64)
+            where = "steamid64 = %s"
+            param = (to_steamid64(str(steamid64)),)
         elif player_name:
             where = "name = %s"
             param = (player_name,)
