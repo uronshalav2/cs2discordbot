@@ -24,6 +24,68 @@ from discord.ui import Button, View
 # Path to stats.html — served directly as a static file
 HTML_PATH = pathlib.Path(__file__).parent / "stats.html"
 
+# =============================================================================
+# CONFIGURATION & DATABASE — must be at the top so all helpers can reference them
+# =============================================================================
+
+# ── Environment variables ─────────────────────────────────────────────────────
+TOKEN = os.getenv("TOKEN")
+STEAM_API_KEY  = os.getenv("STEAM_API_KEY", "")
+EDIT_PASSWORD  = os.getenv("EDIT_PASSWORD", "changeme")   # set in Railway env vars
+SERVER_IP = os.getenv("SERVER_IP", "127.0.0.1")
+SERVER_PORT = int(os.getenv("SERVER_PORT", 27015))
+RCON_IP = os.getenv("RCON_IP", SERVER_IP)
+RCON_PORT = int(os.getenv("RCON_PORT", 27015))
+RCON_PASSWORD = os.getenv("RCON_PASSWORD", "")
+CHANNEL_ID = int(os.getenv("CHANNEL_ID", 0))
+SERVER_DEMOS_CHANNEL_ID = int(os.getenv("SERVER_DEMOS_CHANNEL_ID", 0))
+DEMOS_JSON_URL = os.getenv("DEMOS_JSON_URL")
+GUILD_ID = int(os.getenv("GUILD_ID", "0") or "0")
+ADMIN_ID = int(os.getenv("ADMIN_ID", 0))
+SERVER_LOG_PATH = os.getenv("SERVER_LOG_PATH", "")
+MAP_WHITELIST = [
+    "de_inferno", "de_mirage", "de_dust2", "de_overpass",
+    "de_nuke", "de_ancient", "de_vertigo", "de_anubis"
+]
+
+# ── MySQL / Database ──────────────────────────────────────────────────────────
+import mysql.connector
+from mysql.connector import pooling
+
+def _mysql_cfg() -> dict:
+    """Build MySQL connection kwargs from Railway env vars."""
+    url = os.getenv("MYSQL_URL") or os.getenv("DATABASE_URL", "")
+    if url.startswith("mysql://") or url.startswith("mysql+pymysql://"):
+        url = url.replace("mysql+pymysql://", "mysql://").replace("mysql://", "")
+        userpass, rest = url.split("@", 1)
+        user, password = userpass.split(":", 1)
+        hostport, database = rest.split("/", 1)
+        host, port = (hostport.split(":", 1) if ":" in hostport else (hostport, "3306"))
+        return dict(host=host, port=int(port), user=user, password=password,
+                    database=database, autocommit=False)
+    return dict(
+        host=os.getenv("MYSQLHOST", "localhost"),
+        port=int(os.getenv("MYSQLPORT", 3306)),
+        user=os.getenv("MYSQLUSER", "root"),
+        password=os.getenv("MYSQLPASSWORD", ""),
+        database=os.getenv("MYSQLDATABASE", "railway"),
+        autocommit=False,
+    )
+
+_DB_CFG = _mysql_cfg()
+
+def get_db():
+    """Return a new MySQL connection."""
+    return mysql.connector.connect(**_DB_CFG)
+
+# ── MatchZy table names ───────────────────────────────────────────────────────
+MATCHZY_TABLES = {
+    "matches": "matchzy_stats_matches",
+    "maps":    "matchzy_stats_maps",
+    "players": "matchzy_stats_players",
+}
+
+
 
 
 # Regex to extract every "name<slot><steamid><team>" actor token in a log line
@@ -1420,24 +1482,7 @@ async def start_http_server():
     print(f"✓ HTTP server started on port {port}")
     return runner
 
-TOKEN = os.getenv("TOKEN")
-STEAM_API_KEY  = os.getenv("STEAM_API_KEY", "")
-EDIT_PASSWORD  = os.getenv("EDIT_PASSWORD", "changeme")   # set in Railway env vars
-SERVER_IP = os.getenv("SERVER_IP", "127.0.0.1")
-SERVER_PORT = int(os.getenv("SERVER_PORT", 27015))
-RCON_IP = os.getenv("RCON_IP", SERVER_IP)
-RCON_PORT = int(os.getenv("RCON_PORT", 27015))
-RCON_PASSWORD = os.getenv("RCON_PASSWORD", "")
-CHANNEL_ID = int(os.getenv("CHANNEL_ID", 0))
-SERVER_DEMOS_CHANNEL_ID = int(os.getenv("SERVER_DEMOS_CHANNEL_ID", 0))
-DEMOS_JSON_URL = os.getenv("DEMOS_JSON_URL")
-GUILD_ID = int(os.getenv("GUILD_ID", "0") or "0")
-ADMIN_ID = int(os.getenv("ADMIN_ID", 0))
-SERVER_LOG_PATH = os.getenv("SERVER_LOG_PATH", "")
-MAP_WHITELIST = [
-    "de_inferno", "de_mirage", "de_dust2", "de_overpass",
-    "de_nuke", "de_ancient", "de_vertigo", "de_anubis"
-]
+
 
 
 intents = discord.Intents.default()
@@ -1450,36 +1495,7 @@ bot = commands.Bot(command_prefix="!", intents=intents, owner_id=ADMIN_ID)
 #   MYSQL_URL  (mysql://user:pass@host:port/dbname)
 # OR individual vars:
 #   MYSQLHOST, MYSQLPORT, MYSQLUSER, MYSQLPASSWORD, MYSQLDATABASE
-import mysql.connector
-from mysql.connector import pooling
 
-def _mysql_cfg() -> dict:
-    """Build MySQL connection kwargs from Railway env vars."""
-    url = os.getenv("MYSQL_URL") or os.getenv("DATABASE_URL", "")
-    if url.startswith("mysql://") or url.startswith("mysql+pymysql://"):
-        # Parse URL: mysql://user:pass@host:port/dbname
-        url = url.replace("mysql+pymysql://", "mysql://").replace("mysql://", "")
-        userpass, rest = url.split("@", 1)
-        user, password = userpass.split(":", 1)
-        hostport, database = rest.split("/", 1)
-        host, port = (hostport.split(":", 1) if ":" in hostport else (hostport, "3306"))
-        return dict(host=host, port=int(port), user=user, password=password,
-                    database=database, autocommit=False)
-    # Individual env vars (Railway default naming)
-    return dict(
-        host=os.getenv("MYSQLHOST", "localhost"),
-        port=int(os.getenv("MYSQLPORT", 3306)),
-        user=os.getenv("MYSQLUSER", "root"),
-        password=os.getenv("MYSQLPASSWORD", ""),
-        database=os.getenv("MYSQLDATABASE", "railway"),
-        autocommit=False,
-    )
-
-_DB_CFG = _mysql_cfg()
-
-def get_db():
-    """Return a new MySQL connection."""
-    return mysql.connector.connect(**_DB_CFG)
 
 def init_database():
     conn = get_db()
@@ -1566,11 +1582,7 @@ except Exception as e:
 #   matchid, start_time, end_time, winner, series_type,
 #   team1_name, team1_score, team2_name, team2_score, server_ip
 
-MATCHZY_TABLES = {
-    "matches": "matchzy_stats_matches",
-    "maps":    "matchzy_stats_maps",
-    "players": "matchzy_stats_players",
-}
+
 
 def matchzy_tables_exist(conn) -> bool:
     """Return True if MatchZy tables are present in the database."""
