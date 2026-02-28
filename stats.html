@@ -71,9 +71,9 @@ nav{
 }
 .sidebar-item.active svg{opacity:1}
 .sidebar-spacer{flex:1}
-.sidebar-steam-btn{display:flex;align-items:center;gap:8px;padding:8px 14px;margin:0 8px 8px;border-radius:4px;background:linear-gradient(135deg,#1b9bd1 0%,#1282b0 100%);border:1px solid rgba(255,255,255,.15);color:#fff;font-family:'Rajdhani',sans-serif;font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;cursor:pointer;text-decoration:none;transition:all .15s;box-shadow:0 2px 8px rgba(27,155,209,.35)}
-.sidebar-steam-btn:hover{background:linear-gradient(135deg,#22aee8 0%,#1594c8 100%);color:#fff;box-shadow:0 4px 16px rgba(27,155,209,.55);transform:translateY(-1px)}
-.sidebar-steam-btn svg{flex-shrink:0;opacity:1}
+.sidebar-steam-btn{display:flex;align-items:center;gap:8px;padding:8px 14px;margin:0 8px 8px;border-radius:4px;background:#1b2838;border:1px solid #2a475e;color:#8ba3b8;font-family:'Rajdhani',sans-serif;font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;cursor:pointer;text-decoration:none;transition:all .15s}
+.sidebar-steam-btn:hover{background:#2a475e;color:#c6d4df}
+.sidebar-steam-btn svg{flex-shrink:0;opacity:.7}
 .sidebar-admin-user{display:flex;align-items:center;gap:8px;padding:8px 14px;margin:0 8px 8px}
 .sidebar-admin-avatar{width:24px;height:24px;border-radius:50%;object-fit:cover;border:1px solid var(--border2);flex-shrink:0;background:var(--surface2)}
 .sidebar-admin-name{font-size:12px;font-weight:700;color:var(--white);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -722,7 +722,7 @@ nav{
   <!-- Steam login button (shown when not logged in) -->
   <div id="sidebar-steam-login" style="margin-top:8px">
     <a href="/auth/steam/player" class="sidebar-steam-btn">
-      <svg width="16" height="16" viewBox="0 0 496 512" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M496 256c0 137-111.2 248-248.4 248-113.8 0-209.7-76.3-239.7-180.7l95.7 39.4c6.6 32.4 35.6 56.8 70.4 56.8 39.2 0 71-31.5 71-70.7l-.1-3.4 85-60.8c45.1.4 81.8-36.2 81.8-81.1 0-44.8-36.4-81.2-81.2-81.2-44.8 0-81.2 36.4-81.2 81.2v1.1l-59.8 85.6-2.4-.1c-18.8 0-36 6.8-49.3 18L0 295.6C17.8 166.5 128.1 65.8 248 65.8 384.8 65.8 496 154 496 256zM155.7 384.3l-30.5-12.6a56.44 56.44 0 0 0 54.2 40.4c31.1 0 56.4-25.3 56.4-56.4 0-31.1-25.3-56.4-56.4-56.4-2.8 0-5.5.2-8.2.6l31.5 13c20.3 8.4 30 31.5 21.6 51.8-8.4 20.3-31.5 30-68.6 19.6zm176.8-192.5c0 29.8-24.2 54-54 54s-54-24.2-54-54 24.2-54 54-54 54 24.2 54 54zm-96.2 0c0 23.3 18.9 42.2 42.2 42.2 23.3 0 42.2-18.9 42.2-42.2 0-23.3-18.9-42.2-42.2-42.2-23.3 0-42.2 18.9-42.2 42.2z"/></svg>
+      <svg width="14" height="14" viewBox="0 0 233 233" fill="currentColor"><path d="M116.5 0C52.1 0 0 52.1 0 116.5c0 55.4 38.7 101.8 90.6 113.5l30.9-72.7c-2.4.2-4.8.3-7.3.3-28.1 0-50.9-22.8-50.9-50.9s22.8-50.9 50.9-50.9 50.9 22.8 50.9 50.9c0 24.6-17.5 45.2-40.8 49.9l-29.8 70.1c1.9.1 3.7.2 5.6.2 64.4 0 116.5-52.2 116.5-116.5S180.9 0 116.5 0zm-2.6 150.8c-18.9 0-34.2-15.3-34.2-34.2s15.3-34.2 34.2-34.2 34.2 15.3 34.2 34.2-15.3 34.2-34.2 34.2z"/></svg>
       Sign in with Steam
     </a>
   </div>
@@ -809,8 +809,8 @@ nav{
 
     <!-- Steam login (shown when not signed in) -->
     <div id="mobile-steam-login" style="padding:12px 24px">
-      <a href="/auth/steam/player" style="display:inline-flex;align-items:center;gap:8px;padding:8px 16px;border-radius:4px;background:linear-gradient(135deg,#1b9bd1 0%,#1282b0 100%);border:1px solid rgba(255,255,255,.15);color:#fff;font-family:'Rajdhani',sans-serif;font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;text-decoration:none;box-shadow:0 2px 8px rgba(27,155,209,.35)">
-        <svg width="16" height="16" viewBox="0 0 496 512" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M496 256c0 137-111.2 248-248.4 248-113.8 0-209.7-76.3-239.7-180.7l95.7 39.4c6.6 32.4 35.6 56.8 70.4 56.8 39.2 0 71-31.5 71-70.7l-.1-3.4 85-60.8c45.1.4 81.8-36.2 81.8-81.1 0-44.8-36.4-81.2-81.2-81.2-44.8 0-81.2 36.4-81.2 81.2v1.1l-59.8 85.6-2.4-.1c-18.8 0-36 6.8-49.3 18L0 295.6C17.8 166.5 128.1 65.8 248 65.8 384.8 65.8 496 154 496 256zM155.7 384.3l-30.5-12.6a56.44 56.44 0 0 0 54.2 40.4c31.1 0 56.4-25.3 56.4-56.4 0-31.1-25.3-56.4-56.4-56.4-2.8 0-5.5.2-8.2.6l31.5 13c20.3 8.4 30 31.5 21.6 51.8-8.4 20.3-31.5 30-68.6 19.6zm176.8-192.5c0 29.8-24.2 54-54 54s-54-24.2-54-54 24.2-54 54-54 54 24.2 54 54zm-96.2 0c0 23.3 18.9 42.2 42.2 42.2 23.3 0 42.2-18.9 42.2-42.2 0-23.3-18.9-42.2-42.2-42.2-23.3 0-42.2 18.9-42.2 42.2z"/></svg>
+      <a href="/auth/steam/player" style="display:inline-flex;align-items:center;gap:8px;padding:8px 16px;border-radius:4px;background:#1b2838;border:1px solid #2a475e;color:#8ba3b8;font-family:'Rajdhani',sans-serif;font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;text-decoration:none">
+        <svg width="14" height="14" viewBox="0 0 233 233" fill="currentColor"><path d="M116.5 0C52.1 0 0 52.1 0 116.5c0 55.4 38.7 101.8 90.6 113.5l30.9-72.7c-2.4.2-4.8.3-7.3.3-28.1 0-50.9-22.8-50.9-50.9s22.8-50.9 50.9-50.9 50.9 22.8 50.9 50.9c0 24.6-17.5 45.2-40.8 49.9l-29.8 70.1c1.9.1 3.7.2 5.6.2 64.4 0 116.5-52.2 116.5-116.5S180.9 0 116.5 0zm-2.6 150.8c-18.9 0-34.2-15.3-34.2-34.2s15.3-34.2 34.2-34.2 34.2 15.3 34.2 34.2-15.3 34.2-34.2 34.2z"/></svg>
         Sign in with Steam
       </a>
     </div>
@@ -894,6 +894,49 @@ nav{
 <script>
 // ── Player Steam session check ────────────────────────────────────────────────
 let _playerSteamId = null;  // steamid64 of logged-in player (if any)
+
+// ── Shared Steam avatar/name cache (persists across all page renders) ────────
+// Key: steamid64 string  →  Value: { avatar, name } or null
+const _steamCache = {};
+
+/**
+ * Fetch Steam profiles for an array of players in one parallel batch.
+ * Already-cached players are skipped. Attaches p._steam_avatar / p._steam_name.
+ * @param {Array} players  - array of player objects with .steamid64
+ * @param {number} limit   - max players to fetch (default: all)
+ */
+async function batchFetchSteam(players, limit = Infinity) {
+  const todo = players
+    .filter(p => p.steamid64 && p.steamid64 !== '0' && !_steamCache[p.steamid64])
+    .slice(0, limit);
+  if (!todo.length) {
+    // Still attach cached data to all players
+    players.forEach(p => {
+      if (p.steamid64 && _steamCache[p.steamid64]) {
+        const c = _steamCache[p.steamid64];
+        if (c.avatar) p._steam_avatar = c.avatar;
+        if (c.name)   p._steam_name   = c.name;
+      }
+    });
+    return;
+  }
+  await Promise.all(todo.map(async p => {
+    try {
+      const s = await fetch('/api/steam/' + p.steamid64).then(r => r.json()).catch(() => ({}));
+      _steamCache[p.steamid64] = { avatar: s.avatar || null, name: s.name || null };
+    } catch (_) {
+      _steamCache[p.steamid64] = null;
+    }
+  }));
+  // Attach results to all players (including ones that were already cached)
+  players.forEach(p => {
+    if (p.steamid64 && _steamCache[p.steamid64]) {
+      const c = _steamCache[p.steamid64];
+      if (c.avatar) p._steam_avatar = c.avatar;
+      if (c.name)   p._steam_name   = c.name;
+    }
+  });
+}
 
 function _goMyProfile() {
   if (_playerSteamId) {
@@ -1026,8 +1069,9 @@ async function apiFetch(endpoint, ghFile) {
   return ghFile && ghFile.startsWith('matches/') ? {} : [];
 }
 
-// ── Prefetch: warm the most-used endpoints in the background on page load ──
-// By the time the user clicks a nav item the data is already in browser cache.
+// ── Prefetch: warm the most-used endpoints in parallel on page load ──────────
+// All requests fire simultaneously — by the time the user clicks a nav item
+// the data is already sitting in the browser HTTP cache.
 (function prefetchOnLoad() {
   const PREFETCH = [
     '/api/matches?limit=30',
@@ -1036,12 +1080,11 @@ async function apiFetch(endpoint, ghFile) {
     '/api/mapstats',
     '/api/specialists',
   ];
-  // Use requestIdleCallback when available so prefetch doesn't compete with render
+  // Fire all fetches in parallel; use requestIdleCallback so we don't compete
+  // with the initial render.
   const schedule = window.requestIdleCallback || (fn => setTimeout(fn, 800));
   schedule(() => {
-    PREFETCH.forEach(url => {
-      fetch(url, { cache: 'default' }).catch(() => {});
-    });
+    Promise.all(PREFETCH.map(url => fetch(url, { cache: 'default' }).catch(() => {})));
   });
 })();
 
@@ -1441,14 +1484,10 @@ async function loadMatch(id) {
   const byDmg    = [...players].sort((a,b)=>parseInt(b.damage||0)-parseInt(a.damage||0));
   const byRating = [...players].filter(p=>p.rating!=null).sort((a,b)=>parseFloat(b.rating)-parseFloat(a.rating));
 
-  // Fetch Steam avatars for all unique players in this match
-  const steamCache = {};
-  await Promise.all([...new Map(players.map(p=>[p.steamid64,p])).values()].map(async p => {
-    if (p.steamid64 && p.steamid64 !== '0') {
-      const s = await fetch('/api/steam/'+p.steamid64).then(r=>r.json()).catch(()=>({}));
-      if (s.avatar) steamCache[p.steamid64] = s.avatar;
-    }
-  }));
+  // Fetch Steam avatars for all unique players in this match using shared cache
+  const uniquePlayers = [...new Map(players.map(p => [p.steamid64, p])).values()];
+  await batchFetchSteam(uniquePlayers);
+  const steamCache = Object.fromEntries(uniquePlayers.map(p => [p.steamid64, p._steam_avatar || null]));
 
   function playerAvatar(p, size=40) {
     const img = steamCache[p?.steamid64];
@@ -1875,14 +1914,8 @@ async function loadH2H() {
   if (!_h2hPlayers) {
     const data = await apiFetch('/api/leaderboard', 'leaderboard.json');
   normalizePlayers(data);
-    // Fetch Steam avatars for all
-    await Promise.all(data.slice(0,30).map(async p => {
-      if (p.steamid64 && p.steamid64 !== '0') {
-        const s = await fetch('/api/steam/'+p.steamid64).then(r=>r.json()).catch(()=>({}));
-        if (s.avatar) p._steam_avatar = s.avatar;
-        if (s.name)   p._steam_name   = s.name;
-      }
-    }));
+    // Fetch Steam avatars for all using shared cache
+    await batchFetchSteam(data.slice(0, 30));
     _h2hPlayers = data;
   }
   renderH2HPicker();
@@ -2096,15 +2129,7 @@ async function loadLeaderboard() {
     }
   } catch(_) {}
   // Fetch Steam avatars in parallel (top 20 only to keep it fast)
-  await Promise.all(data.slice(0, 20).map(async p => {
-    if (p.steamid64 && p.steamid64 !== '0') {
-      try {
-        const s = await fetch('/api/steam/'+p.steamid64).then(r=>r.json()).catch(()=>({}));
-        if (s.avatar) p._steam_avatar = s.avatar;
-        if (s.name)   p._steam_name   = s.name;
-      } catch(_) {}
-    }
-  }));
+  await batchFetchSteam(data.slice(0, 20));
   renderLeaderboard(data, _lbSort);
 }
 
@@ -2301,16 +2326,8 @@ async function loadSpecialists() {
   if (!Array.isArray(data) || !data.length) {
     el.innerHTML = emptyState('specialists','No Specialist Data','Clutch kings, entry fraggers and more will appear here'); return;
   }
-  // Fetch Steam avatars + names for all players
-  await Promise.all(data.map(async p => {
-    if (p.steamid64 && p.steamid64 !== '0') {
-      try {
-        const s = await fetch('/api/steam/'+p.steamid64).then(r=>r.json()).catch(()=>({}));
-        if (s.avatar) p._steam_avatar = s.avatar;
-        if (s.name)   p._steam_name   = s.name;
-      } catch(_) {}
-    }
-  }));
+  // Fetch Steam avatars + names for all players using shared cache
+  await batchFetchSteam(data);
   _specData = data;
   renderSpecialists(data, _specTab);
 }
@@ -2616,13 +2633,7 @@ async function loadPredict() {
   if (!_predictPlayers) {
     const data = await apiFetch('/api/leaderboard', 'leaderboard.json');
   normalizePlayers(data);
-    await Promise.all(data.slice(0,40).map(async p => {
-      if (p.steamid64 && p.steamid64 !== '0') {
-        const s = await fetch('/api/steam/'+p.steamid64).then(r=>r.json()).catch(()=>({}));
-        if (s.avatar) p._steam_avatar = s.avatar;
-        if (s.name)   p._steam_name   = s.name;
-      }
-    }));
+    await batchFetchSteam(data.slice(0, 40));
     _predictPlayers = data;
   }
   renderPredict();
@@ -3469,8 +3480,8 @@ function _renderNotAdmin() {
       </svg>
       <div style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:13px;letter-spacing:1px;color:var(--muted2)">Admin access required</div>
       <div style="font-size:12px;color:var(--muted);margin-bottom:8px">Sign in with your Steam admin account to edit matches</div>
-      <a href="/auth/steam" class="edit-pw-btn" style="display:inline-flex;align-items:center;gap:8px;text-decoration:none;background:linear-gradient(135deg,#1b9bd1 0%,#1282b0 100%);border-color:rgba(255,255,255,.2);color:#fff;box-shadow:0 2px 8px rgba(27,155,209,.35)">
-        <svg width="18" height="18" viewBox="0 0 496 512" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M496 256c0 137-111.2 248-248.4 248-113.8 0-209.7-76.3-239.7-180.7l95.7 39.4c6.6 32.4 35.6 56.8 70.4 56.8 39.2 0 71-31.5 71-70.7l-.1-3.4 85-60.8c45.1.4 81.8-36.2 81.8-81.1 0-44.8-36.4-81.2-81.2-81.2-44.8 0-81.2 36.4-81.2 81.2v1.1l-59.8 85.6-2.4-.1c-18.8 0-36 6.8-49.3 18L0 295.6C17.8 166.5 128.1 65.8 248 65.8 384.8 65.8 496 154 496 256zM155.7 384.3l-30.5-12.6a56.44 56.44 0 0 0 54.2 40.4c31.1 0 56.4-25.3 56.4-56.4 0-31.1-25.3-56.4-56.4-56.4-2.8 0-5.5.2-8.2.6l31.5 13c20.3 8.4 30 31.5 21.6 51.8-8.4 20.3-31.5 30-68.6 19.6zm176.8-192.5c0 29.8-24.2 54-54 54s-54-24.2-54-54 24.2-54 54-54 54 24.2 54 54zm-96.2 0c0 23.3 18.9 42.2 42.2 42.2 23.3 0 42.2-18.9 42.2-42.2 0-23.3-18.9-42.2-42.2-42.2-23.3 0-42.2 18.9-42.2 42.2z"/></svg>
+      <a href="/auth/steam" class="edit-pw-btn" style="display:inline-flex;align-items:center;gap:8px;text-decoration:none;background:#1b2838;border-color:#2a475e;color:#c6d4df">
+        <svg width="18" height="18" viewBox="0 0 233 233" fill="currentColor"><path d="M116.5 0C52.1 0 0 52.1 0 116.5c0 55.4 38.7 101.8 90.6 113.5l30.9-72.7c-2.4.2-4.8.3-7.3.3-28.1 0-50.9-22.8-50.9-50.9s22.8-50.9 50.9-50.9 50.9 22.8 50.9 50.9c0 24.6-17.5 45.2-40.8 49.9l-29.8 70.1c1.9.1 3.7.2 5.6.2 64.4 0 116.5-52.2 116.5-116.5S180.9 0 116.5 0zm-2.6 150.8c-18.9 0-34.2-15.3-34.2-34.2s15.3-34.2 34.2-34.2 34.2 15.3 34.2 34.2-15.3 34.2-34.2 34.2z"/></svg>
         Sign in with Steam
       </a>
     </div>`;
