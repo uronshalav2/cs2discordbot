@@ -1775,8 +1775,59 @@ async def handle_player_api_me(request):
 
 
 
+async def handle_api_fshost_matches(request):
+    """
+    GET /api/fshost/matches
+    Returns all matches from fshost JSONs with demo links attached.
+    Demos are linked by matchid — each JSON contains match_id which is used
+    as the key in matchid_map, and each entry already carries the demo URL
+    matched via demo_filename in that same JSON.
+    No extra HTTP calls needed — build_matchid_to_demo_map() does it all.
+    """
+    try:
+        loop = asyncio.get_running_loop()
+        matchid_map = await loop.run_in_executor(None, build_matchid_to_demo_map)
+
+        results = []
+        for mid, entry in matchid_map.items():
+            meta = entry.get("metadata") or {}
+            if not meta:
+                continue
+
+            t1 = meta.get("team1", {})
+            t2 = meta.get("team2", {})
+
+            results.append({
+                "matchid":       str(meta.get("match_id") or mid),
+                "team1_name":    t1.get("name", "Team 1"),
+                "team2_name":    t2.get("name", "Team 2"),
+                "team1_score":   t1.get("score", 0),
+                "team2_score":   t2.get("score", 0),
+                "winner":        meta.get("winner", ""),
+                "mapname":       meta.get("map", "?"),
+                "date":          meta.get("date", ""),
+                "total_rounds":  meta.get("total_rounds"),
+                # Demo linked directly by matchid — no guessing, no filename parsing
+                "demo_url":      entry.get("download_url", ""),
+                "demo_size":     entry.get("size_formatted", ""),
+                "demo_filename": entry.get("name", meta.get("demo_filename", "")),
+                "has_demo":      bool(entry.get("download_url")),
+            })
+
+        results.sort(key=lambda r: str(r.get("date") or ""), reverse=True)
+
+        return _json_response({
+            "matches": results,
+            "total":   len(results),
+            "source":  "fshost",
+        })
+    except Exception as e:
+        return _json_response({"error": str(e)})
+
+
 async def start_http_server():
     app = web.Application()
+    app.router.add_get('/api/fshost/matches',          handle_api_fshost_matches)
     app.router.add_get('/api/specialists',             handle_api_specialists)
     app.router.add_get('/api/player/sid/{steamid64}',         handle_api_player_by_sid)
     app.router.add_get('/api/player/sid/{steamid64}/mapstats', handle_api_player_mapstats_by_sid)
