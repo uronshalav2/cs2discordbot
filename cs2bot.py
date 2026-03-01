@@ -456,10 +456,14 @@ async def handle_api_matches(request):
         except Exception as e:
             print(f"[api/matches] DB fallback error: {e}")
 
-        # Sort newest first — ISO date strings sort correctly lexicographically
+        # Sort newest first — normalize date strings (T vs space separator, strip fractional seconds)
         def sort_key(r):
-            d = r.get('end_time') or ''
-            return str(d)
+            d = str(r.get('end_time') or '')
+            # Normalize: replace space separator with T so DB and fshost dates compare equally
+            d = d.replace(' ', 'T')
+            # Strip fractional seconds and timezone suffix for consistent comparison
+            d = d[:19]
+            return d
         results.sort(key=sort_key, reverse=True)
         results = results[:limit]
 
@@ -808,7 +812,11 @@ def _get_all_edits() -> dict:
 
 def _bust_edits_cache():
     """Call this after saving edits so the cache refreshes immediately."""
+    global _MATCHID_DEMO_CACHE, _MATCHID_CACHE_TIME
     _cache_bust('all_edits', 'matches', 'matches_full', 'leaderboard', 'specialists', 'mapstats', 'teams')
+    # Also clear the demo map cache so new matches from the DB are picked up immediately
+    _MATCHID_DEMO_CACHE = None
+    _MATCHID_CACHE_TIME = None
 
 
 def _edited_name_map():
@@ -1518,118 +1526,6 @@ async def handle_stats_page(request):
 # MATCH EDIT API ENDPOINTS
 # ─────────────────────────────────────────────────────────────────────────────
 
-async def handle_options(request):
-    """CORS preflight."""
-    return web.Response(status=204, headers={
-        "Access-Control-Allow-Origin":  "*",
-        "Access-Control-Allow-Methods": "GET, POST, PATCH, DELETE, OPTIONS",
-        "Access-Control-Allow-Headers": "Content-Type, Authorization",
-    })
-
-
-async def handle_api_auth_edit(request):
-    """POST /api/auth/edit — check Steam admin session, return ok."""
-    if _get_admin_steamid(request):
-        return _json_response({"ok": True, "admin": True})
-    return web.Response(
-        text=json.dumps({"ok": False, "error": "Not logged in as admin"}),
-        content_type='application/json', status=401,
-        headers={"Access-Control-Allow-Origin": "*"},
-    )
-
-
-def _verify_edit_token(request) -> bool:
-    """Auth check: valid Steam admin session OR legacy bearer token."""    # Primary: Steam session cookie
-    if _get_admin_steamid(request):
-        return True
-    # Legacy fallback: bearer token (keep working during transition)
-    import base64
-    auth = request.headers.get('Authorization', '')
-    if not auth.startswith('Bearer '):
-        return False
-    try:
-        return base64.b64decode(auth[7:].encode()).decode() == f"edit:{EDIT_PASSWORD}"
-    except Exception:
-        return False
-
-
-async def handle_api_save_match(request):
-    """POST /api/match/{matchid}/save — cache raw fshost JSON. No auth needed."""
-    matchid = request.match_info.get('matchid', '')
-    try:
-        body = await request.json()
-        raw  = body.get('raw_json') or body
-        if not isinstance(raw, dict):
-            return _json_response({"ok": False, "error": "No JSON body"})
-        loop = asyncio.get_running_loop()
-        await loop.run_in_executor(None, _save_raw_to_db, matchid, raw)
-        return _json_response({"ok": True, "matchid": matchid})
-    except Exception as e:
-        return _json_response({"ok": False, "error": str(e)})
-
-
-async def handle_api_get_edits(request):
-    """GET /api/match/{matchid}/edits — return stored edits for a match."""
-    matchid = request.match_info.get('matchid', '')
-    edits   = _get_edits(matchid)
-    has_raw = False
-    try:
-        conn = get_db(); c = conn.cursor()
-        c.execute("SELECT 1 FROM fshost_matches WHERE matchid = %s", (str(matchid),))
-        has_raw = c.fetchone() is not None
-        c.close(); conn.close()
-    except Exception:
-        pass
-    return _json_response({"matchid": matchid, "edits": edits, "has_raw": has_raw})
-
-
-async def handle_api_patch_match(request):
-    """PATCH /api/match/{matchid}/edit — save edits. Requires bearer token."""
-    matchid = request.match_info.get('matchid', '')
-    if not _verify_edit_token(request):
-        return web.Response(
-            text=json.dumps({"ok": False, "error": "Unauthorized"}),
-            content_type='application/json', status=401,
-            headers={"Access-Control-Allow-Origin": "*"},
-        )
-    try:
-        body  = await request.json()
-        edits = body.get('edits')
-        if not isinstance(edits, dict):
-            return _json_response({"ok": False, "error": "Missing 'edits' object"})
-        conn = get_db(); c = conn.cursor()
-        c.execute("""
-            INSERT INTO match_edits (matchid, edits_json, edited_at)
-            VALUES (%s, %s, NOW())
-            ON DUPLICATE KEY UPDATE edits_json = VALUES(edits_json), edited_at = NOW()
-        """, (str(matchid), json.dumps(edits, default=str)))
-        conn.commit(); c.close(); conn.close()
-        _bust_edits_cache()
-        return _json_response({"ok": True, "matchid": matchid})
-    except Exception as e:
-        return _json_response({"ok": False, "error": str(e)})
-
-
-async def handle_api_revert_match(request):
-    """DELETE /api/match/{matchid}/edit — remove edits, revert to fshost data."""
-    matchid = request.match_info.get('matchid', '')
-    if not _verify_edit_token(request):
-        return web.Response(
-            text=json.dumps({"ok": False, "error": "Unauthorized"}),
-            content_type='application/json', status=401,
-            headers={"Access-Control-Allow-Origin": "*"},
-        )
-    try:
-        conn = get_db(); c = conn.cursor()
-        c.execute("DELETE FROM match_edits WHERE matchid = %s", (str(matchid),))
-        conn.commit(); c.close(); conn.close()
-        _bust_edits_cache()
-        return _json_response({"ok": True, "matchid": matchid, "reverted": True})
-    except Exception as e:
-        return _json_response({"ok": False, "error": str(e)})
-
-
-
 async def handle_api_team_h2h(request):
     """GET /api/teamh2h?t1=name&t2=name — head-to-head history between two teams"""
     t1 = request.rel_url.query.get('t1', '').strip()
@@ -1801,102 +1697,53 @@ async def handle_api_player_mapstats(request):
         return _json_response({"error": str(e)})
 
 
-ADMIN_HTML_PATH = pathlib.Path(__file__).parent / "admin.html"
-# In-memory session store: {token: steamid64}
-_ADMIN_SESSIONS: dict = {}
-# Player session store (any Steam user, not just admin): {token: steamid64}
+# Player session store (any Steam user): {token: steamid64}
 _PLAYER_SESSIONS: dict = {}
-
-def _get_steam_openid_url(return_to: str) -> str:
-    """Build Steam OpenID redirect URL."""
-    import urllib.parse
-    params = {
-        "openid.ns":         "http://specs.openid.net/auth/2.0",
-        "openid.mode":       "checkid_setup",
-        "openid.return_to":  return_to,
-        "openid.realm":      return_to.split("/auth/")[0] + "/",
-        "openid.identity":   "http://specs.openid.net/auth/2.0/identifier_select",
-        "openid.claimed_id": "http://specs.openid.net/auth/2.0/identifier_select",
-    }
-    return "https://steamcommunity.com/openid/login?" + urllib.parse.urlencode(params)
-
-def _verify_steam_openid(params: dict, return_to: str) -> str | None:
-    """Verify Steam OpenID response. Returns steamid64 or None."""
-    import urllib.parse, re
-    check_params = dict(params)
-    check_params["openid.mode"] = "check_authentication"
-    body = urllib.parse.urlencode(check_params).encode()
-    try:
-        r = requests.post("https://steamcommunity.com/openid/login",
-                          data=body, timeout=10,
-                          headers={"Content-Type": "application/x-www-form-urlencoded"})
-        if "is_valid:true" not in r.text:
-            return None
-        identity = params.get("openid.claimed_id", "")
-        m = re.search(r"https://steamcommunity\.com/openid/id/(\d+)", identity)
-        return m.group(1) if m else None
-    except Exception:
-        return None
-
-async def handle_admin_page(request):
-    """GET /admin — serve admin.html"""
-    if ADMIN_HTML_PATH.exists():
-        return web.FileResponse(ADMIN_HTML_PATH)
-    return web.Response(text="Admin panel not found", status=404)
-
-async def handle_admin_steam_login(request):
-    """GET /auth/steam — redirect to Steam OpenID."""
-    scheme = request.headers.get("X-Forwarded-Proto", "https")
-    host   = request.headers.get("X-Forwarded-Host", request.host)
-    return_to = f"{scheme}://{host}/auth/steam/callback"
-    raise web.HTTPFound(location=_get_steam_openid_url(return_to))
-
-async def handle_admin_steam_callback(request):
-    """GET /auth/steam/callback — verify Steam OpenID, set session cookie."""
-    import secrets
-    scheme = request.headers.get("X-Forwarded-Proto", "https")
-    host   = request.headers.get("X-Forwarded-Host", request.host)
-    return_to = f"{scheme}://{host}/auth/steam/callback"
-    params = dict(request.rel_url.query)
-    steamid = await asyncio.get_running_loop().run_in_executor(
-        None, _verify_steam_openid, params, return_to
-    )
-    if not steamid:
-        raise web.HTTPFound(location="/admin?error=auth_failed")
-    if str(ADMIN_ID) and steamid != str(ADMIN_ID):
-        raise web.HTTPFound(location="/admin?error=not_admin")
-    token = secrets.token_hex(32)
-    _ADMIN_SESSIONS[token] = steamid
-    response = web.HTTPFound(location="/admin")
-    response.set_cookie("rg_admin", token, max_age=86400*7, httponly=True, samesite="Lax")
-    return response
-
-async def handle_admin_logout(request):
-    """POST /auth/steam/logout"""
-    token = request.cookies.get("rg_admin", "")
-    _ADMIN_SESSIONS.pop(token, None)
-    response = web.HTTPFound(location="/admin")
-    response.del_cookie("rg_admin")
-    return response
 
 # ── Player Steam login (any Steam user) ──────────────────────────────────────
 
 async def handle_player_steam_login(request):
     """GET /auth/steam/player — redirect to Steam OpenID (open to all players)."""
+    import urllib.parse
     scheme = request.headers.get("X-Forwarded-Proto", "https")
     host   = request.headers.get("X-Forwarded-Host", request.host)
     return_to = f"{scheme}://{host}/auth/steam/player/callback"
-    raise web.HTTPFound(location=_get_steam_openid_url(return_to))
+    params = {
+        "openid.ns":         "http://specs.openid.net/auth/2.0",
+        "openid.mode":       "checkid_setup",
+        "openid.return_to":  return_to,
+        "openid.realm":      f"{scheme}://{host}/",
+        "openid.identity":   "http://specs.openid.net/auth/2.0/identifier_select",
+        "openid.claimed_id": "http://specs.openid.net/auth/2.0/identifier_select",
+    }
+    raise web.HTTPFound(location="https://steamcommunity.com/openid/login?" + urllib.parse.urlencode(params))
 
 async def handle_player_steam_callback(request):
     """GET /auth/steam/player/callback — verify Steam OpenID, set player session cookie."""
-    import secrets
+    import secrets, urllib.parse, re as _re
     scheme = request.headers.get("X-Forwarded-Proto", "https")
     host   = request.headers.get("X-Forwarded-Host", request.host)
     return_to = f"{scheme}://{host}/auth/steam/player/callback"
     params = dict(request.rel_url.query)
+
+    def _verify(params, return_to):
+        check_params = dict(params)
+        check_params["openid.mode"] = "check_authentication"
+        body = urllib.parse.urlencode(check_params).encode()
+        try:
+            r = requests.post("https://steamcommunity.com/openid/login",
+                              data=body, timeout=10,
+                              headers={"Content-Type": "application/x-www-form-urlencoded"})
+            if "is_valid:true" not in r.text:
+                return None
+            identity = params.get("openid.claimed_id", "")
+            m = _re.search(r"https://steamcommunity\.com/openid/id/(\d+)", identity)
+            return m.group(1) if m else None
+        except Exception:
+            return None
+
     steamid = await asyncio.get_running_loop().run_in_executor(
-        None, _verify_steam_openid, params, return_to
+        None, _verify, params, return_to
     )
     if not steamid:
         raise web.HTTPFound(location="/?error=auth_failed")
@@ -1926,310 +1773,6 @@ async def handle_player_api_me(request):
         return web.Response(text=json.dumps({"ok": False}), content_type="application/json", status=401)
     return _json_response({"ok": True, "steamid": sid})
 
-def _get_admin_steamid(request) -> str | None:
-    """Return steamid64 if request has valid admin session, else None."""
-    token = request.cookies.get("rg_admin", "")
-    return _ADMIN_SESSIONS.get(token)
-
-async def handle_admin_api_me(request):
-    """GET /api/admin/me — return session info."""
-    sid = _get_admin_steamid(request)
-    if not sid:
-        return web.Response(text=json.dumps({"ok": False}), content_type="application/json", status=401)
-    return _json_response({"ok": True, "steamid": sid})
-
-async def handle_admin_api_matches(request):
-    """GET /api/admin/matches — all matches for admin management."""
-    if not _get_admin_steamid(request):
-        return web.Response(text=json.dumps({"error": "Unauthorized"}), content_type="application/json", status=401)
-    try:
-        conn = get_db(); c = conn.cursor(dictionary=True)
-        c.execute("""
-            SELECT f.matchid, f.fetched_at,
-                   JSON_UNQUOTE(JSON_EXTRACT(f.raw_json, '$.map'))        AS map,
-                   JSON_UNQUOTE(JSON_EXTRACT(f.raw_json, '$.winner'))     AS winner,
-                   JSON_UNQUOTE(JSON_EXTRACT(f.raw_json, '$.team1.name')) AS team1,
-                   JSON_UNQUOTE(JSON_EXTRACT(f.raw_json, '$.team2.name')) AS team2,
-                   JSON_UNQUOTE(JSON_EXTRACT(f.raw_json, '$.team1.score')) AS score1,
-                   JSON_UNQUOTE(JSON_EXTRACT(f.raw_json, '$.team2.score')) AS score2,
-                   e.edited_at
-            FROM fshost_matches f
-            LEFT JOIN match_edits e ON e.matchid = f.matchid
-            ORDER BY f.fetched_at DESC
-        """)
-        rows = [dict(r) for r in c.fetchall()]
-        c.close(); conn.close()
-        return _json_response(rows)
-    except Exception as e:
-        return _json_response({"error": str(e)})
-
-async def handle_admin_api_delete_match(request):
-    """DELETE /api/admin/match/{matchid} — delete match entirely."""
-    if not _get_admin_steamid(request):
-        return web.Response(text=json.dumps({"error": "Unauthorized"}), content_type="application/json", status=401)
-    matchid = request.match_info.get("matchid", "")
-    try:
-        conn = get_db(); c = conn.cursor()
-        c.execute("DELETE FROM match_edits WHERE matchid = %s", (matchid,))
-        c.execute("DELETE FROM fshost_matches WHERE matchid = %s", (matchid,))
-        conn.commit(); c.close(); conn.close()
-        return _json_response({"ok": True})
-    except Exception as e:
-        return _json_response({"error": str(e)})
-
-async def handle_admin_api_players(request):
-    """GET /api/admin/players — all players for management."""
-    if not _get_admin_steamid(request):
-        return web.Response(text=json.dumps({"error": "Unauthorized"}), content_type="application/json", status=401)
-    try:
-        conn = get_db(); c = conn.cursor(dictionary=True)
-        c.execute("""
-            SELECT steamid64, name,
-                   COUNT(*) AS matches,
-                   SUM(kills) AS kills, SUM(deaths) AS deaths
-            FROM matchzy_stats_players
-            GROUP BY steamid64, name
-            ORDER BY matches DESC
-        """)
-        rows = [dict(r) for r in c.fetchall()]
-        c.close(); conn.close()
-        return _json_response(rows)
-    except Exception as e:
-        return _json_response({"error": str(e)})
-
-async def handle_admin_api_rename_player(request):
-    """POST /api/admin/player/rename — rename player across all records."""
-    if not _get_admin_steamid(request):
-        return web.Response(text=json.dumps({"error": "Unauthorized"}), content_type="application/json", status=401)
-    try:
-        body = await request.json()
-        old_name = body.get("old_name", "").strip()
-        new_name = body.get("new_name", "").strip()
-        if not old_name or not new_name:
-            return _json_response({"error": "old_name and new_name required"})
-        conn = get_db(); c = conn.cursor()
-        c.execute("UPDATE matchzy_stats_players SET name = %s WHERE name = %s", (new_name, old_name))
-        affected = c.rowcount
-        conn.commit(); c.close(); conn.close()
-        return _json_response({"ok": True, "rows_updated": affected})
-    except Exception as e:
-        return _json_response({"error": str(e)})
-
-async def handle_admin_api_server(request):
-    """GET /api/admin/server — live server status + player list."""
-    if not _get_admin_steamid(request):
-        return web.Response(text=json.dumps({"error": "Unauthorized"}), content_type="application/json", status=401)
-    try:
-        loop = asyncio.get_running_loop()
-        players = await loop.run_in_executor(None, rcon_list_players)
-        status_txt = await loop.run_in_executor(None, send_rcon, "status")
-        return _json_response({"ok": True, "players": players, "status": status_txt})
-    except Exception as e:
-        return _json_response({"error": str(e)})
-
-async def handle_admin_api_rcon(request):
-    """POST /api/admin/rcon — run RCON command."""
-    if not _get_admin_steamid(request):
-        return web.Response(text=json.dumps({"error": "Unauthorized"}), content_type="application/json", status=401)
-    try:
-        body = await request.json()
-        cmd = body.get("cmd", "").strip()
-        if not cmd:
-            return _json_response({"error": "cmd required"})
-        loop = asyncio.get_running_loop()
-        result = await loop.run_in_executor(None, send_rcon, cmd)
-        return _json_response({"ok": True, "result": result})
-    except Exception as e:
-        return _json_response({"error": str(e)})
-
-
-async def handle_admin_api_suggest_merges(request):
-    """GET /api/admin/players/suggest-merges — fuzzy duplicate detection."""
-    if not _get_admin_steamid(request):
-        return web.Response(text=json.dumps({"error": "Unauthorized"}), content_type="application/json", status=401)
-    try:
-        conn = get_db(); c = conn.cursor(dictionary=True)
-        c.execute("""
-            SELECT name, COUNT(*) AS matches, SUM(kills) AS kills
-            FROM matchzy_stats_players
-            GROUP BY name
-            ORDER BY matches DESC
-        """)
-        players = [dict(r) for r in c.fetchall()]
-        c.close(); conn.close()
-
-        # Fuzzy matching using simple edit distance
-        def edit_distance(a, b):
-            a, b = a.lower().strip(), b.lower().strip()
-            if a == b: return 0
-            if len(a) > len(b): a, b = b, a
-            distances = range(len(a) + 1)
-            for i2, c2 in enumerate(b):
-                new_distances = [i2 + 1]
-                for i1, c1 in enumerate(a):
-                    if c1 == c2:
-                        new_distances.append(distances[i1])
-                    else:
-                        new_distances.append(1 + min((distances[i1], distances[i1 + 1], new_distances[-1])))
-                distances = new_distances
-            return distances[-1]
-
-        names = [p["name"] for p in players]
-        name_map = {p["name"]: p for p in players}
-        suggestions = []
-        seen = set()
-
-        for i, n1 in enumerate(names):
-            for n2 in names[i+1:]:
-                key = tuple(sorted([n1, n2]))
-                if key in seen:
-                    continue
-                seen.add(key)
-                l1, l2 = len(n1), len(n2)
-                max_len = max(l1, l2)
-                if max_len == 0:
-                    continue
-                dist = edit_distance(n1, n2)
-                similarity = 1 - dist / max_len
-                # Also check if one starts with or contains the other
-                n1l, n2l = n1.lower(), n2.lower()
-                if n1l in n2l or n2l in n1l:
-                    similarity = max(similarity, 0.75)
-                if similarity >= 0.65:
-                    p1, p2 = name_map[n1], name_map[n2]
-                    suggestions.append({
-                        "name1": n1, "matches1": p1["matches"], "kills1": int(p1["kills"] or 0),
-                        "name2": n2, "matches2": p2["matches"], "kills2": int(p2["kills"] or 0),
-                        "similarity": round(similarity, 2),
-                    })
-
-        # Sort by similarity desc
-        suggestions.sort(key=lambda x: -x["similarity"])
-        return _json_response(suggestions[:30])
-    except Exception as e:
-        return _json_response({"error": str(e)})
-
-
-async def handle_admin_api_merge_players(request):
-    """POST /api/admin/players/merge — merge duplicate names into one."""
-    if not _get_admin_steamid(request):
-        return web.Response(text=json.dumps({"error": "Unauthorized"}), content_type="application/json", status=401)
-    try:
-        body = await request.json()
-        keep_name  = body.get("keep_name", "").strip()
-        merge_names = [n.strip() for n in body.get("merge_names", []) if n.strip()]
-        if not keep_name or not merge_names:
-            return _json_response({"error": "keep_name and merge_names[] required"})
-        conn = get_db(); c = conn.cursor()
-        total = 0
-        for name in merge_names:
-            if name == keep_name:
-                continue
-            c.execute("UPDATE matchzy_stats_players SET name = %s WHERE name = %s", (keep_name, name))
-            total += c.rowcount
-        conn.commit(); c.close(); conn.close()
-        return _json_response({"ok": True, "rows_updated": total, "keep_name": keep_name, "merged": merge_names})
-    except Exception as e:
-        return _json_response({"error": str(e)})
-
-async def handle_admin_api_merge_by_steamid(request):
-    """
-    POST /api/admin/players/merge-by-steamid
-    Two-step fix:
-      1. Convert any SteamID32 values in the steamid64 column to real SteamID64
-         (fshost JSONs store steam_id as SteamID32; MatchZy stores SteamID64 —
-          this caused the same player to appear twice with different IDs).
-      2. For each steamid64 with multiple name variants, unify all rows to
-         the most recent name so renamed players are merged into one profile.
-    Body (optional): { "steamid64": "765..." } to fix one player only.
-    """
-    if not _get_admin_steamid(request):
-        return web.Response(text=json.dumps({"error": "Unauthorized"}),
-                            content_type="application/json", status=401)
-    try:
-        body = {}
-        try:
-            body = await request.json()
-        except Exception:
-            pass
-        target_sid = (body.get("steamid64") or "").strip() or None
-
-        conn = get_db()
-        c = conn.cursor(dictionary=True)
-
-        # Find all steamid64s that have more than one distinct name
-        if target_sid:
-            c.execute(f"""
-                SELECT steamid64,
-                    COUNT(DISTINCT name) AS name_count,
-                    SUBSTRING_INDEX(GROUP_CONCAT(name ORDER BY matchid DESC), ',', 1) AS latest_name
-                FROM {MATCHZY_TABLES['players']}
-                WHERE steamid64 = %s AND steamid64 != '0'
-                GROUP BY steamid64
-                HAVING name_count > 1
-            """, (target_sid,))
-        else:
-            c.execute(f"""
-                SELECT steamid64,
-                    COUNT(DISTINCT name) AS name_count,
-                    SUBSTRING_INDEX(GROUP_CONCAT(name ORDER BY matchid DESC), ',', 1) AS latest_name
-                FROM {MATCHZY_TABLES['players']}
-                WHERE steamid64 != '0' AND steamid64 IS NOT NULL
-                GROUP BY steamid64
-                HAVING name_count > 1
-            """)
-
-        duplicates = [dict(r) for r in c.fetchall()]
-
-        # Apply edit-map overrides: if admin has explicitly renamed this player, use that
-        name_map = _edited_name_map()
-        total_updated = 0
-        merged = []
-
-        for dup in duplicates:
-            sid = str(dup['steamid64'])
-            canonical = name_map.get(sid) or dup['latest_name']
-
-            # Fetch old names for reporting
-            c.execute(f"""
-                SELECT DISTINCT name FROM {MATCHZY_TABLES['players']}
-                WHERE steamid64 = %s AND name != %s
-            """, (sid, canonical))
-            old_names = [r['name'] for r in c.fetchall()]
-
-            # Update all rows for this SID to the canonical name (both stored forms)
-            c2 = conn.cursor()
-            c2.execute(f"""
-                UPDATE {MATCHZY_TABLES['players']}
-                SET name = %s
-                WHERE steamid64 = %s AND name != %s
-            """, (sid, canonical))
-            rows_changed = c2.rowcount
-            c2.close()
-
-            total_updated += rows_changed
-            merged.append({
-                "steamid64":   sid,
-                "canonical":   canonical,
-                "old_names":   old_names,
-                "rows_updated": rows_changed,
-            })
-
-        conn.commit()
-        c.close()
-        conn.close()
-
-        # Bust all caches so leaderboard/profiles reflect the fix immediately
-        _bust_edits_cache()
-
-        return _json_response({
-            "ok":            True,
-            "players_fixed": len(merged),
-            "rows_updated":  total_updated,
-            "details":       merged,
-        })
-    except Exception as e:
-        return _json_response({"error": str(e)})
 
 
 async def start_http_server():
@@ -2251,32 +1794,6 @@ async def start_http_server():
     app.router.add_get('/api/search',                  handle_api_search)
     app.router.add_get('/api/player/{name}/mapstats',  handle_api_player_mapstats)
     app.router.add_get('/api/status',                  handle_api_status)
-    # ── Edit endpoints ────────────────────────────────────────────────────────
-    app.router.add_post('/api/auth/edit',              handle_api_auth_edit)
-    app.router.add_post('/api/match/{matchid}/save',   handle_api_save_match)
-    app.router.add_get('/api/match/{matchid}/edits',   handle_api_get_edits)
-    app.router.add_route('PATCH',  '/api/match/{matchid}/edit', handle_api_patch_match)
-    app.router.add_route('DELETE', '/api/match/{matchid}/edit', handle_api_revert_match)
-    app.router.add_route('OPTIONS', '/api/auth/edit',             handle_options)
-    app.router.add_route('OPTIONS', '/api/match/{matchid}/save',  handle_options)
-    app.router.add_route('OPTIONS', '/api/match/{matchid}/edit',  handle_options)
-    app.router.add_route('OPTIONS', '/api/match/{matchid}/edits', handle_options)
-    # ── Static ────────────────────────────────────────────────────────────────
-    # ── Admin ─────────────────────────────────────────────────────────────────
-    app.router.add_get('/admin',                        handle_admin_page)
-    app.router.add_get('/auth/steam',                   handle_admin_steam_login)
-    app.router.add_get('/auth/steam/callback',          handle_admin_steam_callback)
-    app.router.add_post('/auth/steam/logout',           handle_admin_logout)
-    app.router.add_get('/api/admin/me',                 handle_admin_api_me)
-    app.router.add_get('/api/admin/matches',            handle_admin_api_matches)
-    app.router.add_route('DELETE', '/api/admin/match/{matchid}', handle_admin_api_delete_match)
-    app.router.add_get('/api/admin/players',            handle_admin_api_players)
-    app.router.add_post('/api/admin/player/rename',     handle_admin_api_rename_player)
-    app.router.add_get('/api/admin/players/suggest-merges', handle_admin_api_suggest_merges)
-    app.router.add_post('/api/admin/players/merge',             handle_admin_api_merge_players)
-    app.router.add_post('/api/admin/players/merge-by-steamid', handle_admin_api_merge_by_steamid)
-    app.router.add_get('/api/admin/server',             handle_admin_api_server)
-    app.router.add_post('/api/admin/rcon',              handle_admin_api_rcon)
     # ── Player Steam login (open to any Steam user) ───────────────────────────
     app.router.add_get('/auth/steam/player',            handle_player_steam_login)
     app.router.add_get('/auth/steam/player/callback',   handle_player_steam_callback)
@@ -3435,6 +2952,7 @@ async def demos_cmd(inter: discord.Interaction):
     await inter.followup.send(embed=embed, view=view, ephemeral=True)
 
 
+
 # ========== ADMIN COMMANDS ==========
 @bot.tree.command(name="csssay", description="Send center-screen message to all players")
 @owner_only()
@@ -3496,11 +3014,8 @@ async def debugdb_cmd(inter: discord.Interaction):
     try:
         conn = get_db()
         c = conn.cursor()
-        
-        # Check MatchZy
         has_mz = matchzy_tables_exist(conn)
         lines.append(f"**MatchZy tables:** {'✅ Found' if has_mz else '❌ Not found'}")
-        
         if has_mz:
             c.execute(f"SELECT COUNT(*) FROM {MATCHZY_TABLES['players']}")
             rows = c.fetchone()[0]
@@ -3508,13 +3023,10 @@ async def debugdb_cmd(inter: discord.Interaction):
             c.execute(f"SELECT COUNT(DISTINCT matchid) FROM {MATCHZY_TABLES['players']}")
             matches = c.fetchone()[0]
             lines.append(f"**MatchZy matches:** {matches}")
-        
-        
         c.close()
         conn.close()
     except Exception as e:
         lines.append(f"❌ DB Error: {e}")
-    
     await inter.followup.send("\n".join(lines), ephemeral=True)
 
 @bot.tree.command(name="debugmatch", description="Debug a specific match data")
@@ -3525,8 +3037,6 @@ async def debugmatch_cmd(inter: discord.Interaction, match_id: str):
     try:
         conn = get_db()
         c = conn.cursor(dictionary=True)
-        
-        # Get match data
         c.execute(f"SELECT * FROM {MATCHZY_TABLES['matches']} WHERE matchid=%s", (match_id,))
         match = c.fetchone()
         if match:
@@ -3537,27 +3047,20 @@ async def debugmatch_cmd(inter: discord.Interaction, match_id: str):
             lines.append(f"❌ Match not found")
             c.close(); conn.close()
             return await inter.followup.send("\n".join(lines), ephemeral=True)
-        
-        # Get player data
         c.execute(f"SELECT name, team, kills, deaths, mapnumber FROM {MATCHZY_TABLES['players']} WHERE matchid=%s", (match_id,))
         players = c.fetchall()
         lines.append(f"\n**Players ({len(players)} total):**")
         for p in players:
             lines.append(f"• {p['name']} | Team: `{p['team']}` | Map: {p['mapnumber']} | K/D: {p['kills']}/{p['deaths']}")
-        
-        # Get map data
         c.execute(f"SELECT * FROM {MATCHZY_TABLES['maps']} WHERE matchid=%s", (match_id,))
         maps = c.fetchall()
         lines.append(f"\n**Maps ({len(maps)} total):**")
         for m in maps:
             lines.append(f"• Map {m.get('mapnumber')}: {m.get('mapname')} ({m.get('team1_score')} : {m.get('team2_score')})")
-        
         c.close()
         conn.close()
     except Exception as e:
         lines.append(f"\n❌ Error: {e}")
-    
-    # Split into multiple messages if too long
     message = "\n".join(lines)
     if len(message) > 2000:
         chunks = [message[i:i+2000] for i in range(0, len(message), 2000)]
@@ -3569,50 +3072,29 @@ async def debugmatch_cmd(inter: discord.Interaction, match_id: str):
 @bot.tree.command(name="debugdemos", description="Show match ID to demo mapping from .json files")
 @owner_only()
 async def debugdemos_cmd(inter: discord.Interaction, refresh: bool = False):
-    """
-    Shows how .json files are mapped to match IDs.
-    
-    Args:
-        refresh: If True, clears the cache and rebuilds the mapping
-    """
     await inter.response.defer(ephemeral=True)
     lines = ["**Match ID → Demo Mapping** (from .json files)\n"]
-    
     try:
         if refresh:
             lines.append("🔄 Refreshing cache...\n")
-        
         matchid_map = build_matchid_to_demo_map(force_refresh=refresh)
-        
         if not matchid_map:
             lines.append("❌ No demos with .json metadata found")
-            lines.append("\nMake sure your demo files have corresponding .json files with 'matchid' field:")
-            lines.append("```json")
-            lines.append('{"matchid": "11", "team1_name": "...", ...}')
-            lines.append("```")
         else:
             lines.append(f"✅ Found {len(matchid_map)} matches with demos:\n")
-            
-            # Sort by match ID (numeric)
             sorted_matches = sorted(matchid_map.items(), key=lambda x: int(x[0]) if x[0].isdigit() else 0, reverse=True)
-            
-            for matchid, demo in sorted_matches[:15]:  # Show last 15
+            for matchid, demo in sorted_matches[:15]:
                 name = demo.get('name', '?')
                 size = demo.get('size_formatted', '?')
                 lines.append(f"**Match #{matchid}**")
                 lines.append(f"  └─ {name} ({size})")
-            
             if len(matchid_map) > 15:
                 lines.append(f"\n...and {len(matchid_map) - 15} more")
-            
-            # Show cache info
             if _MATCHID_CACHE_TIME:
                 age = (datetime.now() - _MATCHID_CACHE_TIME).total_seconds()
                 lines.append(f"\n📊 Cache age: {age:.0f}s (refreshes every {_CACHE_TTL_SECONDS}s)")
-    
     except Exception as e:
         lines.append(f"\n❌ Error: {e}")
-    
     message = "\n".join(lines)
     if len(message) > 2000:
         chunks = [message[i:i+2000] for i in range(0, len(message), 2000)]
@@ -3620,7 +3102,6 @@ async def debugdemos_cmd(inter: discord.Interaction, refresh: bool = False):
             await inter.followup.send(chunk, ephemeral=True)
     else:
         await inter.followup.send(message, ephemeral=True)
-
 
 @bot.tree.command(name="syncdemos", description="Force re-sync all fshost JSONs into the database now")
 @owner_only()
