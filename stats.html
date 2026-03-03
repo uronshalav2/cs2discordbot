@@ -3023,7 +3023,7 @@ function renderTeam(lineups) {
       const aliasBadge = allAliases.length
         ? `<span style="font-size:10px;color:var(--muted2);font-family:'Rajdhani',sans-serif;letter-spacing:.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="Also known as: ${allAliases.map(a=>esc(a)).join(', ')}">aka ${allAliases.map(a=>esc(a)).join(', ')}</span>`
         : '';
-      return `<div class="lineup-player" onclick="event.stopPropagation();go('player',{sid:${escName(p.steamid64||n)}},'team')">
+      return `<div class="lineup-player" onclick="event.stopPropagation();go('player',{sid:${escName(sid||n)}},'team')">
         ${avatarHtml}
         <div style="display:flex;flex-direction:column;min-width:0;overflow:hidden">
           <span style="font-family:'Rajdhani',sans-serif;font-weight:600;font-size:13px;color:var(--white)">${esc(n)}</span>
