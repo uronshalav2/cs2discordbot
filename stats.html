@@ -1545,7 +1545,7 @@ function sbRows(arr, steamCache={}) {
     const rSty   = p.rating!=null?(parseFloat(p.rating)>=1.15?'style="color:#a78bfa;font-weight:700"':parseFloat(p.rating)<0.85?'style="color:var(--loss)"':''):'';
     const avatar = steamCache[p.steamid64]
       ? `<img src="${steamCache[p.steamid64]}" style="width:22px;height:22px;border-radius:50%;object-fit:cover;vertical-align:middle;margin-right:7px;border:1px solid var(--border2)" onerror="this.style.display='none'">`
-      : `<span style="display:inline-block;width:22px;height:22px;border-radius:50%;background:var(--surface2);line-height:22px;text-align:center;font-size:9px;font-family:'Rajdhani',sans-serif;font-weight:700;color:var(--muted2);vertical-align:middle;margin-right:7px">${initials(p.name)}</span>`;
+      : `<span style="display:inline-block;width:22px;height:22px;border-radius:50%;background:var(--surface2);line-height:22px;text-align:center;font-size:9px;font-family:'Rajdhani',sans-serif;font-weight:700;color:var(--muted2);vertical-align:middle;margin-right:7px">${initials(p._steam_name||p.name)}</span>`;
     return `<tr>
       <td onclick="go('player',{sid:${escName(p.steamid64)}},'match')" style="cursor:pointer"><div style="display:flex;align-items:center">${avatar}${esc(p.name)}</div></td>
       <td class="kda-cell">${p.kills??0}</td>
@@ -1845,7 +1845,7 @@ function renderH2HPicker() {
     if (p) {
       const av = p._steam_avatar
         ? `<img src="${p._steam_avatar}" style="width:48px;height:48px;border-radius:50%;object-fit:cover;border:2px solid ${slot===0?'var(--ct)':'var(--t)'}">`
-        : `<div style="width:48px;height:48px;border-radius:50%;background:var(--surface2);border:2px solid ${slot===0?'var(--ct)':'var(--t)'};display:flex;align-items:center;justify-content:center;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:16px;color:${slot===0?'var(--ct)':'var(--t)'}">${initials(p.name)}</div>`;
+        : `<div style="width:48px;height:48px;border-radius:50%;background:var(--surface2);border:2px solid ${slot===0?'var(--ct)':'var(--t)'};display:flex;align-items:center;justify-content:center;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:16px;color:${slot===0?'var(--ct)':'var(--t)'}">${initials(p._steam_name||p.name)}</div>`;
       return `<div style="display:flex;flex-direction:column;align-items:center;gap:6px;flex:1">
         <div style="font-size:10px;color:var(--muted2);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:2px">Player ${slot+1}</div>
         ${av}
@@ -1870,7 +1870,7 @@ function renderH2HPicker() {
     const selected = isP1 || isP2;
     const av = p._steam_avatar
       ? `<img src="${p._steam_avatar}" style="width:38px;height:38px;border-radius:50%;object-fit:cover;flex-shrink:0">`
-      : `<div style="width:38px;height:38px;border-radius:50%;background:var(--surface2);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:13px;color:var(--muted2)">${initials(p.name)}</div>`;
+      : `<div style="width:38px;height:38px;border-radius:50%;background:var(--surface2);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:13px;color:var(--muted2)">${initials(p._steam_name||p.name)}</div>`;
     const badge = isP1
       ? `<span style="font-size:9px;padding:1px 6px;border-radius:2px;background:rgba(56,189,248,.2);border:1px solid rgba(56,189,248,.4);color:var(--ct);font-family:'Rajdhani',sans-serif;font-weight:700;letter-spacing:1px">P1</span>`
       : isP2
@@ -1939,7 +1939,7 @@ async function runH2H() {
   function avatar(p, st, size=56) {
     return st.avatar
       ? `<img src="${st.avatar}" style="width:${size}px;height:${size}px;border-radius:50%;object-fit:cover;border:2px solid var(--border2)">`
-      : `<div style="width:${size}px;height:${size}px;border-radius:50%;background:linear-gradient(135deg,var(--orange),var(--orange2));display:flex;align-items:center;justify-content:center;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:${Math.floor(size*.35)}px;color:#000">${initials(p.name)}</div>`;
+      : `<div style="width:${size}px;height:${size}px;border-radius:50%;background:linear-gradient(135deg,var(--orange),var(--orange2));display:flex;align-items:center;justify-content:center;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:${Math.floor(size*.35)}px;color:#000">${initials(p._steam_name||p.name)}</div>`;
   }
 
   const stats = [
@@ -2092,7 +2092,7 @@ function renderLeaderboard(data, sortKey) {
       const hsBar = `<div class="hs-bar-wrap"><div class="hs-bar"><div class="hs-bar-fill" style="width:${Math.min(hsPct,100)}%"></div></div><span class="hs-val">${hsPct.toFixed(1)}%</span></div>`;
       const avatarEl = p._steam_avatar
         ? `<img src="${p._steam_avatar}" style="width:24px;height:24px;border-radius:50%;object-fit:cover;vertical-align:middle;margin-right:8px;border:1px solid var(--border2)" alt="">`
-        : `<span style="display:inline-block;width:24px;height:24px;border-radius:50%;background:var(--surface2);vertical-align:middle;margin-right:8px;text-align:center;line-height:24px;font-size:10px;font-family:'Rajdhani',sans-serif;font-weight:700;color:var(--muted2)">${initials(p.name)}</span>`;
+        : `<span style="display:inline-block;width:24px;height:24px;border-radius:50%;background:var(--surface2);vertical-align:middle;margin-right:8px;text-align:center;line-height:24px;font-size:10px;font-family:'Rajdhani',sans-serif;font-weight:700;color:var(--muted2)">${initials(p._steam_name||p.name)}</span>`;
       const rankColors = ['var(--orange)','#a0aec0','#b87333'];
       const rankStyle = rank<=3 ? `color:${rankColors[rank-1]};font-family:'Rajdhani',sans-serif;font-weight:800;font-size:15px` : 'color:var(--muted2)';
       const rankCls = rank===1?'rank-gold':rank===2?'rank-silver':rank===3?'rank-bronze':'';
@@ -2128,7 +2128,7 @@ function renderLeaderboard(data, sortKey) {
       const c = colors[rank];
       const avatarEl = p._steam_avatar
         ? `<img src="${p._steam_avatar}" style="width:56px;height:56px;border-radius:50%;object-fit:cover;border:2px solid ${c};margin-bottom:10px" alt="${esc(p.name)}">`
-        : `<div style="width:56px;height:56px;border-radius:50%;background:var(--surface);border:2px solid ${c};display:flex;align-items:center;justify-content:center;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:20px;color:${c};margin:0 auto 10px">${initials(p.name)}</div>`;
+        : `<div style="width:56px;height:56px;border-radius:50%;background:var(--surface);border:2px solid ${c};display:flex;align-items:center;justify-content:center;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:20px;color:${c};margin:0 auto 10px">${initials(p._steam_name||p.name)}</div>`;
       return `<div class="podium-card" data-rank="${rank}" style="--card-color:${c};--glow:${glowColors[rank]};--bdr:${borderColors[rank]};flex:1;background:${glowColors[rank]};backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border:1px solid ${borderColors[rank]};border-top:2px solid ${c};border-radius:6px;padding:18px 14px;text-align:center;cursor:pointer;position:relative;overflow:hidden;" onclick="go('player',{sid:${escName(p.steamid64)}},'leaderboard')">
         <div class="podium-shine"></div>
         <div style="position:absolute;top:10px;left:14px;font-family:'Rajdhani',sans-serif;font-weight:800;font-size:11px;letter-spacing:2px;color:${c};opacity:.9">${rankLabels[rank]}</div>
@@ -2249,12 +2249,13 @@ async function loadSpecialists() {
   if (!Array.isArray(data) || !data.length) {
     el.innerHTML = emptyState('specialists','No Specialist Data','Clutch kings, entry fraggers and more will appear here'); return;
   }
-  // Fetch Steam avatars for all players
+  // Fetch Steam avatars + real-time names for all players
   await Promise.all(data.map(async p => {
     if (p.steamid64 && p.steamid64 !== '0') {
       try {
         const s = await fetch('/api/steam/'+p.steamid64).then(r=>r.json()).catch(()=>({}));
         if (s.avatar) p._steam_avatar = s.avatar;
+        if (s.name)   p._steam_name   = s.name;
       } catch(_) {}
     }
   }));
@@ -2341,7 +2342,7 @@ function renderSpecialists(data, tab) {
           const avSize = isFirst ? '62px' : '48px';
           const av = p._steam_avatar
             ? `<img src="${p._steam_avatar}" style="width:${avSize};height:${avSize};border-radius:50%;object-fit:cover;border:2px solid ${c.solid};box-shadow:0 0 16px ${c.glow}">`
-            : `<div style="width:${avSize};height:${avSize};border-radius:50%;background:var(--surface2);border:2px solid ${c.solid};box-shadow:0 0 16px ${c.glow};display:flex;align-items:center;justify-content:center;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:${isFirst?'18px':'14px'};color:${c.solid}">${initials(p.name)}</div>`;
+            : `<div style="width:${avSize};height:${avSize};border-radius:50%;background:var(--surface2);border:2px solid ${c.solid};box-shadow:0 0 16px ${c.glow};display:flex;align-items:center;justify-content:center;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:${isFirst?'18px':'14px'};color:${c.solid}">${initials(p._steam_name||p.name)}</div>`;
           return `<div style="flex:1;max-width:155px;display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer" onclick="go('player',{sid:${escName(p.steamid64)}},'specialists')">
             ${isFirst ? `<div>${crownSvg}</div>` : `<div style="height:20px"></div>`}
             ${av}
@@ -2362,7 +2363,7 @@ function renderSpecialists(data, tab) {
     const rank = i + 4;
     const av = p._steam_avatar
       ? `<img src="${p._steam_avatar}" style="width:32px;height:32px;border-radius:50%;object-fit:cover;border:1px solid var(--border2)" alt="">`
-      : `<div style="width:32px;height:32px;border-radius:50%;background:var(--surface2);display:flex;align-items:center;justify-content:center;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:11px;color:var(--muted2)">${initials(p.name)}</div>`;
+      : `<div style="width:32px;height:32px;border-radius:50%;background:var(--surface2);display:flex;align-items:center;justify-content:center;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:11px;color:var(--muted2)">${initials(p._steam_name||p.name)}</div>`;
     return `<div onclick="go('player',{sid:${escName(p.steamid64)}},'specialists')"
       style="display:flex;align-items:center;gap:12px;padding:10px 14px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .12s"
       onmouseover="this.style.background='rgba(var(--orange-rgb),.04)'" onmouseout="this.style.background=''">
@@ -2589,7 +2590,7 @@ function renderPredict() {
       if (p) {
         const av = p._steam_avatar
           ? `<img src="${p._steam_avatar}" style="width:30px;height:30px;border-radius:50%;object-fit:cover;flex-shrink:0;border:1px solid ${color}">`
-          : `<div style="width:30px;height:30px;border-radius:50%;background:var(--surface2);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:11px;color:var(--muted2)">${initials(p.name)}</div>`;
+          : `<div style="width:30px;height:30px;border-radius:50%;background:var(--surface2);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:11px;color:var(--muted2)">${initials(p._steam_name||p.name)}</div>`;
         out.push(`<div class="predict-slot filled" onclick="predictRemove(${teamIdx},${i})">
           ${av}
           <div style="flex:1;min-width:0">
@@ -2640,7 +2641,7 @@ function predictOpenPicker(teamIdx) {
     const globalIdx = _predictPlayers.indexOf(p);
     const av = p._steam_avatar
       ? `<img src="${p._steam_avatar}" style="width:34px;height:34px;border-radius:50%;object-fit:cover;flex-shrink:0">`
-      : `<div style="width:34px;height:34px;border-radius:50%;background:var(--surface2);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:12px;color:var(--muted2)">${initials(p.name)}</div>`;
+      : `<div style="width:34px;height:34px;border-radius:50%;background:var(--surface2);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:12px;color:var(--muted2)">${initials(p._steam_name||p.name)}</div>`;
     return `<div class="predict-player-row" onclick="predictAdd(${teamIdx},${globalIdx})">
       ${av}
       <div style="flex:1;min-width:0">
@@ -2712,7 +2713,7 @@ function buildPrediction(t1, t2) {
     if (!p) return '';
     const av = p._steam_avatar
       ? `<img src="${p._steam_avatar}" style="width:28px;height:28px;border-radius:50%;object-fit:cover;border:1px solid ${color}">`
-      : `<div style="width:28px;height:28px;border-radius:50%;background:var(--surface2);display:flex;align-items:center;justify-content:center;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:10px;color:var(--muted2)">${initials(p.name)}</div>`;
+      : `<div style="width:28px;height:28px;border-radius:50%;background:var(--surface2);display:flex;align-items:center;justify-content:center;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:10px;color:var(--muted2)">${initials(p._steam_name||p.name)}</div>`;
     return `<div style="display:flex;align-items:center;gap:8px;padding:7px 10px;background:var(--surface);border-radius:4px;border:1px solid var(--border);margin-bottom:5px">
       ${av}
       <div style="min-width:0;flex:1">
@@ -3829,7 +3830,7 @@ async function runSearch(q) {
       html += '<div class="search-section-hd">Players</div>';
       html += data.players.map(p => `
         <div class="search-row" onclick="closeSearchOverlay();go('player',{sid:${escName(p.steamid64||p.name)}})">
-          <div style="width:32px;height:32px;border-radius:50%;background:var(--surface2);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:11px;color:var(--muted2)">${initials(p.name)}</div>
+          <div style="width:32px;height:32px;border-radius:50%;background:var(--surface2);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:11px;color:var(--muted2)">${initials(p._steam_name||p.name)}</div>
           <div style="flex:1;min-width:0">
             <div class="search-row-title">${esc(p._steam_name||p.name)}</div>
             <div class="search-row-sub">${p.matches} matches · ${parseFloat(p.kd??0).toFixed(2)} K/D · ${parseFloat(p.adr??0).toFixed(0)} ADR</div>
