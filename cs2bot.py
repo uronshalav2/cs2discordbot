@@ -1266,18 +1266,36 @@ def to_steamid64(raw: str) -> str:
     except (ValueError, TypeError):
         return raw
 
-# ── Steam avatar local cache ─────────────────────────────────────────────────
-# In-memory cache: steamid64 -> local URL or Steam CDN URL
+# ── Steam avatar server-side cache ──────────────────────────────────────────
+# In-memory cache: steamid64 -> {data, ts}  (TTL: 1 hour)
+_STEAM_CACHE: dict = {}
+_STEAM_CACHE_TTL = 3600  # seconds
 
+def _steam_cache_get(sid: str):
+    entry = _STEAM_CACHE.get(sid)
+    if entry and (_time.monotonic() - entry['ts']) < _STEAM_CACHE_TTL:
+        return entry['data']
+    return None
 
+def _steam_cache_set(sid: str, data: dict):
+    _STEAM_CACHE[sid] = {'data': data, 'ts': _time.monotonic()}
 
 async def handle_api_steam(request):
     """GET /api/steam/{steamid64} — fetch Steam profile and avatar from CDN."""
-    steamid = request.match_info.get('steamid64', '')
-    if not steamid or not STEAM_API_KEY:
+    steamid = request.match_info.get('steamid64', '').strip()
+    if not steamid or steamid == '0' or not STEAM_API_KEY:
         return _json_response({"error": "Steam API not configured"})
     try:
         steamid64 = to_steamid64(steamid)
+        # Validate: all real SteamID64s start with 7656119
+        if not steamid64.startswith('7656119'):
+            return _json_response({"error": f"Invalid steamid64: {steamid64}"})
+
+        # Check server-side cache first
+        cached = _steam_cache_get(steamid64)
+        if cached is not None:
+            return _json_response(cached, max_age=300)
+
         loop = asyncio.get_running_loop()
 
         def fetch():
@@ -1291,6 +1309,9 @@ async def handle_api_steam(request):
             if not players:
                 return {}
             p = players[0]
+            # Verify the returned steamid matches what we asked for
+            if p.get("steamid") != steamid64:
+                return {}
             return {
                 "steamid":     p.get("steamid"),
                 "name":        p.get("personaname"),
@@ -1301,7 +1322,10 @@ async def handle_api_steam(request):
             }
 
         data = await loop.run_in_executor(None, fetch)
-        return _json_response(data, max_age=3600)
+        if data:
+            _steam_cache_set(steamid64, data)
+        # max_age=300: browser can cache for 5 min (short enough to avoid stale profiles)
+        return _json_response(data, max_age=300)
     except Exception as e:
         return _json_response({"error": str(e)})
 
