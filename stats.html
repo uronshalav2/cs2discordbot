@@ -236,6 +236,78 @@ nav{
 .winner-tag{display:inline-block;padding:2px 10px;border:1px solid var(--win);border-radius:2px;font-family:'Rajdhani',sans-serif;font-weight:600;font-size:11px;letter-spacing:1px;text-transform:uppercase;color:var(--win);background:rgba(34,197,94,.08)}
 
 /* EDITED BADGE */
+.edited-badge{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:2px;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:var(--ct);border:1px solid rgba(91,196,245,.4);background:rgba(91,196,245,.08)}
+
+/* EDIT BUTTON */
+.edit-match-btn{padding:5px 14px;border-radius:3px;border:1px solid var(--border2);background:transparent;color:var(--muted2);font-family:'Rajdhani',sans-serif;font-weight:700;font-size:11px;letter-spacing:1.5px;text-transform:uppercase;cursor:pointer;transition:all .15s;display:inline-flex;align-items:center;gap:6px}
+.edit-match-btn:hover{color:var(--orange);border-color:var(--orange);background:var(--orange-glow)}
+.edit-match-btn svg{width:12px;height:12px}
+
+/* EDIT MODAL */
+.edit-overlay{position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:600;display:flex;align-items:flex-start;justify-content:center;padding:40px 16px;backdrop-filter:blur(6px);opacity:0;pointer-events:none;transition:opacity .2s;overflow-y:auto}
+.edit-overlay.open{opacity:1;pointer-events:auto}
+.edit-modal{background:var(--nav-bg);border:1px solid rgba(var(--orange-rgb),.3);border-radius:10px;width:100%;max-width:680px;box-shadow:0 20px 80px rgba(0,0,0,.7),inset 0 1px 0 rgba(255,255,255,.05);transform:translateY(12px);transition:transform .2s;position:relative;flex-shrink:0}
+.edit-overlay.open .edit-modal{transform:translateY(0)}
+.edit-modal-header{padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;background:linear-gradient(180deg,rgba(var(--orange-rgb),.1) 0%,transparent 100%)}
+.edit-modal-title{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:15px;letter-spacing:1.5px;text-transform:uppercase;color:var(--orange)}
+.edit-modal-close{width:28px;height:28px;border-radius:4px;background:transparent;border:1px solid var(--border);color:var(--muted2);cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;transition:all .15s;line-height:1}
+.edit-modal-close:hover{color:var(--white);border-color:var(--border2)}
+.edit-modal-body{padding:20px}
+.edit-section{margin-bottom:20px}
+.edit-section-title{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:11px;letter-spacing:2px;text-transform:uppercase;color:var(--orange);margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid rgba(var(--orange-rgb),.2)}
+.edit-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.edit-field{display:flex;flex-direction:column;gap:4px}
+.edit-field label{font-family:'Rajdhani',sans-serif;font-weight:600;font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted2)}
+.edit-field input{padding:7px 10px;background:var(--surface2);border:1px solid var(--border2);border-radius:4px;color:var(--white);font-family:'Inter',sans-serif;font-size:13px;transition:border-color .15s;width:100%}
+.edit-field input:focus{outline:none;border-color:var(--orange);box-shadow:0 0 0 2px rgba(var(--orange-rgb),.12)}
+.edit-player-row{display:grid;grid-template-columns:140px repeat(6,1fr);gap:6px;align-items:center;padding:6px 0;border-bottom:1px solid var(--border)}
+.edit-player-row:last-child{border-bottom:none}
+.edit-player-name-cell{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:12px;color:var(--white);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.edit-player-row input{padding:4px 6px;background:var(--surface2);border:1px solid var(--border2);border-radius:3px;color:var(--white);font-size:12px;font-family:'Inter',sans-serif;text-align:center;transition:border-color .15s}
+.edit-player-row input:focus{outline:none;border-color:var(--orange)}
+.edit-player-hdr{display:grid;grid-template-columns:140px repeat(6,1fr);gap:6px;padding:4px 0 8px;font-family:'Rajdhani',sans-serif;font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:rgba(var(--orange-rgb),.7)}
+.edit-modal-footer{padding:14px 20px;border-top:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:10px}
+.edit-save-btn{padding:8px 24px;background:var(--orange);border:none;border-radius:4px;color:#000;font-family:'Rajdhani',sans-serif;font-weight:800;font-size:12px;letter-spacing:1.5px;text-transform:uppercase;cursor:pointer;transition:all .15s}
+.edit-save-btn:hover{background:var(--orange2);box-shadow:0 0 16px rgba(var(--orange-rgb),.4)}
+.edit-save-btn:disabled{opacity:.5;cursor:not-allowed}
+.edit-revert-btn{padding:8px 16px;background:transparent;border:1px solid var(--loss);border-radius:4px;color:var(--loss);font-family:'Rajdhani',sans-serif;font-weight:700;font-size:11px;letter-spacing:1.5px;text-transform:uppercase;cursor:pointer;transition:all .15s}
+.edit-revert-btn:hover{background:rgba(239,68,68,.1)}
+.edit-status{font-size:12px;color:var(--muted2);font-family:'Rajdhani',sans-serif}
+.edit-status.ok{color:var(--win)}
+.edit-status.err{color:var(--loss)}
+
+/* MISSING PLAYERS PANEL */
+.missing-players-panel{margin-top:4px;border:1px dashed rgba(var(--orange-rgb),.35);border-radius:6px;overflow:hidden}
+.missing-players-header{padding:8px 14px;background:rgba(var(--orange-rgb),.06);display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none}
+.missing-players-header:hover{background:rgba(var(--orange-rgb),.1)}
+.missing-players-title{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:11px;letter-spacing:1.5px;text-transform:uppercase;color:var(--orange);display:flex;align-items:center;gap:7px}
+.missing-badge{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:50%;background:var(--orange);color:#000;font-size:10px;font-weight:800}
+.missing-players-list{padding:10px 14px;display:flex;flex-direction:column;gap:6px}
+.missing-player-row{display:flex;align-items:center;gap:10px;padding:7px 10px;border:1px solid var(--border);border-radius:4px;background:var(--surface2);transition:border-color .15s}
+.missing-player-row:hover{border-color:rgba(var(--orange-rgb),.4)}
+.missing-player-info{flex:1;min-width:0}
+.missing-player-name{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:13px;color:var(--white)}
+.missing-player-stats{font-size:11px;color:var(--muted2);margin-top:1px}
+.missing-player-team-select{padding:4px 8px;background:var(--surface);border:1px solid var(--border2);border-radius:3px;color:var(--white);font-family:'Rajdhani',sans-serif;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;cursor:pointer}
+.missing-player-team-select:focus{outline:none;border-color:var(--orange)}
+.add-player-btn{padding:5px 12px;background:transparent;border:1px solid var(--win);border-radius:3px;color:var(--win);font-family:'Rajdhani',sans-serif;font-weight:700;font-size:11px;letter-spacing:1px;text-transform:uppercase;cursor:pointer;transition:all .15s;white-space:nowrap}
+.add-player-btn:hover{background:rgba(34,197,94,.12)}
+.add-player-btn.added{border-color:var(--muted);color:var(--muted);cursor:default}
+.manual-add-row{display:grid;grid-template-columns:1fr 90px auto;gap:8px;align-items:center;padding:8px 14px;border-top:1px solid var(--border)}
+.manual-add-row input{padding:5px 8px;background:var(--surface2);border:1px solid var(--border2);border-radius:3px;color:var(--white);font-size:12px;font-family:'Inter',sans-serif}
+.manual-add-row input:focus{outline:none;border-color:var(--orange)}
+.manual-add-btn{padding:5px 12px;background:rgba(var(--orange-rgb),.15);border:1px solid var(--orange);border-radius:3px;color:var(--orange);font-family:'Rajdhani',sans-serif;font-weight:700;font-size:11px;letter-spacing:1px;text-transform:uppercase;cursor:pointer;white-space:nowrap}
+.manual-add-btn:hover{background:rgba(var(--orange-rgb),.25)}
+/* Added player row indicator */
+.edit-player-row.is-added{border-left:3px solid var(--win);padding-left:7px}
+.edit-player-row.is-added .edit-player-name-cell::before{content:'+ ';color:var(--win);font-weight:800;font-size:11px}
+.remove-player-btn{width:22px;height:22px;border-radius:3px;background:transparent;border:1px solid rgba(239,68,68,.4);color:rgba(239,68,68,.7);font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s;flex-shrink:0;line-height:1}
+.remove-player-btn:hover{background:rgba(239,68,68,.15);border-color:var(--loss);color:var(--loss)}
+.edit-pw-gate{padding:32px 20px;display:flex;flex-direction:column;align-items:center;gap:14px}
+.edit-pw-gate input{padding:10px 14px;background:var(--surface2);border:1px solid var(--border2);border-radius:5px;color:var(--white);font-size:14px;width:100%;max-width:280px;text-align:center;letter-spacing:3px}
+.edit-pw-gate input:focus{outline:none;border-color:var(--orange)}
+.edit-pw-btn{padding:9px 28px;background:var(--orange);border:none;border-radius:4px;color:#000;font-family:'Rajdhani',sans-serif;font-weight:800;font-size:12px;letter-spacing:1.5px;text-transform:uppercase;cursor:pointer}
+.edit-pw-err{color:var(--loss);font-size:12px;font-family:'Rajdhani',sans-serif}
 
 /* TEAM TABLE FILTER */
 .filter-bar{display:flex;gap:6px;margin-bottom:10px;align-items:center}
@@ -638,30 +710,28 @@ nav{
     Predict
   </div>
 
-  <!-- My Profile — only visible when logged in via Steam -->
-  <div id="sidebar-my-profile-section" style="display:none">
-    <div class="sidebar-section">My Account</div>
-    <div class="sidebar-item" id="sidebar-my-profile-btn" onclick="_goMyProfile()">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
-      My Profile
-    </div>
-  </div>
-
-  <!-- Steam login button (shown when not logged in) -->
-  <div id="sidebar-steam-login" style="margin-top:8px">
-    <a href="/auth/steam/player" class="sidebar-steam-btn">
-      <svg width="14" height="14" viewBox="0 0 233 233" fill="currentColor"><path d="M116.5 0C52.1 0 0 52.1 0 116.5c0 55.4 38.7 101.8 90.6 113.5l30.9-72.7c-2.4.2-4.8.3-7.3.3-28.1 0-50.9-22.8-50.9-50.9s22.8-50.9 50.9-50.9 50.9 22.8 50.9 50.9c0 24.6-17.5 45.2-40.8 49.9l-29.8 70.1c1.9.1 3.7.2 5.6.2 64.4 0 116.5-52.2 116.5-116.5S180.9 0 116.5 0zm-2.6 150.8c-18.9 0-34.2-15.3-34.2-34.2s15.3-34.2 34.2-34.2 34.2 15.3 34.2 34.2-15.3 34.2-34.2 34.2z"/></svg>
-      Sign in with Steam
+  <!-- Admin tab — only visible when logged in as admin -->
+  <div id="sidebar-admin-section" style="display:none">
+    <div class="sidebar-section">Admin</div>
+    <a href="/admin" class="sidebar-item" style="text-decoration:none" id="sidebar-admin-link">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+      Dashboard
     </a>
   </div>
 
-  <!-- Logged-in player pill (shown when signed in) -->
-  <div id="sidebar-player-user" style="display:none;margin-top:8px">
+  <!-- Steam login / admin user -->
+  <div id="sidebar-steam-login" style="margin-top:8px">
+    <a href="/auth/steam" class="sidebar-steam-btn">
+      <svg width="14" height="14" viewBox="0 0 233 233" fill="currentColor"><path d="M116.5 0C52.1 0 0 52.1 0 116.5c0 55.4 38.7 101.8 90.6 113.5l30.9-72.7c-2.4.2-4.8.3-7.3.3-28.1 0-50.9-22.8-50.9-50.9s22.8-50.9 50.9-50.9 50.9 22.8 50.9 50.9c0 24.6-17.5 45.2-40.8 49.9l-29.8 70.1c1.9.1 3.7.2 5.6.2 64.4 0 116.5-52.2 116.5-116.5S180.9 0 116.5 0zm-2.6 150.8c-18.9 0-34.2-15.3-34.2-34.2s15.3-34.2 34.2-34.2 34.2 15.3 34.2 34.2-15.3 34.2-34.2 34.2z"/></svg>
+      Admin Login
+    </a>
+  </div>
+  <div id="sidebar-admin-user" style="display:none;margin-top:8px">
     <div class="sidebar-admin-user">
-      <img id="sidebar-player-avatar" class="sidebar-admin-avatar" src="" alt="">
-      <span id="sidebar-player-name" class="sidebar-admin-name"></span>
-      <form action="/auth/steam/player/logout" method="post" style="flex-shrink:0">
-        <button class="sidebar-admin-out" type="submit" title="Sign out">✕</button>
+      <img id="sidebar-admin-avatar" class="sidebar-admin-avatar" src="" alt="">
+      <span id="sidebar-admin-name" class="sidebar-admin-name">Admin</span>
+      <form action="/auth/steam/logout" method="post" style="flex-shrink:0">
+        <button class="sidebar-admin-out" type="submit" title="Log out">✕</button>
       </form>
     </div>
   </div>
@@ -722,26 +792,6 @@ nav{
     <div class="mobile-section">Files</div>
     <div class="mobile-tab" data-p="demos" onclick="_navStack=[];go('demos');closeMenu()">Demos</div>
 
-    <!-- My Profile (shown when signed in via Steam) -->
-    <div id="mobile-my-profile-section" style="display:none">
-      <div class="mobile-section">My Account</div>
-      <div class="mobile-tab" id="mobile-my-profile-btn" onclick="_goMyProfile();closeMenu()">My Profile</div>
-      <div id="mobile-player-info" style="display:none;padding:8px 24px 12px;display:flex;align-items:center;gap:10px">
-        <img id="mobile-player-avatar" style="width:28px;height:28px;border-radius:50%;object-fit:cover;border:1px solid var(--border2);flex-shrink:0" src="" alt="">
-        <span id="mobile-player-name" style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:13px;color:var(--white);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></span>
-        <form action="/auth/steam/player/logout" method="post">
-          <button style="background:transparent;border:none;color:var(--muted2);font-size:10px;cursor:pointer;font-family:'Rajdhani',sans-serif;letter-spacing:1px;text-transform:uppercase" type="submit">Sign out</button>
-        </form>
-      </div>
-    </div>
-
-    <!-- Steam login (shown when not signed in) -->
-    <div id="mobile-steam-login" style="padding:12px 24px">
-      <a href="/auth/steam/player" style="display:inline-flex;align-items:center;gap:8px;padding:8px 16px;border-radius:4px;background:#1b2838;border:1px solid #2a475e;color:#8ba3b8;font-family:'Rajdhani',sans-serif;font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;text-decoration:none">
-        <svg width="14" height="14" viewBox="0 0 233 233" fill="currentColor"><path d="M116.5 0C52.1 0 0 52.1 0 116.5c0 55.4 38.7 101.8 90.6 113.5l30.9-72.7c-2.4.2-4.8.3-7.3.3-28.1 0-50.9-22.8-50.9-50.9s22.8-50.9 50.9-50.9 50.9 22.8 50.9 50.9c0 24.6-17.5 45.2-40.8 49.9l-29.8 70.1c1.9.1 3.7.2 5.6.2 64.4 0 116.5-52.2 116.5-116.5S180.9 0 116.5 0zm-2.6 150.8c-18.9 0-34.2-15.3-34.2-34.2s15.3-34.2 34.2-34.2 34.2 15.3 34.2 34.2-15.3 34.2-34.2 34.2z"/></svg>
-        Sign in with Steam
-      </a>
-    </div>
 
   </div>
 </div>
@@ -820,98 +870,35 @@ nav{
 </div>
 
 <script>
-// ── Player Steam session check ────────────────────────────────────────────────
-let _playerSteamId = null;  // steamid64 of logged-in player (if any)
-
-// ── Shared Steam avatar/name cache (persists across all page renders) ────────
-// Key: steamid64 string  →  Value: { avatar, name } or null
-const _steamCache = {};
-
-/**
- * Fetch Steam profiles for an array of players in one parallel batch.
- * Already-cached players are skipped. Attaches p._steam_avatar / p._steam_name.
- * @param {Array} players  - array of player objects with .steamid64
- * @param {number} limit   - max players to fetch (default: all)
- */
-async function batchFetchSteam(players, limit = Infinity) {
-  const todo = players
-    .filter(p => p.steamid64 && p.steamid64 !== '0' && !_steamCache[p.steamid64])
-    .slice(0, limit);
-  if (!todo.length) {
-    // Still attach cached data to all players
-    players.forEach(p => {
-      if (p.steamid64 && _steamCache[p.steamid64]) {
-        const c = _steamCache[p.steamid64];
-        if (c.avatar) p._steam_avatar = c.avatar;
-        if (c.name)   p._steam_name   = c.name;
-      }
-    });
-    return;
-  }
-  await Promise.all(todo.map(async p => {
-    try {
-      const s = await fetch('/api/steam/' + p.steamid64).then(r => r.json()).catch(() => ({}));
-      _steamCache[p.steamid64] = { avatar: s.avatar || null, name: s.name || null };
-    } catch (_) {
-      _steamCache[p.steamid64] = null;
-    }
-  }));
-  // Attach results to all players (including ones that were already cached)
-  players.forEach(p => {
-    if (p.steamid64 && _steamCache[p.steamid64]) {
-      const c = _steamCache[p.steamid64];
-      if (c.avatar) p._steam_avatar = c.avatar;
-      if (c.name)   p._steam_name   = c.name;
-    }
-  });
-}
-
-function _goMyProfile() {
-  if (_playerSteamId) {
-    _navStack = [];
-    go('player', { sid: _playerSteamId });
-  }
-}
-
-(async function checkSteamSession() {
-  // Check player session first (any Steam user)
+// ── Admin session check ──────────────────────────────────────────────────────
+(async function checkAdminSession() {
   try {
-    const r = await fetch('/api/auth/steam/me');
+    const r = await fetch('/api/admin/me');
     if (r.ok) {
       const d = await r.json();
-      if (d.ok && d.steamid) {
-        _playerSteamId = d.steamid;
-        // Show "My Profile" in sidebar
-        const profileSection = document.getElementById('sidebar-my-profile-section');
-        if (profileSection) profileSection.style.display = '';
-        // Hide login button, show user pill
-        const loginEl  = document.getElementById('sidebar-steam-login');
-        const playerEl = document.getElementById('sidebar-player-user');
-        if (loginEl)  loginEl.style.display = 'none';
-        if (playerEl) playerEl.style.display = '';
-        // Mobile nav
-        const mobileSection = document.getElementById('mobile-my-profile-section');
-        const mobileLogin   = document.getElementById('mobile-steam-login');
-        const mobileInfo    = document.getElementById('mobile-player-info');
-        if (mobileSection) mobileSection.style.display = '';
-        if (mobileLogin)   mobileLogin.style.display = 'none';
-        if (mobileInfo)    mobileInfo.style.display = 'flex';
-        // Load Steam avatar + name
+      if (d.ok) {
+        _isAdmin = true;
+        // Show edit buttons if any are hidden
+        document.querySelectorAll('.edit-match-btn').forEach(b => b.style.display = '');
+        // Show admin tab in sidebar
+        const adminSection = document.getElementById('sidebar-admin-section');
+        if (adminSection) adminSection.style.display = '';
+        // Swap login button → user pill
+        const loginEl = document.getElementById('sidebar-steam-login');
+        const userEl  = document.getElementById('sidebar-admin-user');
+        if (loginEl) loginEl.style.display = 'none';
+        if (userEl)  userEl.style.display = '';
+        // Load Steam profile for avatar + name
         try {
-          const s = await fetch('/api/steam/' + d.steamid).then(r => r.json());
-          const nameEl    = document.getElementById('sidebar-player-name');
-          const avatarEl  = document.getElementById('sidebar-player-avatar');
-          const mNameEl   = document.getElementById('mobile-player-name');
-          const mAvatarEl = document.getElementById('mobile-player-avatar');
-          if (nameEl   && s.name)   nameEl.textContent   = s.name;
-          if (avatarEl && s.avatar) avatarEl.src          = s.avatar;
-          if (mNameEl  && s.name)   mNameEl.textContent  = s.name;
-          if (mAvatarEl && s.avatar) mAvatarEl.src        = s.avatar;
+          const s = await fetch('/api/steam/' + d.steamid).then(r=>r.json());
+          const nameEl   = document.getElementById('sidebar-admin-name');
+          const avatarEl = document.getElementById('sidebar-admin-avatar');
+          if (nameEl && s.name)     nameEl.textContent = s.name;
+          if (avatarEl && s.avatar) avatarEl.src = s.avatar;
         } catch(_) {}
       }
     }
   } catch(_) {}
-
 })();
 
 // ── Router ────────────────────────────────────────────────────────────────────
@@ -986,9 +973,8 @@ async function apiFetch(endpoint, ghFile) {
   return ghFile && ghFile.startsWith('matches/') ? {} : [];
 }
 
-// ── Prefetch: warm the most-used endpoints in parallel on page load ──────────
-// All requests fire simultaneously — by the time the user clicks a nav item
-// the data is already sitting in the browser HTTP cache.
+// ── Prefetch: warm the most-used endpoints in the background on page load ──
+// By the time the user clicks a nav item the data is already in browser cache.
 (function prefetchOnLoad() {
   const PREFETCH = [
     '/api/matches?limit=30',
@@ -997,11 +983,12 @@ async function apiFetch(endpoint, ghFile) {
     '/api/mapstats',
     '/api/specialists',
   ];
-  // Fire all fetches in parallel; use requestIdleCallback so we don't compete
-  // with the initial render.
+  // Use requestIdleCallback when available so prefetch doesn't compete with render
   const schedule = window.requestIdleCallback || (fn => setTimeout(fn, 800));
   schedule(() => {
-    Promise.all(PREFETCH.map(url => fetch(url, { cache: 'default' }).catch(() => {})));
+    PREFETCH.forEach(url => {
+      fetch(url, { cache: 'default' }).catch(() => {});
+    });
   });
 })();
 
@@ -1042,7 +1029,7 @@ function go(page, params, back) {
     if(page==='h2h')         loadH2H();
     if(page==='specialists') loadSpecialists();
     if(page==='demos')       loadDemos();
-    if(page==='player')      loadPlayer(params.name, params.sid);
+    if(page==='player')      loadPlayer(params.name);
     if(page==='match')       loadMatch(params.id);
     if(page==='predict')     loadPredict();
     if(page==='team')        loadTeam();
@@ -1251,14 +1238,7 @@ function emptyState(type, title, sub) {
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-const esc = s=>String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
-const escName = s => "'" + String(s||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'") + "'";
-// Decode unicode escapes like \u0027 that may be stored literally in the DB
-const decodeUnicode = s => String(s||'').replace(/\\u([0-9a-fA-F]{4})/g, (_, h) => String.fromCharCode(parseInt(h, 16)));
-// Normalize player name: decode literal \uXXXX sequences stored in DB
-const normalizeName = s => decodeUnicode(String(s||''));
-const normalizePlayer = p => { if(p && p.name) p.name = normalizeName(p.name); return p; };
-const normalizePlayers = arr => Array.isArray(arr) ? arr.map(normalizePlayer) : arr;
+const esc = s=>String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 const num = n=>n!=null?Number(n).toLocaleString():'-';
 const kdc = v=>{const f=parseFloat(v);return f>=1.3?'kd-g':f>=0.9?'kd-n':'kd-b'};
 const kdf = v=>{const f=parseFloat(v);return f>=1.3?'win':f>=0.9?'text':'loss'};
@@ -1374,7 +1354,7 @@ async function loadMatch(id) {
   window._currentMatchId = id;
   window._currentMatchData = d;
 
-  const meta=d.meta||{}, maps=d.maps||[], players=normalizePlayers(d.players||[]), demo=d.demo||{};
+  const meta=d.meta||{}, maps=d.maps||[], players=d.players||[], demo=d.demo||{};
 
   // ── Team split: players have team='team1' or 'team2' from fshost ──────────
   function splitTeams(arr) {
@@ -1401,10 +1381,14 @@ async function loadMatch(id) {
   const byDmg    = [...players].sort((a,b)=>parseInt(b.damage||0)-parseInt(a.damage||0));
   const byRating = [...players].filter(p=>p.rating!=null).sort((a,b)=>parseFloat(b.rating)-parseFloat(a.rating));
 
-  // Fetch Steam avatars for all unique players in this match using shared cache
-  const uniquePlayers = [...new Map(players.map(p => [p.steamid64, p])).values()];
-  await batchFetchSteam(uniquePlayers);
-  const steamCache = Object.fromEntries(uniquePlayers.map(p => [p.steamid64, p._steam_avatar || null]));
+  // Fetch Steam avatars for all unique players in this match
+  const steamCache = {};
+  await Promise.all([...new Map(players.map(p=>[p.steamid64,p])).values()].map(async p => {
+    if (p.steamid64 && p.steamid64 !== '0') {
+      const s = await fetch('/api/steam/'+p.steamid64).then(r=>r.json()).catch(()=>({}));
+      if (s.avatar) steamCache[p.steamid64] = s.avatar;
+    }
+  }));
 
   function playerAvatar(p, size=40) {
     const img = steamCache[p?.steamid64];
@@ -1416,7 +1400,7 @@ async function loadMatch(id) {
     <div class="mvp-card">
       ${playerAvatar(mvp, 64)}
       <div class="mvp-info">
-        <div class="mvp-name">${esc(mvp._steam_name||mvp.name)}</div>
+        <div class="mvp-name">${esc(mvp.name)}</div>
         <div class="mvp-stats">
           <div class="mvp-stat"><div class="mvp-val">${mvp.kills??0} / ${mvp.deaths??0} / ${mvp.assists??0}</div><div class="mvp-lbl">K / D / A</div></div>
           <div class="mvp-stat"><div class="mvp-val"><span data-count="${mvp.adr!=null?parseFloat(mvp.adr):0}" data-dec="1">${mvp.adr!=null?parseFloat(mvp.adr).toFixed(1):'—'}</span></div><div class="mvp-lbl">ADR</div></div>
@@ -1485,6 +1469,10 @@ async function loadMatch(id) {
       <div class="back-btn" onclick="goBack('matches')" style="margin-bottom:0">← Back</div>
       <div style="display:flex;align-items:center;gap:8px">
         ${editedBadge}
+        <button class="edit-match-btn" onclick="openEditModal('${id}')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+          Edit Match
+        </button>
       </div>
     </div>
     <div style="position:relative;border-radius:6px;overflow:hidden;margin-bottom:12px;min-height:200px">
@@ -1546,7 +1534,7 @@ function sbRows(arr, steamCache={}) {
       ? `<img src="${steamCache[p.steamid64]}" style="width:22px;height:22px;border-radius:50%;object-fit:cover;vertical-align:middle;margin-right:7px;border:1px solid var(--border2)" onerror="this.style.display='none'">`
       : `<span style="display:inline-block;width:22px;height:22px;border-radius:50%;background:var(--surface2);line-height:22px;text-align:center;font-size:9px;font-family:'Rajdhani',sans-serif;font-weight:700;color:var(--muted2);vertical-align:middle;margin-right:7px">${initials(p.name)}</span>`;
     return `<tr>
-      <td onclick="go('player',{sid:${escName(p.steamid64)}},'match')" style="cursor:pointer"><div style="display:flex;align-items:center">${avatar}${esc(p.name)}</div></td>
+      <td onclick="go('player',{name:'${esc(p.name)}'},'match')" style="cursor:pointer"><div style="display:flex;align-items:center">${avatar}${esc(p.name)}</div></td>
       <td class="kda-cell">${p.kills??0}</td>
       <td class="kda-cell">${p.deaths??0}</td>
       <td class="kda-cell">${p.assists??0}</td>
@@ -1566,14 +1554,11 @@ function sbRows(arr, steamCache={}) {
 }
 
 // ── Player Profile ────────────────────────────────────────────────────────────
-async function loadPlayer(name, sid) {
-  sid = sid || '';
+async function loadPlayer(name) {
   spin('p-player');
   const [data, ] = await Promise.all([
-    fetch(sid ? '/api/player/sid/'+encodeURIComponent(sid) : '/api/player/'+encodeURIComponent(name)).then(r=>r.json()).catch(()=>({})),
+    fetch('/api/player/'+encodeURIComponent(name)).then(r=>r.json()).catch(()=>({})),
   ]);
-  if (data && data.career) data.career.name = normalizeName(data.career.name || name);
-  if (data && Array.isArray(data.recent_matches)) data.recent_matches.forEach(m => { if(m.name) m.name = normalizeName(m.name); });
   if (data.error) {
     document.getElementById('p-player').innerHTML = `<div class="empty">${data.error}</div>`;
     return;
@@ -1601,24 +1586,6 @@ async function loadPlayer(name, sid) {
 
   const countryFlag = '';
 
-  // Collect old names (aliases) for this player from team cache
-  const playerAliases = [];
-  if (window._teamCache) {
-    for (const lu of window._teamCache) {
-      if (lu.playerAliases && lu.playerAliases[name]) {
-        [...lu.playerAliases[name]].filter(a => a !== name).forEach(a => {
-          if (!playerAliases.includes(a)) playerAliases.push(a);
-        });
-      }
-    }
-  }
-  const aliasSection = playerAliases.length
-    ? `<div style="margin-top:7px;display:flex;align-items:center;flex-wrap:wrap;gap:5px">
-        <span style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted2)">Previously known as</span>
-        ${playerAliases.map(a => `<span style="padding:1px 8px;border-radius:2px;background:var(--surface2);border:1px solid var(--border2);color:var(--text);font-family:'Rajdhani',sans-serif;font-size:12px;font-weight:600">${esc(a)}</span>`).join('')}
-      </div>`
-    : '';
-
   const statsGrid = [
     {label:'Kills',     raw: c.kills,         dec:0},
     {label:'Deaths',    raw: c.deaths,        dec:0},
@@ -1639,20 +1606,18 @@ async function loadPlayer(name, sid) {
     return `<div class="stat-box"><div class="stat-val">${valEl}</div><div class="stat-lbl">${s.label}</div></div>`;
   }).join('');
 
-  const recentRows = recent.map(m => {
-    // Use server-computed player_won (most reliable — pure SQL from matches table)
+  // ── Helper: render a match row ───────────────────────────────────────────
+  function renderMatchRow(m) {
     let won = false;
     if (m.player_won !== null && m.player_won !== undefined) {
       won = m.player_won === 1 || m.player_won === true;
     } else {
-      // Fallback: slot + map scores
       const slot = m.player_team || '';
       const s1 = parseInt(m.team1_score ?? 0);
       const s2 = parseInt(m.team2_score ?? 0);
       if (s1 !== s2 && (slot === 'team1' || slot === 'team2')) {
         won = slot === 'team1' ? s1 > s2 : s2 > s1;
       } else {
-        // Last resort: case-insensitive winner name
         const playerTeamName = slot === 'team1' ? (m.team1_name ?? '') : slot === 'team2' ? (m.team2_name ?? '') : (m.team ?? '');
         const winnerLc = (m.winner ?? '').toLowerCase().trim();
         const playerTeamLc = playerTeamName.toLowerCase().trim();
@@ -1671,7 +1636,10 @@ async function loadPlayer(name, sid) {
       <td>${num(m.damage)}</td>
       <td style="font-size:11px;color:var(--muted2)">${m.team1_name??'?'} vs ${m.team2_name??'?'}</td>
     </tr>`;
-  }).join('');
+  }
+
+  const PAGE_SIZE = 20;
+  const recentRows = recent.map(renderMatchRow).join('');
 
   document.getElementById('p-player').innerHTML = `
     <div class="back-btn" onclick="goBack('leaderboard')">← Back</div>
@@ -1681,7 +1649,6 @@ async function loadPlayer(name, sid) {
         <div class="p-name">${countryFlag}${esc(steam.name || name)}</div>
         <div class="p-sub">${steam.real_name ? esc(steam.real_name)+' • ' : ''}${c.matches??0} matches played</div>
         <div style="margin-top:6px">${profileLink}</div>
-        ${aliasSection}
       </div>
     </div>
     <div class="card" style="margin-bottom:12px">
@@ -1693,14 +1660,57 @@ async function loadPlayer(name, sid) {
         <thead><tr>
           <th>Match</th><th>Map</th><th>K/D/A</th><th>K/D</th><th>ADR</th><th>HS%</th><th>Dmg</th><th>Teams</th>
         </tr></thead>
-        <tbody>${recentRows}</tbody>
+        <tbody id="recent-matches-tbody">${recentRows}</tbody>
       </table>
+      ${(c.matches ?? 0) > PAGE_SIZE ? `
+      <div style="text-align:center;padding:14px 0 4px">
+        <button id="show-more-btn" onclick="loadMoreMatches()" style="background:rgba(var(--orange-rgb),.12);border:1px solid var(--orange);color:var(--orange);font-family:'Rajdhani',sans-serif;font-weight:700;font-size:12px;letter-spacing:1.5px;text-transform:uppercase;padding:8px 24px;border-radius:0;cursor:pointer;transition:all .2s">
+          Show More
+        </button>
+      </div>` : ''}
     </div>` : ''}
     <div id="player-mapstats-section" style="display:none"></div>`;
 
+  // Store state for pagination
+  window._playerMatchesOffset = PAGE_SIZE;
+  window._playerMatchesName = name;
+  window._playerMatchesSid = c.steamid64 || '';
+  window._playerTotalMatches = c.matches ?? 0;
+
+  // Load more matches function
+  window.loadMoreMatches = async function() {
+    const btn = document.getElementById('show-more-btn');
+    if (!btn) return;
+    btn.textContent = 'Loading...';
+    btn.disabled = true;
+    try {
+      const sid = window._playerMatchesSid;
+      const offset = window._playerMatchesOffset;
+      const url = sid && sid !== '0'
+        ? `/api/player/sid/${encodeURIComponent(sid)}?limit=${PAGE_SIZE}&offset=${offset}`
+        : `/api/player/${encodeURIComponent(window._playerMatchesName)}?limit=${PAGE_SIZE}&offset=${offset}`;
+      const res = await fetch(url).then(r => r.json()).catch(() => ({}));
+      const more = res.recent_matches || [];
+      if (more.length) {
+        const tbody = document.getElementById('recent-matches-tbody');
+        if (tbody) tbody.insertAdjacentHTML('beforeend', more.map(renderMatchRow).join(''));
+        window._playerMatchesOffset += more.length;
+      }
+      if (more.length < PAGE_SIZE || window._playerMatchesOffset >= window._playerTotalMatches) {
+        btn.remove();
+      } else {
+        btn.textContent = 'Show More';
+        btn.disabled = false;
+      }
+    } catch(e) {
+      btn.textContent = 'Show More';
+      btn.disabled = false;
+    }
+  };
+
   // Load map stats async after profile renders
   const mapStatsEl = document.getElementById('player-mapstats-section');
-  if (mapStatsEl) loadPlayerMapStats(name, mapStatsEl, sid);
+  if (mapStatsEl) loadPlayerMapStats(name, mapStatsEl);
 }
 
 // ── Map Stats ─────────────────────────────────────────────────────────────────
@@ -1826,9 +1836,14 @@ async function loadH2H() {
   el.innerHTML=`<div class="loading"><span class="spin" style="display:inline-flex;align-items:center;justify-content:center;color:var(--orange)">${_spinnerSvg}</span></div>`;
   if (!_h2hPlayers) {
     const data = await apiFetch('/api/leaderboard', 'leaderboard.json');
-  normalizePlayers(data);
-    // Fetch Steam avatars for all using shared cache
-    await batchFetchSteam(data.slice(0, 30));
+    // Fetch Steam avatars for all
+    await Promise.all(data.slice(0,30).map(async p => {
+      if (p.steamid64 && p.steamid64 !== '0') {
+        const s = await fetch('/api/steam/'+p.steamid64).then(r=>r.json()).catch(()=>({}));
+        if (s.avatar) p._steam_avatar = s.avatar;
+        if (s.name)   p._steam_name   = s.name;
+      }
+    }));
     _h2hPlayers = data;
   }
   renderH2HPicker();
@@ -1863,8 +1878,8 @@ function renderH2HPicker() {
   const canCompare = p1 && p2 && p1.name !== p2.name;
 
   const cards = players.map((p,i) => {
-    const isP1 = p1 && (p1.steamid64 ? p1.steamid64 === p.steamid64 : p1.name === p.name);
-    const isP2 = p2 && (p2.steamid64 ? p2.steamid64 === p.steamid64 : p2.name === p.name);
+    const isP1 = p1 && p1.name === p.name;
+    const isP2 = p2 && p2.name === p.name;
     const selected = isP1 || isP2;
     const av = p._steam_avatar
       ? `<img src="${p._steam_avatar}" style="width:38px;height:38px;border-radius:50%;object-fit:cover;flex-shrink:0">`
@@ -1903,8 +1918,8 @@ function renderH2HPicker() {
 
 function h2hSelect(idx) {
   const p = _h2hPlayers[idx];
-  if (_h2hSel[0] && (_h2hSel[0].steamid64 ? _h2hSel[0].steamid64 === p.steamid64 : _h2hSel[0].name === p.name)) { _h2hSel[0] = null; }
-  else if (_h2hSel[1] && (_h2hSel[1].steamid64 ? _h2hSel[1].steamid64 === p.steamid64 : _h2hSel[1].name === p.name)) { _h2hSel[1] = null; }
+  if (_h2hSel[0] && _h2hSel[0].name === p.name) { _h2hSel[0] = null; }
+  else if (_h2hSel[1] && _h2hSel[1].name === p.name) { _h2hSel[1] = null; }
   else if (!_h2hSel[0]) { _h2hSel[0] = p; }
   else if (!_h2hSel[1]) { _h2hSel[1] = p; }
   else { _h2hSel[0] = _h2hSel[1]; _h2hSel[1] = p; }
@@ -1968,12 +1983,12 @@ async function runH2H() {
   body.innerHTML = `
     <div style="border-top:1px solid rgba(var(--orange-rgb),.15);margin:0 -20px"></div>
     <div style="display:grid;grid-template-columns:1fr 60px 1fr;align-items:center;padding:20px 14px 14px">
-      <div style="display:flex;flex-direction:column;align-items:center;gap:8px;cursor:pointer" onclick="go('player',{sid:${escName(d1.steamid64)}},'h2h')">
+      <div style="display:flex;flex-direction:column;align-items:center;gap:8px;cursor:pointer" onclick="go('player',{name:'${esc(d1.name)}'},'h2h')">
         ${avatar(d1,st1)}
         <div style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:16px;color:var(--ct);text-align:center">${esc(st1.name||d1.name)}</div>
       </div>
       <div style="font-family:'Rajdhani',sans-serif;font-weight:800;font-size:20px;color:var(--muted);text-align:center">VS</div>
-      <div style="display:flex;flex-direction:column;align-items:center;gap:8px;cursor:pointer" onclick="go('player',{sid:${escName(d2.steamid64)}},'h2h')">
+      <div style="display:flex;flex-direction:column;align-items:center;gap:8px;cursor:pointer" onclick="go('player',{name:'${esc(d2.name)}'},'h2h')">
         ${avatar(d2,st2)}
         <div style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:16px;color:var(--t);text-align:center">${esc(st2.name||d2.name)}</div>
       </div>
@@ -2003,7 +2018,6 @@ async function loadLeaderboard() {
   const el = document.getElementById('p-leaderboard');
   el.innerHTML=`<div class="loading"><span class="spin" style="display:inline-flex;align-items:center;justify-content:center;color:var(--orange)">${_spinnerSvg}</span></div>`;
   const data = await apiFetch('/api/leaderboard', 'leaderboard.json');
-  normalizePlayers(data);
   if (!Array.isArray(data) || !data.length) {
     el.innerHTML = emptyState('leaderboard','No Player Data','Stats will appear after matches are completed');
     return;
@@ -2021,7 +2035,7 @@ async function loadLeaderboard() {
         const s1 = m.map_team1_score ?? m.team1_score ?? 0;
         const s2 = m.map_team2_score ?? m.team2_score ?? 0;
         ps.forEach(p => {
-          const name = p.name; const psid = p.steamid64||p.name;
+          const name = p.name;
           if (!name) return;
           const win = (String(p.team||'').toLowerCase()==='team1') ? s1>s2 : s2>s1;
           if (!playerResults[name]) playerResults[name] = [];
@@ -2030,7 +2044,7 @@ async function loadLeaderboard() {
       });
       // Compute current streak for each player
       data.forEach(p => {
-        const res = playerResults[p.steamid64||p.name];
+        const res = playerResults[p.name];
         if (!res || !res.length) return;
         const last = res[res.length-1];
         let count = 0;
@@ -2042,7 +2056,15 @@ async function loadLeaderboard() {
     }
   } catch(_) {}
   // Fetch Steam avatars in parallel (top 20 only to keep it fast)
-  await batchFetchSteam(data.slice(0, 20));
+  await Promise.all(data.slice(0, 20).map(async p => {
+    if (p.steamid64 && p.steamid64 !== '0') {
+      try {
+        const s = await fetch('/api/steam/'+p.steamid64).then(r=>r.json()).catch(()=>({}));
+        if (s.avatar) p._steam_avatar = s.avatar;
+        if (s.name)   p._steam_name   = s.name;
+      } catch(_) {}
+    }
+  }));
   renderLeaderboard(data, _lbSort);
 }
 
@@ -2089,7 +2111,7 @@ function renderLeaderboard(data, sortKey) {
       const streakBadge = p._streak && p._streak.count >= 2
         ? `<span class="streak-badge ${p._streak.type==='W'?'streak-hot':'streak-cold'}">${p._streak.type}${p._streak.count}</span>`
         : '';
-      return `<tr class="${rankCls}" data-sid="${esc(p.steamid64||p.name)}" onclick="go('player',{sid:${escName(p.steamid64)}},'leaderboard')">
+      return `<tr class="${rankCls}" data-sid="${esc(p.steamid64||p.name)}" onclick="go('player',{name:'${esc(p.name)}'},'leaderboard')">
         <td style="${rankStyle}">${rank}</td>
         <td>${avatarEl}<span class="pname">${esc(p._steam_name||p.name)}</span>${streakBadge}</td>
         <td>${p.kills??0}</td>
@@ -2119,7 +2141,7 @@ function renderLeaderboard(data, sortKey) {
       const avatarEl = p._steam_avatar
         ? `<img src="${p._steam_avatar}" style="width:56px;height:56px;border-radius:50%;object-fit:cover;border:2px solid ${c};margin-bottom:10px" alt="${esc(p.name)}">`
         : `<div style="width:56px;height:56px;border-radius:50%;background:var(--surface);border:2px solid ${c};display:flex;align-items:center;justify-content:center;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:20px;color:${c};margin:0 auto 10px">${initials(p.name)}</div>`;
-      return `<div class="podium-card" data-rank="${rank}" style="--card-color:${c};--glow:${glowColors[rank]};--bdr:${borderColors[rank]};flex:1;background:${glowColors[rank]};backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border:1px solid ${borderColors[rank]};border-top:2px solid ${c};border-radius:6px;padding:18px 14px;text-align:center;cursor:pointer;position:relative;overflow:hidden;" onclick="go('player',{sid:${escName(p.steamid64)}},'leaderboard')">
+      return `<div class="podium-card" data-rank="${rank}" style="--card-color:${c};--glow:${glowColors[rank]};--bdr:${borderColors[rank]};flex:1;background:${glowColors[rank]};backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border:1px solid ${borderColors[rank]};border-top:2px solid ${c};border-radius:6px;padding:18px 14px;text-align:center;cursor:pointer;position:relative;overflow:hidden;" onclick="go('player',{name:'${esc(p.name)}'},'leaderboard')">
         <div class="podium-shine"></div>
         <div style="position:absolute;top:10px;left:14px;font-family:'Rajdhani',sans-serif;font-weight:800;font-size:11px;letter-spacing:2px;color:${c};opacity:.9">${rankLabels[rank]}</div>
         <div style="margin-top:6px;position:relative;z-index:1">${avatarEl}</div>
@@ -2239,8 +2261,15 @@ async function loadSpecialists() {
   if (!Array.isArray(data) || !data.length) {
     el.innerHTML = emptyState('specialists','No Specialist Data','Clutch kings, entry fraggers and more will appear here'); return;
   }
-  // Fetch Steam avatars + names for all players using shared cache
-  await batchFetchSteam(data);
+  // Fetch Steam avatars for all players
+  await Promise.all(data.map(async p => {
+    if (p.steamid64 && p.steamid64 !== '0') {
+      try {
+        const s = await fetch('/api/steam/'+p.steamid64).then(r=>r.json()).catch(()=>({}));
+        if (s.avatar) p._steam_avatar = s.avatar;
+      } catch(_) {}
+    }
+  }));
   _specData = data;
   renderSpecialists(data, _specTab);
 }
@@ -2325,10 +2354,10 @@ function renderSpecialists(data, tab) {
           const av = p._steam_avatar
             ? `<img src="${p._steam_avatar}" style="width:${avSize};height:${avSize};border-radius:50%;object-fit:cover;border:2px solid ${c.solid};box-shadow:0 0 16px ${c.glow}">`
             : `<div style="width:${avSize};height:${avSize};border-radius:50%;background:var(--surface2);border:2px solid ${c.solid};box-shadow:0 0 16px ${c.glow};display:flex;align-items:center;justify-content:center;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:${isFirst?'18px':'14px'};color:${c.solid}">${initials(p.name)}</div>`;
-          return `<div style="flex:1;max-width:155px;display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer" onclick="go('player',{sid:${escName(p.steamid64)}},'specialists')">
+          return `<div style="flex:1;max-width:155px;display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer" onclick="go('player',{name:'${esc(p.name)}'},'specialists')">
             ${isFirst ? `<div>${crownSvg}</div>` : `<div style="height:20px"></div>`}
             ${av}
-            <div style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:${isFirst?'13px':'11px'};color:#fff;text-align:center;width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:0 4px;margin-top:2px">${esc(p._steam_name||p.name)}</div>
+            <div style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:${isFirst?'13px':'11px'};color:#fff;text-align:center;width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:0 4px;margin-top:2px">${esc(p.name)}</div>
             <div style="font-family:'Rajdhani',sans-serif;font-weight:900;font-size:${isFirst?'30px':'22px'};color:${c.solid};line-height:1">${primaryVal(p)}</div>
             <div style="font-size:9px;color:var(--muted2);letter-spacing:1px;text-transform:uppercase;margin-top:-2px">${primaryLabel}</div>
             <div style="font-size:10px;color:var(--muted2);font-family:'Rajdhani',sans-serif;margin-bottom:8px">${secondaryVal(p)}</div>
@@ -2346,12 +2375,12 @@ function renderSpecialists(data, tab) {
     const av = p._steam_avatar
       ? `<img src="${p._steam_avatar}" style="width:32px;height:32px;border-radius:50%;object-fit:cover;border:1px solid var(--border2)" alt="">`
       : `<div style="width:32px;height:32px;border-radius:50%;background:var(--surface2);display:flex;align-items:center;justify-content:center;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:11px;color:var(--muted2)">${initials(p.name)}</div>`;
-    return `<div onclick="go('player',{sid:${escName(p.steamid64)}},'specialists')"
+    return `<div onclick="go('player',{name:'${esc(p.name)}'},'specialists')"
       style="display:flex;align-items:center;gap:12px;padding:10px 14px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .12s"
       onmouseover="this.style.background='rgba(var(--orange-rgb),.04)'" onmouseout="this.style.background=''">
       <span style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:13px;color:var(--muted2);width:22px;text-align:center;flex-shrink:0">${rank}</span>
       ${av}
-      <span style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:14px;color:var(--white);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(p._steam_name||p.name)}</span>
+      <span style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:14px;color:var(--white);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(p.name)}</span>
       <div style="text-align:right;flex-shrink:0">
         <div style="font-family:'Rajdhani',sans-serif;font-weight:800;font-size:17px;color:var(--orange)">${primaryVal(p)}</div>
         <div style="font-size:10px;color:var(--muted2)">${secondaryVal(p)}</div>
@@ -2545,8 +2574,13 @@ async function loadPredict() {
   el.innerHTML=`<div class="loading"><span class="spin" style="display:inline-flex;align-items:center;justify-content:center;color:var(--orange)">${_spinnerSvg}</span></div>`;
   if (!_predictPlayers) {
     const data = await apiFetch('/api/leaderboard', 'leaderboard.json');
-  normalizePlayers(data);
-    await batchFetchSteam(data.slice(0, 40));
+    await Promise.all(data.slice(0,40).map(async p => {
+      if (p.steamid64 && p.steamid64 !== '0') {
+        const s = await fetch('/api/steam/'+p.steamid64).then(r=>r.json()).catch(()=>({}));
+        if (s.avatar) p._steam_avatar = s.avatar;
+        if (s.name)   p._steam_name   = s.name;
+      }
+    }));
     _predictPlayers = data;
   }
   renderPredict();
@@ -2610,8 +2644,8 @@ function predictOpenPicker(teamIdx) {
   const listEl   = document.getElementById('predict-picker-list');
   if (!pickerEl || !listEl) return;
   const [t1, t2] = _predictTeams;
-  const allSelected = new Set([...t1, ...t2].map(p => p.steamid64||p.name));
-  const available = (_predictPlayers || []).filter(p => !allSelected.has(p.steamid64||p.name));
+  const allSelected = new Set([...t1, ...t2].map(p => p.name));
+  const available = (_predictPlayers || []).filter(p => !allSelected.has(p.name));
 
   const rows = available.length ? available.map(p => {
     const globalIdx = _predictPlayers.indexOf(p);
@@ -2648,7 +2682,7 @@ function predictOpenPicker(teamIdx) {
 function predictAdd(teamIdx, playerIdx) {
   const p = _predictPlayers[playerIdx];
   const team = _predictTeams[teamIdx];
-  if (team.length < 5 && !team.some(x=>(x.steamid64||x.name)===(p.steamid64||p.name))) team.push(p);
+  if (team.length < 5 && !team.some(x=>x.name===p.name)) team.push(p);
   document.getElementById('predict-picker').style.display = 'none';
   renderPredict();
 }
@@ -2803,7 +2837,6 @@ async function loadTeam() {
 
     const t1 = players.filter(p=>String(p.team||'').toLowerCase()==='team1');
     const t2 = players.filter(p=>String(p.team||'').toLowerCase()==='team2');
-    normalizePlayers(t1); normalizePlayers(t2);
 
     // Scores: prefer meta totals, fallback to first map
     const firstMap = mapsArr[0] || {};
@@ -2822,35 +2855,17 @@ async function loadTeam() {
       const key = teamName.toLowerCase();
       if (!lineupMap[key]) {
         lineupMap[key] = {teamName, aliases: new Set([teamName]), playerSet: new Set(),
-          playerSids: {}, sidToName: {}, playerAliases: {},
-          matchRosters:[], names:[], wins:0, losses:0, draws:0,
+          playerSids: {}, matchRosters:[], names:[], wins:0, losses:0, draws:0,
           maps:{}, roundsFor:0, roundsAgainst:0};
       }
       const lu = lineupMap[key];
       lu.teamName = teamName;
       lu.aliases.add(teamName);
       roster.forEach(p => {
-        if (!p.name) return;
-        const sid = (p.steamid64 && p.steamid64 !== '0') ? p.steamid64 : null;
-        if (sid) {
-          if (!lu.sidToName[sid]) {
-            // First time we see this SID — register canonical name
-            lu.sidToName[sid] = p.name;
-            lu.playerSet.add(p.name);
-            lu.playerSids[p.name] = sid;
-            lu.playerAliases[p.name] = lu.playerAliases[p.name] || new Set([p.name]);
-          } else {
-            // Same SID, different name = renamed player — track as alias
-            const canonName = lu.sidToName[sid];
-            lu.playerAliases[canonName] = lu.playerAliases[canonName] || new Set([canonName]);
-            if (p.name !== canonName) lu.playerAliases[canonName].add(p.name);
-          }
-        } else {
-          // No SID: fall back to name-based deduplication
-          if (!lu.playerSet.has(p.name)) {
-            lu.playerSet.add(p.name);
-            lu.playerAliases[p.name] = lu.playerAliases[p.name] || new Set([p.name]);
-          }
+        if (p.name) {
+          lu.playerSet.add(p.name);
+          // Map name → steamid64 so we can load Steam avatars
+          if (p.steamid64 && p.steamid64 !== '0') lu.playerSids[p.name] = p.steamid64;
         }
       });
       // Roster signature is SCOPED TO THIS MATCH (matchKey prefix).
@@ -2914,11 +2929,6 @@ async function loadTeam() {
         secondary.aliases.forEach(a => primary.aliases.add(a));
         secondary.playerSet.forEach(p => primary.playerSet.add(p));
         Object.assign(primary.playerSids, secondary.playerSids || {});
-        Object.assign(primary.sidToName, secondary.sidToName || {});
-        Object.entries(secondary.playerAliases || {}).forEach(([n, aliases]) => {
-          primary.playerAliases[n] = primary.playerAliases[n] || new Set([n]);
-          aliases.forEach(a => primary.playerAliases[n].add(a));
-        });
         Object.entries(secondary.maps).forEach(([map, {w,l}]) => {
           if (!primary.maps[map]) primary.maps[map] = {w:0, l:0};
           primary.maps[map].w += w;
@@ -2996,17 +3006,9 @@ function renderTeam(lineups) {
       const avatarHtml = cached
         ? `<img class="lineup-avatar" src="${cached}" alt="">`
         : `<div class="lineup-avatar-placeholder"${avatarId ? ` id="${avatarId}"` : ''}>${initials(n)}</div>`;
-      // Old names (aliases excluding current canonical name)
-      const allAliases = lu.playerAliases ? [...(lu.playerAliases[n] || [])].filter(a => a !== n) : [];
-      const aliasBadge = allAliases.length
-        ? `<span style="font-size:10px;color:var(--muted2);font-family:'Rajdhani',sans-serif;letter-spacing:.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="Also known as: ${allAliases.map(a=>esc(a)).join(', ')}">aka ${allAliases.map(a=>esc(a)).join(', ')}</span>`
-        : '';
-      return `<div class="lineup-player" onclick="event.stopPropagation();go('player',{sid:${escName(sid||n)}},'team')">
+      return `<div class="lineup-player" onclick="event.stopPropagation();go('player',{name:'${esc(n)}'},'team')">
         ${avatarHtml}
-        <div style="display:flex;flex-direction:column;min-width:0;overflow:hidden">
-          <span style="font-family:'Rajdhani',sans-serif;font-weight:600;font-size:13px;color:var(--white)">${esc(n)}</span>
-          ${aliasBadge}
-        </div>
+        <span style="font-family:'Rajdhani',sans-serif;font-weight:600;font-size:13px;color:var(--white)">${esc(n)}</span>
       </div>`;
     }).join('');
 
@@ -3361,6 +3363,407 @@ const urlParams = new URLSearchParams(location.search);
 if(urlParams.get('match')) go('match',{id:urlParams.get('match')});
 else go('matches');
 
+// ── Match Edit Modal ──────────────────────────────────────────────────────────
+
+let _editToken = null;    // kept for legacy bearer fallback
+let _isAdmin   = false;   // set after Steam session check on load
+let _editMatchId = null;  // current match being edited
+
+async function openEditModal(matchId) {
+  _editMatchId = matchId || window._currentMatchId;
+  document.getElementById('edit-overlay').classList.add('open');
+  if (_isAdmin) {
+    _renderEditForm();
+  } else {
+    _renderNotAdmin();
+  }
+}
+
+function closeEditModal() {
+  document.getElementById('edit-overlay').classList.remove('open');
+}
+
+function editOverlayClick(e) {
+  if (e.target === document.getElementById('edit-overlay')) closeEditModal();
+}
+
+function _renderNotAdmin() {
+  document.getElementById('edit-modal-content').innerHTML = `
+    <div class="edit-pw-gate">
+      <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="var(--orange)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="opacity:.6">
+        <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+      </svg>
+      <div style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:13px;letter-spacing:1px;color:var(--muted2)">Admin access required</div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:8px">Sign in with your Steam admin account to edit matches</div>
+      <a href="/auth/steam" class="edit-pw-btn" style="display:inline-flex;align-items:center;gap:8px;text-decoration:none;background:#1b2838;border-color:#2a475e;color:#c6d4df">
+        <svg width="18" height="18" viewBox="0 0 233 233" fill="currentColor"><path d="M116.5 0C52.1 0 0 52.1 0 116.5c0 55.4 38.7 101.8 90.6 113.5l30.9-72.7c-2.4.2-4.8.3-7.3.3-28.1 0-50.9-22.8-50.9-50.9s22.8-50.9 50.9-50.9 50.9 22.8 50.9 50.9c0 24.6-17.5 45.2-40.8 49.9l-29.8 70.1c1.9.1 3.7.2 5.6.2 64.4 0 116.5-52.2 116.5-116.5S180.9 0 116.5 0zm-2.6 150.8c-18.9 0-34.2-15.3-34.2-34.2s15.3-34.2 34.2-34.2 34.2 15.3 34.2 34.2-15.3 34.2-34.2 34.2z"/></svg>
+        Sign in with Steam
+      </a>
+    </div>`;
+}
+
+async function _renderEditForm() {
+  const d = window._currentMatchData || {};
+  const meta           = d.meta    || {};
+  const players        = d.players || [];
+  const maps           = d.maps    || [];
+  const missingPlayers = d.missing_players || [];   // from backend: MatchZy-only rows
+
+  // Load existing edits from DB
+  let existingEdits = {};
+  try {
+    const er = await fetch(`/api/match/${_editMatchId}/edits`);
+    const ed = await er.json();
+    existingEdits = ed.edits || {};
+  } catch(e) {}
+
+  // Helper: navigate dotted path in existingEdits
+  const ev = (editPath, currentVal) => {
+    const parts = editPath.split('.');
+    let obj = existingEdits;
+    for (const p of parts) { obj = (obj||{})[p]; }
+    return obj !== undefined ? obj : (currentVal ?? '');
+  };
+
+  const t1name  = ev('team1.name',  meta.team1_name);
+  const t2name  = ev('team2.name',  meta.team2_name);
+  const t1score = ev('team1.score', meta.team1_score);
+  const t2score = ev('team2.score', meta.team2_score);
+  const mapname = ev('map',         maps[0]?.mapname || '');
+  const winner  = ev('winner',      meta.winner || '');
+
+  // Added players already in edits (persisted from previous save)
+  const alreadyAdded = existingEdits.added_players || [];
+  const alreadyAddedSids = new Set(alreadyAdded.map(p => String(p.steamid64 || '')));
+
+  // Build player section rows (existing + already-added players)
+  const mkPlayerRow = (p, isAdded = false) => {
+    const sid = String(p.steamid64 || p.steam_id || '');
+    const pe  = (existingEdits.players || {})[sid] || {};
+    const gv  = (field, fallback) => pe[field] !== undefined ? pe[field] : (p[field] ?? fallback ?? '');
+    const addedClass = isAdded ? ' is-added' : '';
+    const removeBtn  = isAdded
+      ? `<button class="remove-player-btn" title="Remove from scoreboard"
+           onclick="_removeAddedPlayer('${sid}',this)" type="button">✕</button>`
+      : '';
+    return `<div class="edit-player-row${addedClass}" data-sid="${esc(sid)}" data-team="${esc(p.team||'')}" data-is-added="${isAdded}">
+      <div class="edit-player-name-cell">
+        <input type="text" value="${esc(gv('name', p.name))}" data-field="name" placeholder="Name" style="width:130px;text-align:left">
+      </div>
+      <input type="number" value="${esc(gv('kills',          p.kills))}"          data-field="kills"    min="0" placeholder="K">
+      <input type="number" value="${esc(gv('deaths',         p.deaths))}"         data-field="deaths"   min="0" placeholder="D">
+      <input type="number" value="${esc(gv('assists',        p.assists))}"        data-field="assists"  min="0" placeholder="A">
+      <input type="number" value="${esc(gv('damage',         p.damage))}"         data-field="damage"   min="0" placeholder="DMG">
+      <input type="number" value="${esc(gv('rating',         p.rating))}"         data-field="rating"   step="0.01" placeholder="Rtg">
+      <input type="number" value="${esc(gv('kast',           p.kast))}"           data-field="kast"     step="0.1"  placeholder="KAST">
+      ${removeBtn}
+    </div>`;
+  };
+
+  const mkPlayerSection = (teamPlayers, addedForTeam, teamLabel, teamColor) => {
+    const allRows = [
+      ...teamPlayers.map(p => mkPlayerRow(p, false)),
+      ...addedForTeam.map(p => mkPlayerRow(p, true)),
+    ].join('');
+    if (!allRows) return '';
+    const colCount = teamPlayers.length || addedForTeam.length;
+    return `
+      <div class="edit-section" id="section-${teamLabel.replace(/\s+/g,'-')}">
+        <div class="edit-section-title" style="color:var(${teamColor})">${teamLabel}</div>
+        <div class="edit-player-hdr" style="grid-template-columns:140px repeat(6,1fr) 22px">
+          <div>Player</div><div>K</div><div>D</div><div>A</div><div>DMG</div><div>Rating</div><div>KAST</div><div></div>
+        </div>
+        <div id="rows-${teamLabel.replace(/\s+/g,'-')}">${allRows}</div>
+      </div>`;
+  };
+
+  const team1Players   = players.filter(p => String(p.team||'').toLowerCase() === 'team1');
+  const team2Players   = players.filter(p => String(p.team||'').toLowerCase() === 'team2');
+  const added1         = alreadyAdded.filter(p => String(p.team||'').toLowerCase() === 'team1');
+  const added2         = alreadyAdded.filter(p => String(p.team||'').toLowerCase() === 'team2');
+
+  // Missing players panel — those MatchZy found but fshost missed, not yet added
+  const stillMissing = missingPlayers.filter(mp => !alreadyAddedSids.has(String(mp.steamid64 || '')));
+  const missingPanel = stillMissing.length ? `
+    <div class="edit-section">
+      <div class="edit-section-title" style="display:flex;align-items:center;gap:8px">
+        <span>Players Not in Scoreboard</span>
+        <span class="missing-badge">${stillMissing.length}</span>
+      </div>
+      <div style="font-size:11px;color:var(--muted2);margin-bottom:10px">
+        These players were found in MatchZy but not captured by fshost (disconnected early).
+        Click <strong style="color:var(--white)">Add</strong> to include them in the scoreboard.
+      </div>
+      <div class="missing-players-list">
+        ${stillMissing.map(mp => {
+          const sid  = String(mp.steamid64 || '');
+          const kd   = mp.deaths > 0 ? (mp.kills/mp.deaths).toFixed(2) : mp.kills;
+          const team = String(mp.team||'').toLowerCase();
+          return `<div class="missing-player-row" id="mpr-${esc(sid)}">
+            <div class="missing-player-info">
+              <div class="missing-player-name">${esc(mp.name||'Unknown')}</div>
+              <div class="missing-player-stats">
+                ${mp.kills}K / ${mp.deaths}D / ${mp.assists}A &nbsp;·&nbsp; KD ${kd}
+                &nbsp;·&nbsp; ${mp.damage} DMG
+                ${mp.adr ? '&nbsp;·&nbsp; ADR ' + mp.adr : ''}
+              </div>
+            </div>
+            <select class="missing-player-team-select" id="mpt-${esc(sid)}">
+              <option value="team1" ${team==='team1'?'selected':''}>${esc(t1name)}</option>
+              <option value="team2" ${team==='team2'?'selected':''}>${esc(t2name)}</option>
+            </select>
+            <button class="add-player-btn" onclick="_addMissingPlayer(${JSON.stringify(mp).replace(/"/g,'&quot;')}, '${esc(sid)}')" type="button">
+              + Add
+            </button>
+          </div>`;
+        }).join('')}
+      </div>
+      <div class="manual-add-row">
+        <input type="text" id="manual-name" placeholder="Or type player name manually…">
+        <select class="missing-player-team-select" id="manual-team">
+          <option value="team1">${esc(t1name)}</option>
+          <option value="team2">${esc(t2name)}</option>
+        </select>
+        <button class="manual-add-btn" onclick="_addManualPlayer()" type="button">+ Add Blank Row</button>
+      </div>
+    </div>` : `
+    <div class="edit-section">
+      <div class="manual-add-row" style="padding:0;border:none;margin-top:-8px">
+        <input type="text" id="manual-name" placeholder="Add player by name manually…">
+        <select class="missing-player-team-select" id="manual-team">
+          <option value="team1">${esc(t1name)}</option>
+          <option value="team2">${esc(t2name)}</option>
+        </select>
+        <button class="manual-add-btn" onclick="_addManualPlayer()" type="button">+ Add Row</button>
+      </div>
+    </div>`;
+
+  document.getElementById('edit-modal-title').textContent = `Edit Match #${_editMatchId}`;
+  document.getElementById('edit-modal-content').innerHTML = `
+    <div class="edit-modal-body" id="edit-modal-body" style="max-height:calc(85vh - 120px);overflow-y:auto">
+
+      <div class="edit-section">
+        <div class="edit-section-title">Match Info</div>
+        <div class="edit-grid">
+          <div class="edit-field"><label>Team 1 Name</label><input type="text" id="ef-t1name" value="${esc(t1name)}"></div>
+          <div class="edit-field"><label>Team 2 Name</label><input type="text" id="ef-t2name" value="${esc(t2name)}"></div>
+          <div class="edit-field"><label>Team 1 Score</label><input type="number" id="ef-t1score" value="${esc(t1score)}" min="0"></div>
+          <div class="edit-field"><label>Team 2 Score</label><input type="number" id="ef-t2score" value="${esc(t2score)}" min="0"></div>
+          <div class="edit-field"><label>Map</label><input type="text" id="ef-map" value="${esc(mapname)}"></div>
+          <div class="edit-field"><label>Winner</label><input type="text" id="ef-winner" value="${esc(winner)}"></div>
+        </div>
+      </div>
+
+      ${mkPlayerSection(team1Players, added1, t1name + ' Players', '--ct')}
+      ${mkPlayerSection(team2Players, added2, t2name + ' Players', '--t')}
+      ${missingPanel}
+
+    </div>
+    <div class="edit-modal-footer">
+      <button class="edit-revert-btn" onclick="_revertEdits()">↺ Revert to Original</button>
+      <span class="edit-status" id="edit-status"></span>
+      <button class="edit-save-btn" id="edit-save-btn" onclick="_saveEdits()">Save Changes</button>
+    </div>`;
+
+  // Store added players state in memory for this session
+  window._pendingAddedPlayers = [...alreadyAdded];
+}
+
+// ── Add/remove player helpers ─────────────────────────────────────────────────
+
+function _addMissingPlayer(mp, sid) {
+  const teamSel = document.getElementById(`mpt-${sid}`);
+  const team    = teamSel ? teamSel.value : (mp.team || 'team1');
+  const p       = { ...mp, team, steamid64: sid, source: 'added' };
+  _insertAddedPlayerRow(p);
+  // Hide the missing row
+  const mpr = document.getElementById(`mpr-${sid}`);
+  if (mpr) mpr.style.display = 'none';
+}
+
+function _addManualPlayer() {
+  const nameEl = document.getElementById('manual-name');
+  const teamEl = document.getElementById('manual-team');
+  const name   = nameEl?.value?.trim();
+  if (!name) { nameEl?.focus(); return; }
+  const team   = teamEl?.value || 'team1';
+  // Generate a temp fake steamid so the row has a unique key
+  const fakeSid = 'manual_' + Date.now();
+  const p = { steamid64: fakeSid, name, team, kills:0, deaths:0, assists:0, damage:0,
+               head_shot_kills:0, rating:null, kast:null, source:'added' };
+  _insertAddedPlayerRow(p);
+  if (nameEl) nameEl.value = '';
+}
+
+function _insertAddedPlayerRow(p) {
+  const sid     = String(p.steamid64 || '');
+  const team    = String(p.team || 'team1').toLowerCase();
+  const isTeam1 = team === 'team1';
+
+  // Find the right section container
+  const d         = window._currentMatchData || {};
+  const meta      = d.meta || {};
+  const t1name    = document.getElementById('ef-t1name')?.value || meta.team1_name || 'Team 1';
+  const t2name    = document.getElementById('ef-t2name')?.value || meta.team2_name || 'Team 2';
+  const teamLabel = isTeam1 ? (t1name + ' Players') : (t2name + ' Players');
+  const sectionId = 'rows-' + teamLabel.replace(/\s+/g,'-');
+  let container   = document.getElementById(sectionId);
+
+  // If that section doesn't exist yet (team had 0 players), create it
+  if (!container) {
+    const color  = isTeam1 ? '--ct' : '--t';
+    const body   = document.getElementById('edit-modal-body');
+    const missSec = body?.querySelector('.missing-players-panel') || body?.lastElementChild;
+    const sec    = document.createElement('div');
+    sec.className = 'edit-section';
+    sec.innerHTML = `
+      <div class="edit-section-title" style="color:var(${color})">${teamLabel}</div>
+      <div class="edit-player-hdr" style="grid-template-columns:140px repeat(6,1fr) 22px">
+        <div>Player</div><div>K</div><div>D</div><div>A</div><div>DMG</div><div>Rating</div><div>KAST</div><div></div>
+      </div>
+      <div id="${sectionId}"></div>`;
+    body?.insertBefore(sec, missSec);
+    container = document.getElementById(sectionId);
+  }
+
+  const gv = (field) => p[field] ?? '';
+  const row = document.createElement('div');
+  row.className  = 'edit-player-row is-added';
+  row.dataset.sid       = sid;
+  row.dataset.team      = team;
+  row.dataset.isAdded   = 'true';
+  row.innerHTML = `
+    <div class="edit-player-name-cell">
+      <input type="text" value="${esc(String(gv('name')))}" data-field="name" placeholder="Name" style="width:130px;text-align:left">
+    </div>
+    <input type="number" value="${esc(String(gv('kills')||0))}"    data-field="kills"    min="0" placeholder="K">
+    <input type="number" value="${esc(String(gv('deaths')||0))}"   data-field="deaths"   min="0" placeholder="D">
+    <input type="number" value="${esc(String(gv('assists')||0))}"  data-field="assists"  min="0" placeholder="A">
+    <input type="number" value="${esc(String(gv('damage')||0))}"   data-field="damage"   min="0" placeholder="DMG">
+    <input type="number" value="${esc(String(gv('rating')||''))}"  data-field="rating"   step="0.01" placeholder="Rtg">
+    <input type="number" value="${esc(String(gv('kast')||''))}"    data-field="kast"     step="0.1"  placeholder="KAST">
+    <button class="remove-player-btn" title="Remove" onclick="_removeAddedPlayer('${sid}',this)" type="button">✕</button>`;
+  container.appendChild(row);
+
+  // Track in pending state
+  if (!window._pendingAddedPlayers) window._pendingAddedPlayers = [];
+  window._pendingAddedPlayers = window._pendingAddedPlayers.filter(ap => String(ap.steamid64) !== sid);
+  window._pendingAddedPlayers.push({ ...p });
+}
+
+function _removeAddedPlayer(sid, btn) {
+  const row = btn.closest('.edit-player-row');
+  if (row) row.remove();
+  // Re-show in missing panel if applicable
+  const mpr = document.getElementById(`mpr-${sid}`);
+  if (mpr) mpr.style.display = '';
+  // Remove from pending
+  if (window._pendingAddedPlayers) {
+    window._pendingAddedPlayers = window._pendingAddedPlayers.filter(
+      ap => String(ap.steamid64) !== sid
+    );
+  }
+}
+
+async function _saveEdits() {
+  const btn      = document.getElementById('edit-save-btn');
+  const statusEl = document.getElementById('edit-status');
+  btn.disabled   = true;
+  statusEl.textContent = 'Saving…';
+  statusEl.className   = 'edit-status';
+
+  try {
+    const edits = {
+      team1:  { name: document.getElementById('ef-t1name')?.value,
+                score: Number(document.getElementById('ef-t1score')?.value) },
+      team2:  { name: document.getElementById('ef-t2name')?.value,
+                score: Number(document.getElementById('ef-t2score')?.value) },
+      map:    document.getElementById('ef-map')?.value,
+      winner: document.getElementById('ef-winner')?.value,
+      players: {},
+      added_players: [],
+    };
+
+    // Collect edits from ALL player rows (existing + added)
+    document.querySelectorAll('#edit-modal-content .edit-player-row').forEach(row => {
+      const sid     = row.dataset.sid;
+      const isAdded = row.dataset.isAdded === 'true';
+      if (!sid) return;
+
+      const pEdit = {};
+      row.querySelectorAll('input[data-field]').forEach(inp => {
+        const field = inp.dataset.field;
+        const val   = inp.type === 'number'
+          ? (inp.value !== '' ? Number(inp.value) : null)
+          : inp.value;
+        if (val !== null && val !== '') pEdit[field] = val;
+      });
+
+      if (isAdded) {
+        // Build the full added_player object
+        const basePlayer = (window._pendingAddedPlayers || []).find(
+          ap => String(ap.steamid64) === sid
+        ) || {};
+        edits.added_players.push({
+          ...basePlayer,
+          ...pEdit,
+          steamid64: sid,
+          team:      row.dataset.team,
+          source:    'added',
+        });
+      } else {
+        if (Object.keys(pEdit).length) edits.players[sid] = pEdit;
+      }
+    });
+
+    const r = await fetch(`/api/match/${_editMatchId}/edit`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({edits}),
+    });
+    const data = await r.json();
+    if (data.ok) {
+      statusEl.textContent = '✓ Saved!';
+      statusEl.className   = 'edit-status ok';
+      setTimeout(() => { closeEditModal(); loadMatch(_editMatchId); }, 800);
+    } else {
+      throw new Error(data.error || 'Save failed');
+    }
+  } catch(e) {
+    statusEl.textContent = '✕ ' + e.message;
+    statusEl.className   = 'edit-status err';
+    btn.disabled = false;
+  }
+}
+
+async function _revertEdits() {
+  if (!confirm('Revert all edits to original fshost data? This cannot be undone.')) return;
+  const statusEl = document.getElementById('edit-status');
+  statusEl.textContent = 'Reverting…';
+  statusEl.className = 'edit-status';
+  try {
+    const r = await fetch(`/api/match/${_editMatchId}/edit`, {
+      method: 'DELETE',
+      headers: {},
+    });
+    const data = await r.json();
+    if (data.ok) {
+      statusEl.textContent = '✓ Reverted!';
+      statusEl.className = 'edit-status ok';
+      setTimeout(() => {
+        closeEditModal();
+        loadMatch(_editMatchId);
+      }, 800);
+    } else {
+      throw new Error(data.error || 'Revert failed');
+    }
+  } catch(e) {
+    statusEl.textContent = '✕ ' + e.message;
+    statusEl.className = 'edit-status err';
+  }
+}
+
+
 // ── SEARCH ────────────────────────────────────────────────────────────────────
 let _searchTimer = null;
 function toggleSearchOverlay() {
@@ -3399,15 +3802,14 @@ async function runSearch(q) {
   res.innerHTML = '<div style="padding:12px 14px;color:var(--muted2);font-size:12px">Searching...</div>';
   try {
     const data = await fetch('/api/search?q=' + encodeURIComponent(q)).then(r => r.json());
-    if (data && Array.isArray(data.players)) normalizePlayers(data.players);
     let html = '';
     if (data.players && data.players.length) {
       html += '<div class="search-section-hd">Players</div>';
       html += data.players.map(p => `
-        <div class="search-row" onclick="closeSearchOverlay();go('player',{sid:${escName(p.steamid64||p.name)}})">
+        <div class="search-row" onclick="closeSearchOverlay();go('player',{name:'${esc(p.name)}'})">
           <div style="width:32px;height:32px;border-radius:50%;background:var(--surface2);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:11px;color:var(--muted2)">${initials(p.name)}</div>
           <div style="flex:1;min-width:0">
-            <div class="search-row-title">${esc(p._steam_name||p.name)}</div>
+            <div class="search-row-title">${esc(p.name)}</div>
             <div class="search-row-sub">${p.matches} matches · ${parseFloat(p.kd??0).toFixed(2)} K/D · ${parseFloat(p.adr??0).toFixed(0)} ADR</div>
           </div>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--muted2)" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
@@ -3571,9 +3973,8 @@ async function runTeamH2H() {
 }
 
 // ── PLAYER MAP STATS (appended to player profile) ─────────────────────────────
-async function loadPlayerMapStats(name, containerEl, sid) {
-  sid = sid || '';
-  const rows = await fetch(sid ? '/api/player/sid/'+encodeURIComponent(sid)+'/mapstats' : '/api/player/'+encodeURIComponent(name)+'/mapstats').then(r => r.json()).catch(() => []);
+async function loadPlayerMapStats(name, containerEl) {
+  const rows = await fetch('/api/player/' + encodeURIComponent(name) + '/mapstats').then(r => r.json()).catch(() => []);
   if (!Array.isArray(rows) || !rows.length) { containerEl.style.display = 'none'; return; }
 
   const best = rows.reduce((a, b) => parseFloat(a.kd??0) >= parseFloat(b.kd??0) ? a : b, rows[0]);
@@ -3619,6 +4020,18 @@ async function loadPlayerMapStats(name, containerEl, sid) {
   containerEl.style.display = '';
 }
 </script>
+<!-- ── Match Edit Modal ────────────────────────────────────────────────────── -->
+<div class="edit-overlay" id="edit-overlay" onclick="editOverlayClick(event)">
+  <div class="edit-modal" id="edit-modal">
+    <div class="edit-modal-header">
+      <span class="edit-modal-title" id="edit-modal-title">Edit Match</span>
+      <button class="edit-modal-close" onclick="closeEditModal()">✕</button>
+    </div>
+    <div id="edit-modal-content">
+      <!-- Filled dynamically: password gate or edit form -->
+    </div>
+  </div>
+</div>
 
 </body>
 </html>
