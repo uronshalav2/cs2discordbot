@@ -226,14 +226,6 @@ async def handle_api_player(request):
     if not career:
         return _json_response({"error": "Player not found"})
 
-    # Enrich career and recent matches with live Steam profile
-    sid = str(career.get('steamid64') or '')
-    steam_profiles = await _fetch_steam_profiles([sid])
-    sp = steam_profiles.get(sid, {})
-    career['steam_name']   = sp.get('steam_name')
-    career['steam_avatar'] = sp.get('steam_avatar')
-    await _enrich_rows_with_steam(recent)
-
     return _json_response({"career": career, "recent_matches": recent})
 
 async def handle_api_player_by_sid(request):
@@ -313,13 +305,6 @@ async def handle_api_player_by_sid(request):
 
     if not career:
         return _json_response({"error": "Player not found"})
-
-    # Enrich with live Steam profile
-    steam_profiles = await _fetch_steam_profiles([sid])
-    sp = steam_profiles.get(sid, {})
-    career['steam_name']   = sp.get('steam_name')
-    career['steam_avatar'] = sp.get('steam_avatar')
-    await _enrich_rows_with_steam(recent)
 
     return _json_response({"career": career, "recent_matches": recent})
 
@@ -468,8 +453,6 @@ async def handle_api_match(request):
         }
         meta['filename'] = entry.get('name', '')
 
-        await _enrich_rows_with_steam(players)
-
         return _json_response({
             "meta":    meta,
             "maps":    maps,
@@ -542,11 +525,6 @@ async def handle_api_matches_full(request):
             })
 
         results.sort(key=lambda r: str(r['meta'].get('end_time') or ''), reverse=True)
-
-        # Enrich all players across all matches with live Steam profiles.
-        # Collect every unique steamid64 first so we make as few API calls as possible.
-        all_players = [p for match in results for p in match.get('players', [])]
-        await _enrich_rows_with_steam(all_players)
 
         _cache_set('matches_full', results)
         return _json_response(results, max_age=30)
@@ -885,7 +863,6 @@ async def handle_api_leaderboard(request):
         rows = c.fetchall()
         c.close(); conn.close()
         rows = _patch_aggregate_rows(rows)
-        await _enrich_rows_with_steam(rows)
         _cache_set('leaderboard', rows)
         return _json_response(rows, max_age=60)
     except Exception as e:
@@ -925,7 +902,6 @@ async def handle_api_specialists(request):
         rows = c.fetchall()
         c.close(); conn.close()
         rows = _patch_aggregate_rows(rows)
-        await _enrich_rows_with_steam(rows)
         _cache_set('specialists', rows)
         return _json_response(rows, max_age=60)
     except Exception as e:
