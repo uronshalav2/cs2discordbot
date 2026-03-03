@@ -697,6 +697,11 @@ def _patch_recent_matches(rows: list) -> list:
     return [dict(r) for r in rows]
 
 
+def _patch_aggregate_rows(rows: list) -> list:
+    """Return aggregate rows (leaderboard/specialists) as a clean list of dicts."""
+    return [dict(r) for r in rows]
+
+
 def _save_raw_to_db(matchid: str, raw: dict):
     """Upsert the raw fshost JSON into fshost_matches table."""
     try:
