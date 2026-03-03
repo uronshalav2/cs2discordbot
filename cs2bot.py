@@ -252,6 +252,14 @@ async def handle_api_player(request):
     if not career:
         return _json_response({"error": "Player not found"})
 
+    # Enrich career and recent matches with live Steam profile
+    sid = str(career.get('steamid64') or '')
+    steam_profiles = await _fetch_steam_profiles([sid])
+    sp = steam_profiles.get(sid, {})
+    career['steam_name']   = sp.get('steam_name')
+    career['steam_avatar'] = sp.get('steam_avatar')
+    await _enrich_rows_with_steam(recent)
+
     return _json_response({"career": career, "recent_matches": recent})
 
 async def handle_api_player_by_sid(request):
@@ -328,6 +336,13 @@ async def handle_api_player_by_sid(request):
 
     if not career:
         return _json_response({"error": "Player not found"})
+
+    # Enrich with live Steam profile
+    steam_profiles = await _fetch_steam_profiles([sid])
+    sp = steam_profiles.get(sid, {})
+    career['steam_name']   = sp.get('steam_name')
+    career['steam_avatar'] = sp.get('steam_avatar')
+    await _enrich_rows_with_steam(recent)
 
     return _json_response({"career": career, "recent_matches": recent})
 
@@ -536,6 +551,11 @@ async def handle_api_match(request):
         }
         # Include filename in meta so team stats page can use it as unique match key
         meta['filename'] = entry.get('name', '')
+
+        # Enrich all player lists with live Steam profiles (single batched call)
+        all_player_rows = players + missing_players
+        await _enrich_rows_with_steam(all_player_rows)
+
         return _json_response({
             "meta":            meta,
             "maps":            maps,
@@ -633,6 +653,12 @@ async def handle_api_matches_full(request):
             })
 
         results.sort(key=lambda r: str(r['meta'].get('end_time') or ''), reverse=True)
+
+        # Enrich all players across all matches with live Steam profiles.
+        # Collect every unique steamid64 first so we make as few API calls as possible.
+        all_players = [p for match in results for p in match.get('players', [])]
+        await _enrich_rows_with_steam(all_players)
+
         _cache_set('matches_full', results)
         return _json_response(results, max_age=30)
     except Exception as e:
@@ -640,9 +666,35 @@ async def handle_api_matches_full(request):
 
 
 
+def _get_steamid_map_from_db(matchid: str) -> dict:
+    """
+    Query matchzy_stats_players for the given matchid and return a
+    dict mapping player name -> steamid64.  Used so _players_from_fshost
+    can resolve Steam IDs from the DB instead of relying on the fshost JSON.
+    Returns an empty dict on any error.
+    """
+    try:
+        conn = get_db()
+        c = conn.cursor(dictionary=True)
+        c.execute(
+            f"SELECT name, steamid64 FROM {MATCHZY_TABLES['players']} "
+            f"WHERE matchid = %s AND steamid64 != '0'",
+            (str(matchid),)
+        )
+        rows = c.fetchall()
+        c.close(); conn.close()
+        return {str(r['name']): str(r['steamid64']) for r in rows if r.get('name')}
+    except Exception as e:
+        print(f"[steamid map] DB lookup failed for match {matchid}: {e}")
+        return {}
+
+
 def _players_from_fshost(data: dict, matchid: str) -> list:
     """Flatten fshost team1/team2 players into a unified list with all available fields."""
     players = []
+    # Build a name -> steamid64 map from the DB for this match so we don't
+    # rely on the steam_id field embedded in the fshost JSON.
+    db_sid_map = _get_steamid_map_from_db(matchid)
     for team_key in ('team1', 'team2'):
         team_data = data.get(team_key, {})
         team_name = team_data.get('name', team_key)
@@ -656,11 +708,18 @@ def _players_from_fshost(data: dict, matchid: str) -> list:
             def cw(s):
                 try: return int(str(s).split('/')[0])
                 except: return 0
+            player_name = fp.get('name', '?')
+            # Prefer the steamid64 from matchzy_stats_players; fall back to
+            # whatever the fshost JSON provides, then '0' as last resort.
+            steamid64 = (
+                db_sid_map.get(player_name)
+                or str(fp.get('steam_id') or fp.get('steamid64') or '0')
+            )
             players.append({
                 'matchid':        matchid,
                 'mapnumber':      1,
-                'steamid64':      str(fp.get('steam_id', '0')),
-                'name':           fp.get('name', '?'),
+                'steamid64':      steamid64,
+                'name':           player_name,
                 'team':           team_key,
                 'team_name':      team_name,
                 'kills':          kills,
@@ -1209,6 +1268,7 @@ async def handle_api_leaderboard(request):
         rows = c.fetchall()
         c.close(); conn.close()
         rows = _patch_aggregate_rows(rows)
+        await _enrich_rows_with_steam(rows)
         _cache_set('leaderboard', rows)
         return _json_response(rows, max_age=60)
     except Exception as e:
@@ -1248,6 +1308,7 @@ async def handle_api_specialists(request):
         rows = c.fetchall()
         c.close(); conn.close()
         rows = _patch_aggregate_rows(rows)
+        await _enrich_rows_with_steam(rows)
         _cache_set('specialists', rows)
         return _json_response(rows, max_age=60)
     except Exception as e:
@@ -1270,6 +1331,89 @@ def _steam_cache_get(sid: str):
 
 def _steam_cache_set(sid: str, data: dict):
     _STEAM_CACHE[sid] = {'data': data, 'ts': _time.monotonic()}
+
+async def _fetch_steam_profiles(steamids: list[str]) -> dict:
+    """
+    Fetch current Steam profile data (name + avatar) for a list of steamid64s.
+    Returns a dict: { steamid64: {"steam_name": ..., "steam_avatar": ...} }
+
+    - Uses the existing in-memory cache (_STEAM_CACHE).
+    - Makes a single batched GetPlayerSummaries call (up to 100 IDs) for any
+      IDs that are not already cached, then back-fills the cache.
+    - Always live from the Steam API (no DB storage).
+    - Silently returns empty profiles if STEAM_API_KEY is not set or the
+      request fails, so callers never need to handle errors.
+    """
+    if not STEAM_API_KEY:
+        return {}
+
+    result: dict = {}
+    missing: list[str] = []
+
+    for sid in steamids:
+        if not sid or sid == '0' or not sid.startswith('7656119'):
+            continue
+        cached = _steam_cache_get(sid)
+        if cached is not None:
+            result[sid] = {"steam_name": cached.get("name"), "steam_avatar": cached.get("avatar")}
+        else:
+            missing.append(sid)
+
+    if not missing:
+        return result
+
+    # Steam allows up to 100 IDs per call; chunk just in case
+    def _batch_fetch(ids: list[str]) -> list[dict]:
+        url = (
+            "https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v2/"
+            f"?key={STEAM_API_KEY}&steamids={','.join(ids)}"
+        )
+        try:
+            r = requests.get(url, timeout=10)
+            r.raise_for_status()
+            return r.json().get("response", {}).get("players", [])
+        except Exception as e:
+            print(f"[Steam batch] Error fetching {len(ids)} profiles: {e}")
+            return []
+
+    loop = asyncio.get_running_loop()
+    chunk_size = 100
+    for i in range(0, len(missing), chunk_size):
+        chunk = missing[i:i + chunk_size]
+        players = await loop.run_in_executor(None, _batch_fetch, chunk)
+        for p in players:
+            sid = p.get("steamid")
+            if not sid:
+                continue
+            profile = {
+                "steamid":     sid,
+                "name":        p.get("personaname"),
+                "avatar":      p.get("avatarfull"),
+                "profile_url": p.get("profileurl"),
+                "country":     p.get("loccountrycode", ""),
+                "real_name":   p.get("realname", ""),
+            }
+            _steam_cache_set(sid, profile)
+            result[sid] = {"steam_name": profile["name"], "steam_avatar": profile["avatar"]}
+
+    return result
+
+
+async def _enrich_rows_with_steam(rows: list) -> list:
+    """
+    Add 'steam_name' and 'steam_avatar' fields to a list of player dicts.
+    Each dict must have a 'steamid64' key.  Rows without a valid steamid64
+    are left unchanged.  Returns the same list (mutated in place) for convenience.
+    """
+    sids = list({str(r.get('steamid64') or '') for r in rows})
+    profiles = await _fetch_steam_profiles(sids)
+    for row in rows:
+        sid = str(row.get('steamid64') or '')
+        p = profiles.get(sid, {})
+        row['steam_name']   = p.get('steam_name')
+        row['steam_avatar'] = p.get('steam_avatar')
+    return rows
+
 
 async def handle_api_steam(request):
     """GET /api/steam/{steamid64} — fetch Steam profile and avatar from CDN."""
