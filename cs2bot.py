@@ -218,42 +218,6 @@ async def handle_api_player(request):
             sid = sid64  # always SteamID64 form, set above
             if sid in name_map:
                 career['name'] = name_map[sid]
-
-            # ── Name history ──────────────────────────────────────────────────
-            c.execute(f"""
-                SELECT DISTINCT name
-                FROM {MATCHZY_TABLES['players']}
-                WHERE CAST(steamid64 AS UNSIGNED) IN (%s, %s)
-                  AND steamid64 != '0' AND name != '' AND name IS NOT NULL
-                ORDER BY name
-            """, (int(sid64), int(sid32)))
-            db_names = [r['name'] for r in c.fetchall()]
-            current_display = career['name']
-            name_history = sorted(set(db_names) - {current_display})
-            career['name_history'] = name_history
-
-            # ── Live Steam name ───────────────────────────────────────────────
-            if STEAM_API_KEY and sid64 and sid64 != '0':
-                def _fetch_steam_name_a():
-                    try:
-                        url = (
-                            f"https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v2/"
-                            f"?key={STEAM_API_KEY}&steamids={sid64}"
-                        )
-                        r = requests.get(url, timeout=5)
-                        r.raise_for_status()
-                        players = r.json().get("response", {}).get("players", [])
-                        if players:
-                            return players[0].get("personaname", "")
-                    except Exception:
-                        pass
-                    return ""
-                steam_name = await loop.run_in_executor(None, _fetch_steam_name_a)
-                if steam_name:
-                    if steam_name != current_display and current_display not in career['name_history']:
-                        career['name_history'].insert(0, current_display)
-                    career['steam_name'] = steam_name
-                    career['name'] = steam_name
             c.execute(f"""
                 SELECT p.matchid, p.mapnumber, p.team, p.steamid64,
                     p.kills, p.deaths, p.assists, p.damage, p.head_shot_kills,
@@ -346,44 +310,6 @@ async def handle_api_player_by_sid(request):
             name_map = _edited_name_map()
             if sid64 in name_map:
                 career['name'] = name_map[sid64]
-
-            # ── Name history: all distinct names this steamid64 has played under ──
-            c.execute(f"""
-                SELECT DISTINCT name
-                FROM {MATCHZY_TABLES['players']}
-                WHERE CAST(steamid64 AS UNSIGNED) IN (%s, %s)
-                  AND steamid64 != '0' AND name != '' AND name IS NOT NULL
-                ORDER BY name
-            """, (int(sid64), int(sid32)))
-            db_names = [r['name'] for r in c.fetchall()]
-            # Add edited name overrides and strip the current display name
-            current_display = career['name']
-            name_history = sorted(set(db_names) - {current_display})
-            career['name_history'] = name_history
-
-            # ── Fetch live Steam name (runs in executor to avoid blocking event loop) ──
-            if STEAM_API_KEY and sid64 and sid64 != '0':
-                def _fetch_steam_name():
-                    try:
-                        url = (
-                            f"https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v2/"
-                            f"?key={STEAM_API_KEY}&steamids={sid64}"
-                        )
-                        r = requests.get(url, timeout=5)
-                        r.raise_for_status()
-                        players = r.json().get("response", {}).get("players", [])
-                        if players:
-                            return players[0].get("personaname", "")
-                    except Exception:
-                        pass
-                    return ""
-                steam_name = await loop.run_in_executor(None, _fetch_steam_name)
-                if steam_name:
-                    # If Steam name differs from DB name, add old DB name to history
-                    if steam_name != current_display and current_display not in career['name_history']:
-                        career['name_history'].insert(0, current_display)
-                    career['steam_name'] = steam_name
-                    career['name'] = steam_name  # always show real-time Steam name
 
             c.execute(f"""
                 SELECT p.matchid, p.mapnumber, p.team, p.steamid64,
