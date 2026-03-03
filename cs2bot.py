@@ -54,7 +54,6 @@ import time as _time
 
 _API_CACHE: dict = {}
 _API_CACHE_TTL = {
-    'all_edits':    60,
     'matches':      30,
     'matches_full': 30,
     'leaderboard':  60,
@@ -90,13 +89,12 @@ async def handle_api_player(request):
         # reverse edited map: edited_name -> steamid
         edited_sid = next((s for s, n in name_map.items() if n == lookup_name), None)
         row = next((r for r in all_rows if r['name'] == lookup_name
-                    or to_steamid64(str(r['steamid64'])) == to_steamid64(str(edited_sid or ''))), None)
+                    or r['steamid64'] == edited_sid), None)
         if not row:
             return None, []
-        row_sid64 = to_steamid64(str(row['steamid64']))
         career = {
-            'name':           name_map.get(row_sid64, row['name']),
-            'steamid64':      row_sid64,
+            'name':           name_map.get(row['steamid64'], row['name']),
+            'steamid64':      row['steamid64'],
             'matches':        row['matches'],
             'kills':          row['kills'],
             'deaths':         row['deaths'],
@@ -115,7 +113,7 @@ async def handle_api_player(request):
         # Build recent matches from fshost
         recent = []
         matchid_map = build_matchid_to_demo_map()
-        sid = to_steamid64(str(row['steamid64']))
+        sid = row['steamid64']
         for mid, entry in matchid_map.items():
             meta = entry.get('metadata')
             if not meta:
@@ -123,7 +121,7 @@ async def handle_api_player(request):
             for team_key in ('team1', 'team2'):
                 team = meta.get(team_key, {})
                 for fp in team.get('players', []):
-                    fp_sid = to_steamid64(str(fp.get('steam_id') or fp.get('steamid64') or '0'))
+                    fp_sid = str(fp.get('steam_id') or fp.get('steamid64') or '0')
                     if fp_sid != sid:
                         continue
                     k = int(fp.get('kills',0) or 0)
@@ -155,7 +153,7 @@ async def handle_api_player(request):
                     })
         recent = _patch_recent_matches(recent)
         recent.sort(key=lambda r: str(r.get('matchid','')), reverse=True)
-        return career, recent[:20]
+        return career, recent[:20]  # fshost fallback keeps 20 (no offset support)
 
     # ── Try MatchZy first ─────────────────────────────────────────────────────
     career = None
@@ -163,58 +161,50 @@ async def handle_api_player(request):
     try:
         conn = get_db()
         c = conn.cursor(dictionary=True)
+        c.execute(f"""
+            SELECT name, steamid64,
+                COUNT(DISTINCT matchid) AS matches,
+                SUM(kills) AS kills, SUM(deaths) AS deaths, SUM(assists) AS assists,
+                SUM(head_shot_kills) AS headshots, SUM(damage) AS total_damage,
+                SUM(enemies5k) AS aces, SUM(enemies4k) AS quads,
+                SUM(v1_wins) AS clutch_1v1, SUM(v2_wins) AS clutch_1v2,
+                SUM(entry_wins) AS entry_wins, SUM(entry_count) AS entry_attempts,
+                SUM(flash_successes) AS flashes_thrown,
+                ROUND(SUM(kills)/NULLIF(SUM(deaths),0),2) AS kd,
+                ROUND(SUM(head_shot_kills)/NULLIF(SUM(kills),0)*100,1) AS hs_pct,
+                ROUND(SUM(damage)/NULLIF(COUNT(DISTINCT CONCAT(matchid,mapnumber)),0)/30,1) AS adr
+            FROM {MATCHZY_TABLES['players']}
+            WHERE name = %s AND steamid64 != '0'
+            GROUP BY steamid64, name
+        """, (name,))
+        career = c.fetchone()
 
-        # Step 1: resolve steamid64 for this player name.
-        # A player may have changed their name, so rows exist under multiple names
-        # all sharing the same steamid64. We resolve the SID first, then aggregate
-        # ALL rows by SID so no matches are missed.
-        name_map = _edited_name_map()
-
-        # Check edited name map first (highest priority)
-        resolved_sid = next((sid for sid, n in name_map.items() if n == name), None)
-
-        # If not in edit map, look up any row with this exact name
-        if not resolved_sid:
-            c.execute(f"""
-                SELECT steamid64 FROM {MATCHZY_TABLES['players']}
-                WHERE name = %s AND steamid64 != '0'
-                LIMIT 1
-            """, (name,))
-            row = c.fetchone()
-            if row:
-                resolved_sid = to_steamid64(str(row['steamid64']))
-
-        # Aggregate ALL rows for this steamid64 regardless of name changes.
-        if resolved_sid:
-            sid64 = to_steamid64(resolved_sid)
-            c.execute(f"""
-                SELECT
-                    SUBSTRING_INDEX(GROUP_CONCAT(name ORDER BY matchid DESC), ',', 1) AS name,
-                    COUNT(DISTINCT matchid)                                      AS matches,
-                    SUM(kills)                                                   AS kills,
-                    SUM(deaths)                                                  AS deaths,
-                    SUM(assists)                                                 AS assists,
-                    SUM(head_shot_kills)                                         AS headshots,
-                    SUM(damage)                                                  AS total_damage,
-                    SUM(enemies5k)                                               AS aces,
-                    SUM(enemies4k)                                               AS quads,
-                    SUM(v1_wins)                                                 AS clutch_1v1,
-                    SUM(v2_wins)                                                 AS clutch_1v2,
-                    SUM(entry_wins)                                              AS entry_wins,
-                    SUM(entry_count)                                             AS entry_attempts,
-                    SUM(flash_successes)                                         AS flashes_thrown,
-                    ROUND(SUM(kills)/NULLIF(SUM(deaths),0),2)                   AS kd,
-                    ROUND(SUM(head_shot_kills)/NULLIF(SUM(kills),0)*100,1)      AS hs_pct,
-                    ROUND(SUM(damage)/NULLIF(
-                        COUNT(DISTINCT CONCAT(matchid,mapnumber)),0)/30,1)      AS adr
-                FROM {MATCHZY_TABLES['players']}
-                WHERE steamid64 = %s AND steamid64 != '0'
-            """, (sid64,))
-            career = c.fetchone()
+        if not career:
+            name_map = _edited_name_map()
+            sid_for_edited = next((sid for sid, n in name_map.items() if n == name), None)
+            if sid_for_edited:
+                c.execute(f"""
+                    SELECT name, steamid64,
+                        COUNT(DISTINCT matchid) AS matches,
+                        SUM(kills) AS kills, SUM(deaths) AS deaths, SUM(assists) AS assists,
+                        SUM(head_shot_kills) AS headshots, SUM(damage) AS total_damage,
+                        SUM(enemies5k) AS aces, SUM(enemies4k) AS quads,
+                        SUM(v1_wins) AS clutch_1v1, SUM(v2_wins) AS clutch_1v2,
+                        SUM(entry_wins) AS entry_wins, SUM(entry_count) AS entry_attempts,
+                        SUM(flash_successes) AS flashes_thrown,
+                        ROUND(SUM(kills)/NULLIF(SUM(deaths),0),2) AS kd,
+                        ROUND(SUM(head_shot_kills)/NULLIF(SUM(kills),0)*100,1) AS hs_pct,
+                        ROUND(SUM(damage)/NULLIF(COUNT(DISTINCT CONCAT(matchid,mapnumber)),0)/30,1) AS adr
+                    FROM {MATCHZY_TABLES['players']}
+                    WHERE steamid64 = %s AND steamid64 != '0'
+                    GROUP BY steamid64, name
+                """, (sid_for_edited,))
+                career = c.fetchone()
 
         if career:
+            career = dict(career)
             name_map = _edited_name_map()
-            sid = sid64  # always SteamID64 form, set above
+            sid = str(career.get('steamid64') or '')
             if sid in name_map:
                 career['name'] = name_map[sid]
             c.execute(f"""
@@ -244,12 +234,12 @@ async def handle_api_player(request):
                 LEFT JOIN {MATCHZY_TABLES['matches']} mm ON p.matchid=mm.matchid
                 WHERE p.steamid64 = %s AND p.steamid64 != '0'
                 ORDER BY p.matchid DESC, p.mapnumber DESC
-                LIMIT 20
-            """, (sid,))
+                LIMIT %s OFFSET %s
+            """, (sid, int(request.rel_url.query.get('limit', 20)), int(request.rel_url.query.get('offset', 0))))
             recent = _patch_recent_matches(c.fetchall())
         c.close(); conn.close()
-    except Exception as _e:
-        print(f"[api/player] MatchZy query error for '{name}': {_e}")
+    except Exception:
+        pass
 
     # ── Fallback to fshost ────────────────────────────────────────────────────
     if not career:
@@ -259,127 +249,6 @@ async def handle_api_player(request):
         return _json_response({"error": "Player not found"})
 
     return _json_response({"career": career, "recent_matches": recent})
-
-async def handle_api_player_by_sid(request):
-    """GET /api/player/sid/{steamid64} — look up player by SteamID (either form)."""
-    raw_sid = request.match_info.get('steamid64', '')
-    loop = asyncio.get_running_loop()
-
-    sid64 = to_steamid64(raw_sid)
-
-    career = None
-    recent = []
-    try:
-        conn = get_db()
-        c = conn.cursor(dictionary=True)
-
-        # WHERE IN (sid64, sid32) covers both forms stored in DB.
-        # No GROUP BY needed — we already filter to one player's rows.
-        c.execute(f"""
-            SELECT
-                SUBSTRING_INDEX(GROUP_CONCAT(name ORDER BY matchid DESC), ',', 1) AS name,
-                COUNT(DISTINCT matchid)                                      AS matches,
-                SUM(kills)                                                   AS kills,
-                SUM(deaths)                                                  AS deaths,
-                SUM(assists)                                                 AS assists,
-                SUM(head_shot_kills)                                         AS headshots,
-                SUM(damage)                                                  AS total_damage,
-                SUM(enemies5k)                                               AS aces,
-                SUM(enemies4k)                                               AS quads,
-                SUM(v1_wins)                                                 AS clutch_1v1,
-                SUM(v2_wins)                                                 AS clutch_1v2,
-                SUM(entry_wins)                                              AS entry_wins,
-                SUM(entry_count)                                             AS entry_attempts,
-                SUM(flash_successes)                                         AS flashes_thrown,
-                ROUND(SUM(kills)/NULLIF(SUM(deaths),0),2)                   AS kd,
-                ROUND(SUM(head_shot_kills)/NULLIF(SUM(kills),0)*100,1)      AS hs_pct,
-                ROUND(SUM(damage)/NULLIF(
-                    COUNT(DISTINCT CONCAT(matchid,mapnumber)),0)/30,1)      AS adr
-            FROM {MATCHZY_TABLES['players']}
-            WHERE steamid64 = %s AND steamid64 != '0'
-        """, (sid64,))
-        career = c.fetchone()
-
-        if career:
-            career = dict(career)
-            # Always expose the real SteamID64 regardless of what DB stores
-            career['steamid64'] = sid64
-            name_map = _edited_name_map()
-            if sid64 in name_map:
-                career['name'] = name_map[sid64]
-
-            c.execute(f"""
-                SELECT p.matchid, p.mapnumber, p.team, p.steamid64,
-                    p.kills, p.deaths, p.assists, p.damage, p.head_shot_kills,
-                    p.enemies5k, p.v1_wins,
-                    m.mapname, m.team1_score, m.team2_score,
-                    mm.team1_name, mm.team2_name, mm.winner,
-                    ROUND(p.damage/30,1) AS adr,
-                    ROUND(p.head_shot_kills/NULLIF(p.kills,0)*100,1) AS hs_pct,
-                    CASE
-                        WHEN LOWER(p.team) = LOWER(mm.team1_name) THEN 'team1'
-                        WHEN LOWER(p.team) = LOWER(mm.team2_name) THEN 'team2'
-                        WHEN LOWER(p.team) IN ('team1','team_1','1') THEN 'team1'
-                        WHEN LOWER(p.team) IN ('team2','team_2','2') THEN 'team2'
-                        ELSE NULL
-                    END AS player_team,
-                    CASE
-                        WHEN LOWER(p.team) = LOWER(mm.team1_name) THEN
-                            CASE WHEN LOWER(mm.winner) = LOWER(mm.team1_name) THEN 1 ELSE 0 END
-                        WHEN LOWER(p.team) = LOWER(mm.team2_name) THEN
-                            CASE WHEN LOWER(mm.winner) = LOWER(mm.team2_name) THEN 1 ELSE 0 END
-                        ELSE NULL
-                    END AS player_won
-                FROM {MATCHZY_TABLES['players']} p
-                LEFT JOIN {MATCHZY_TABLES['maps']} m ON p.matchid=m.matchid AND p.mapnumber=m.mapnumber
-                LEFT JOIN {MATCHZY_TABLES['matches']} mm ON p.matchid=mm.matchid
-                WHERE p.steamid64 = %s AND p.steamid64 != '0'
-                ORDER BY p.matchid DESC, p.mapnumber DESC
-                LIMIT 20
-            """, (sid64,))
-            recent = _patch_recent_matches(c.fetchall())
-        c.close(); conn.close()
-    except Exception as _e:
-        print(f"[api/player/sid] error for '{raw_sid}': {_e}")
-
-    if not career:
-        return _json_response({"error": "Player not found"})
-
-    return _json_response({"career": career, "recent_matches": recent})
-
-
-async def handle_api_player_mapstats_by_sid(request):
-    """GET /api/player/sid/{steamid64}/mapstats"""
-    raw_sid = request.match_info.get('steamid64', '')
-    sid64 = to_steamid64(raw_sid)
-    try:
-        conn = get_db()
-        c = conn.cursor(dictionary=True)
-        c.execute(f"""
-            SELECT m.mapname,
-                COUNT(DISTINCT p.matchid)                                           AS matches,
-                SUM(p.kills) AS kills, SUM(p.deaths) AS deaths,
-                SUM(p.assists) AS assists, SUM(p.damage) AS damage,
-                SUM(p.head_shot_kills) AS headshots,
-                ROUND(SUM(p.kills)/NULLIF(SUM(p.deaths),0),2)                      AS kd,
-                ROUND(SUM(p.head_shot_kills)/NULLIF(SUM(p.kills),0)*100,1)         AS hs_pct,
-                ROUND(SUM(p.damage)/NULLIF(COUNT(DISTINCT p.matchid),0)/30,1)      AS adr,
-                SUM(CASE WHEN LOWER(mm.winner) = LOWER(p.team) THEN 1 ELSE 0 END) AS wins
-            FROM {MATCHZY_TABLES['players']} p
-            LEFT JOIN {MATCHZY_TABLES['maps']} m  ON p.matchid=m.matchid AND p.mapnumber=m.mapnumber
-            LEFT JOIN {MATCHZY_TABLES['matches']} mm ON p.matchid=mm.matchid
-            WHERE p.steamid64 = %s AND p.steamid64 != '0'
-              AND m.mapname IS NOT NULL AND m.mapname != ''
-            GROUP BY m.mapname
-            ORDER BY matches DESC
-        """, (sid64,))
-        rows = [dict(r) for r in c.fetchall()]
-        c.close(); conn.close()
-        return _json_response(rows)
-    except Exception as e:
-        return _json_response({"error": str(e)})
-
-
 
 async def handle_api_matches(request):
     """
@@ -456,14 +325,10 @@ async def handle_api_matches(request):
         except Exception as e:
             print(f"[api/matches] DB fallback error: {e}")
 
-        # Sort newest first — normalize date strings (T vs space separator, strip fractional seconds)
+        # Sort newest first — ISO date strings sort correctly lexicographically
         def sort_key(r):
-            d = str(r.get('end_time') or '')
-            # Normalize: replace space separator with T so DB and fshost dates compare equally
-            d = d.replace(' ', 'T')
-            # Strip fractional seconds and timezone suffix for consistent comparison
-            d = d[:19]
-            return d
+            d = r.get('end_time') or ''
+            return str(d)
         results.sort(key=sort_key, reverse=True)
         results = results[:limit]
 
@@ -550,7 +415,7 @@ async def handle_api_match(request):
 
         # ── Merge manually-added players from edits ──────────────────────────
         added_players = edits.get('added_players', [])
-        added_sids    = {to_steamid64(str(ap.get('steamid64') or '')) for ap in added_players}
+        added_sids    = {str(ap.get('steamid64') or '') for ap in added_players}
         for ap in added_players:
             ap = dict(ap)
             ap['source']    = 'added'
@@ -713,7 +578,7 @@ def _players_from_fshost(data: dict, matchid: str) -> list:
             players.append({
                 'matchid':        matchid,
                 'mapnumber':      1,
-                'steamid64':      to_steamid64(str(fp.get('steam_id', '0'))),
+                'steamid64':      str(fp.get('steam_id', '0')),
                 'name':           fp.get('name', '?'),
                 'team':           team_key,
                 'team_name':      team_name,
@@ -785,12 +650,13 @@ def _get_edits(matchid: str) -> dict:
 def _get_all_edits() -> dict:
     """
     Load ALL match edits in one query. Returns { matchid: edits_dict }.
-    Uses the shared _API_CACHE with a 60-second TTL so all hot endpoints
-    share the same warm object — no separate cache dict needed.
+    Simple 60-second in-process cache so hot endpoints don't hit the DB repeatedly.
     """
-    cached = _cache_get('all_edits')
-    if cached is not None:
-        return cached
+    import time as _time
+    now = _time.monotonic()
+    cache = _get_all_edits._cache
+    if cache and now - cache['ts'] < 60:
+        return cache['data']
     try:
         conn = get_db()
         c = conn.cursor(dictionary=True)
@@ -803,34 +669,31 @@ def _get_all_edits() -> dict:
                 data[str(row['matchid'])] = json.loads(row['edits_json'])
             except Exception:
                 pass
-        _cache_set('all_edits', data)
+        _get_all_edits._cache = {'ts': now, 'data': data}
         return data
     except Exception as e:
         print(f"[edits] _get_all_edits error: {e}")
         return {}
+_get_all_edits._cache = {}
 
 
 def _bust_edits_cache():
     """Call this after saving edits so the cache refreshes immediately."""
-    global _MATCHID_DEMO_CACHE, _MATCHID_CACHE_TIME
-    _cache_bust('all_edits', 'matches', 'matches_full', 'leaderboard', 'specialists', 'mapstats', 'teams')
-    # Also clear the demo map cache so new matches from the DB are picked up immediately
-    _MATCHID_DEMO_CACHE = None
-    _MATCHID_CACHE_TIME = None
+    _get_all_edits._cache = {}
+    _cache_bust('matches', 'matches_full', 'leaderboard', 'specialists', 'mapstats', 'teams')
 
 
 def _edited_name_map():
     """
     Returns name_map = { steamid64: latest_edited_name }.
-    Keys are always normalised to SteamID64 so lookups work regardless of
-    whether the DB or edit JSON stored SteamID32 or SteamID64.
+    Used to patch player names on leaderboard / specialists / career pages.
     """
     all_edits = _get_all_edits()
     name_map = {}
     for mid, edits in all_edits.items():
         for sid, pe in edits.get('players', {}).items():
             if 'name' in pe:
-                name_map[to_steamid64(str(sid))] = pe['name']
+                name_map[str(sid)] = pe['name']
     return name_map
 
 
@@ -847,7 +710,7 @@ def _apply_match_player_edits(players: list, matchid: str) -> list:
         return players
     out = []
     for p in players:
-        sid = to_steamid64(str(p.get('steamid64') or p.get('steam_id') or ''))
+        sid = str(p.get('steamid64') or p.get('steam_id') or '')
         pe  = player_edits.get(sid, {})
         if pe:
             p = dict(p)
@@ -917,7 +780,7 @@ def _get_matchzy_players_for_match(matchid: str) -> list:
             r = dict(r)
             r['matchid']   = str(matchid)
             r['mapnumber'] = 1
-            r['steamid64'] = to_steamid64(str(r.get('steamid64') or '0'))
+            r['steamid64'] = str(r.get('steamid64') or '0')
             r['source']    = 'matchzy'
             # Determine team key for consistency with fshost convention
             team_raw = str(r.get('team') or '').lower()
@@ -946,11 +809,11 @@ def _merge_missing_players(fshost_players: list, matchzy_players: list,
       - missing_players = MatchZy rows whose steamid64 is NOT in fshost list
         AND NOT already manually added via edits['added_players']
     """
-    fshost_sids = {to_steamid64(str(p.get('steamid64') or '')) for p in fshost_players}
+    fshost_sids = {str(p.get('steamid64') or '') for p in fshost_players}
     missing = [
         p for p in matchzy_players
-        if to_steamid64(str(p['steamid64'])) not in fshost_sids
-        and to_steamid64(str(p['steamid64'])) not in added_sids
+        if p['steamid64'] not in fshost_sids
+        and p['steamid64'] not in added_sids
         and p['steamid64'] != '0'
     ]
     return fshost_players, missing
@@ -969,8 +832,7 @@ def _patch_aggregate_rows(rows: list) -> list:
         return rows
     out = []
     for row in rows:
-        # Normalise to SteamID64 before name_map lookup (DB may store SteamID32)
-        sid = to_steamid64(str(row.get('steamid64') or ''))
+        sid = str(row.get('steamid64') or '')
         if sid in name_map:
             row = dict(row)
             row['name'] = name_map[sid]
@@ -1003,7 +865,7 @@ def _patch_recent_matches(rows: list) -> list:
         if edits.get('map'):    row['mapname'] = edits['map']
         if edits.get('winner'): row['winner']  = edits['winner']
         # Patch this player's own stats if they were edited
-        sid = to_steamid64(str(row.get('steamid64') or ''))
+        sid = str(row.get('steamid64') or '')
         pe  = edits.get('players', {}).get(sid, {})
         if pe:
             row.update(pe)
@@ -1029,10 +891,10 @@ def _deep_merge(base: dict, overrides: dict) -> dict:
             merged_team = dict(result[key])
             for tk, tv in val.items():
                 if tk == 'players' and isinstance(tv, list):
-                    orig_players = {to_steamid64(str(p.get('steam_id', p.get('steamid64', '')))): p
+                    orig_players = {str(p.get('steam_id', p.get('steamid64', ''))): p
                                     for p in merged_team.get('players', [])}
                     for op in tv:
-                        pid = to_steamid64(str(op.get('steam_id', op.get('steamid64', ''))))
+                        pid = str(op.get('steam_id', op.get('steamid64', '')))
                         if pid and pid in orig_players:
                             orig_players[pid] = {**orig_players[pid], **op}
                         elif pid:
@@ -1161,7 +1023,7 @@ def _aggregate_stats_from_fshost() -> list:
             for team_key in ('team1', 'team2'):
                 team_data = meta.get(team_key, {})
                 for fp in team_data.get('players', []):
-                    sid = to_steamid64(str(fp.get('steam_id') or fp.get('steamid64') or '0'))
+                    sid = str(fp.get('steam_id') or fp.get('steamid64') or '0')
                     if sid == '0' or not sid:
                         continue
                     name = fp.get('name') or '?'
@@ -1265,10 +1127,6 @@ async def handle_api_leaderboard(request):
         """)
         rows = c.fetchall()
         c.close(); conn.close()
-        # Normalise any SteamID32 → SteamID64 in output (DB may store either form)
-        for r in rows:
-            if r.get('steamid64'):
-                r['steamid64'] = to_steamid64(str(r['steamid64']))
         rows = _patch_aggregate_rows(rows)
         _cache_set('leaderboard', rows)
         return _json_response(rows, max_age=60)
@@ -1308,9 +1166,6 @@ async def handle_api_specialists(request):
         """)
         rows = c.fetchall()
         c.close(); conn.close()
-        for r in rows:
-            if r.get('steamid64'):
-                r['steamid64'] = to_steamid64(str(r['steamid64']))
         rows = _patch_aggregate_rows(rows)
         _cache_set('specialists', rows)
         return _json_response(rows, max_age=60)
@@ -1329,8 +1184,6 @@ def to_steamid64(raw: str) -> str:
         return str(val)
     except (ValueError, TypeError):
         return raw
-
-
 
 # ── Steam avatar local cache ─────────────────────────────────────────────────
 # In-memory cache: steamid64 -> local URL or Steam CDN URL
@@ -1414,43 +1267,52 @@ async def handle_api_h2h(request):
         c = conn.cursor(dictionary=True)
         name_map = _edited_name_map()
 
-        def fetch_player(pname):
-            # Resolve SID: edit map first, then any stored name row
-            psid = next((s for s, n in name_map.items() if n == pname), None)
-            if not psid:
-                c.execute(f"SELECT steamid64 FROM {MATCHZY_TABLES['players']} WHERE name = %s AND steamid64 != '0' LIMIT 1", (pname,))
-                r = c.fetchone()
-                if r:
-                    psid = to_steamid64(str(r['steamid64']))
-            if not psid:
-                return None
-            # Aggregate ALL rows for this SID regardless of name changes
+        def fetch_player(name):
+            # Try by stored name first
             c.execute(f"""
-                SELECT
-                    steamid64,
-                    SUBSTRING_INDEX(GROUP_CONCAT(name ORDER BY matchid DESC), ',', 1) AS name,
-                    COUNT(DISTINCT matchid)                                      AS matches,
-                    SUM(kills)                                                   AS kills,
-                    SUM(deaths)                                                  AS deaths,
-                    SUM(assists)                                                 AS assists,
-                    SUM(head_shot_kills)                                         AS headshots,
-                    SUM(damage)                                                  AS damage,
-                    SUM(enemies5k)                                               AS aces,
-                    SUM(enemies4k)                                               AS quads,
-                    SUM(v1_wins)                                                 AS clutch_wins,
-                    SUM(entry_wins)                                              AS entry_wins,
-                    ROUND(SUM(kills)/NULLIF(SUM(deaths),0),2)                   AS kd,
-                    ROUND(SUM(head_shot_kills)/NULLIF(SUM(kills),0)*100,1)      AS hs_pct,
+                SELECT name, steamid64,
+                    COUNT(DISTINCT matchid)                                     AS matches,
+                    SUM(kills)                                                  AS kills,
+                    SUM(deaths)                                                 AS deaths,
+                    SUM(assists)                                                AS assists,
+                    SUM(head_shot_kills)                                        AS headshots,
+                    SUM(damage)                                                 AS damage,
+                    SUM(enemies5k)                                              AS aces,
+                    SUM(enemies4k)                                              AS quads,
+                    SUM(v1_wins)                                                AS clutch_wins,
+                    SUM(entry_wins)                                             AS entry_wins,
+                    ROUND(SUM(kills)/NULLIF(SUM(deaths),0),2)                  AS kd,
+                    ROUND(SUM(head_shot_kills)/NULLIF(SUM(kills),0)*100,1)     AS hs_pct,
                     ROUND(SUM(damage)/NULLIF(
-                        COUNT(DISTINCT CONCAT(matchid,'_',mapnumber)),0)/30,1)  AS adr
+                        COUNT(DISTINCT CONCAT(matchid,'_',mapnumber)),0)/30,1) AS adr
                 FROM {MATCHZY_TABLES['players']}
-                WHERE steamid64 = %s AND steamid64 != '0'
-            """, (psid,))
+                WHERE name = %s AND steamid64 != '0'
+                GROUP BY steamid64, name
+                LIMIT 1
+            """, (name,))
             row = c.fetchone()
             if row:
-                row = dict(row)
-                row['steamid64'] = to_steamid64(str(psid))
-            return row
+                return row
+            # Try by steamid64 (in case name was edited)
+            sid = next((s for s, n in name_map.items() if n == name), None)
+            if sid:
+                c.execute(f"""
+                    SELECT name, steamid64,
+                        COUNT(DISTINCT matchid) AS matches,
+                        SUM(kills) AS kills, SUM(deaths) AS deaths,
+                        SUM(assists) AS assists, SUM(head_shot_kills) AS headshots,
+                        SUM(damage) AS damage, SUM(enemies5k) AS aces,
+                        SUM(enemies4k) AS quads, SUM(v1_wins) AS clutch_wins,
+                        SUM(entry_wins) AS entry_wins,
+                        ROUND(SUM(kills)/NULLIF(SUM(deaths),0),2) AS kd,
+                        ROUND(SUM(head_shot_kills)/NULLIF(SUM(kills),0)*100,1) AS hs_pct,
+                        ROUND(SUM(damage)/NULLIF(COUNT(DISTINCT CONCAT(matchid,'_',mapnumber)),0)/30,1) AS adr
+                    FROM {MATCHZY_TABLES['players']}
+                    WHERE steamid64 = %s AND steamid64 != '0'
+                    GROUP BY steamid64, name LIMIT 1
+                """, (sid,))
+                return c.fetchone()
+            return None
 
         r1 = fetch_player(p1)
         r2 = fetch_player(p2)
@@ -1459,8 +1321,7 @@ async def handle_api_h2h(request):
         # Patch edited names
         for r in [r1, r2]:
             if r:
-                sid = to_steamid64(str(r.get('steamid64') or ''))
-                r['steamid64'] = sid  # normalise output too
+                sid = str(r.get('steamid64') or '')
                 if sid in name_map:
                     r['name'] = name_map[sid]
     except Exception as e:
@@ -1525,6 +1386,118 @@ async def handle_stats_page(request):
 # ─────────────────────────────────────────────────────────────────────────────
 # MATCH EDIT API ENDPOINTS
 # ─────────────────────────────────────────────────────────────────────────────
+
+async def handle_options(request):
+    """CORS preflight."""
+    return web.Response(status=204, headers={
+        "Access-Control-Allow-Origin":  "*",
+        "Access-Control-Allow-Methods": "GET, POST, PATCH, DELETE, OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type, Authorization",
+    })
+
+
+async def handle_api_auth_edit(request):
+    """POST /api/auth/edit — check Steam admin session, return ok."""
+    if _get_admin_steamid(request):
+        return _json_response({"ok": True, "admin": True})
+    return web.Response(
+        text=json.dumps({"ok": False, "error": "Not logged in as admin"}),
+        content_type='application/json', status=401,
+        headers={"Access-Control-Allow-Origin": "*"},
+    )
+
+
+def _verify_edit_token(request) -> bool:
+    """Auth check: valid Steam admin session OR legacy bearer token."""    # Primary: Steam session cookie
+    if _get_admin_steamid(request):
+        return True
+    # Legacy fallback: bearer token (keep working during transition)
+    import base64
+    auth = request.headers.get('Authorization', '')
+    if not auth.startswith('Bearer '):
+        return False
+    try:
+        return base64.b64decode(auth[7:].encode()).decode() == f"edit:{EDIT_PASSWORD}"
+    except Exception:
+        return False
+
+
+async def handle_api_save_match(request):
+    """POST /api/match/{matchid}/save — cache raw fshost JSON. No auth needed."""
+    matchid = request.match_info.get('matchid', '')
+    try:
+        body = await request.json()
+        raw  = body.get('raw_json') or body
+        if not isinstance(raw, dict):
+            return _json_response({"ok": False, "error": "No JSON body"})
+        loop = asyncio.get_running_loop()
+        await loop.run_in_executor(None, _save_raw_to_db, matchid, raw)
+        return _json_response({"ok": True, "matchid": matchid})
+    except Exception as e:
+        return _json_response({"ok": False, "error": str(e)})
+
+
+async def handle_api_get_edits(request):
+    """GET /api/match/{matchid}/edits — return stored edits for a match."""
+    matchid = request.match_info.get('matchid', '')
+    edits   = _get_edits(matchid)
+    has_raw = False
+    try:
+        conn = get_db(); c = conn.cursor()
+        c.execute("SELECT 1 FROM fshost_matches WHERE matchid = %s", (str(matchid),))
+        has_raw = c.fetchone() is not None
+        c.close(); conn.close()
+    except Exception:
+        pass
+    return _json_response({"matchid": matchid, "edits": edits, "has_raw": has_raw})
+
+
+async def handle_api_patch_match(request):
+    """PATCH /api/match/{matchid}/edit — save edits. Requires bearer token."""
+    matchid = request.match_info.get('matchid', '')
+    if not _verify_edit_token(request):
+        return web.Response(
+            text=json.dumps({"ok": False, "error": "Unauthorized"}),
+            content_type='application/json', status=401,
+            headers={"Access-Control-Allow-Origin": "*"},
+        )
+    try:
+        body  = await request.json()
+        edits = body.get('edits')
+        if not isinstance(edits, dict):
+            return _json_response({"ok": False, "error": "Missing 'edits' object"})
+        conn = get_db(); c = conn.cursor()
+        c.execute("""
+            INSERT INTO match_edits (matchid, edits_json, edited_at)
+            VALUES (%s, %s, NOW())
+            ON DUPLICATE KEY UPDATE edits_json = VALUES(edits_json), edited_at = NOW()
+        """, (str(matchid), json.dumps(edits, default=str)))
+        conn.commit(); c.close(); conn.close()
+        _bust_edits_cache()
+        return _json_response({"ok": True, "matchid": matchid})
+    except Exception as e:
+        return _json_response({"ok": False, "error": str(e)})
+
+
+async def handle_api_revert_match(request):
+    """DELETE /api/match/{matchid}/edit — remove edits, revert to fshost data."""
+    matchid = request.match_info.get('matchid', '')
+    if not _verify_edit_token(request):
+        return web.Response(
+            text=json.dumps({"ok": False, "error": "Unauthorized"}),
+            content_type='application/json', status=401,
+            headers={"Access-Control-Allow-Origin": "*"},
+        )
+    try:
+        conn = get_db(); c = conn.cursor()
+        c.execute("DELETE FROM match_edits WHERE matchid = %s", (str(matchid),))
+        conn.commit(); c.close(); conn.close()
+        _bust_edits_cache()
+        return _json_response({"ok": True, "matchid": matchid, "reverted": True})
+    except Exception as e:
+        return _json_response({"ok": False, "error": str(e)})
+
+
 
 async def handle_api_team_h2h(request):
     """GET /api/teamh2h?t1=name&t2=name — head-to-head history between two teams"""
@@ -1608,23 +1581,18 @@ async def handle_api_search(request):
             LIMIT 8
         """, (like,))
         players = [dict(r) for r in c.fetchall()]
-        # Normalise SteamID32 → SteamID64 in output
-        for p in players:
-            if p.get('steamid64'):
-                p['steamid64'] = to_steamid64(str(p['steamid64']))
         name_map = _edited_name_map()
         for p in players:
             sid = str(p.get('steamid64') or '')
             if sid in name_map:
                 p['name'] = name_map[sid]
         for sid, edited_name in [(s, n) for s, n in name_map.items() if q.lower() in n.lower()]:
-            sid64_cmp = to_steamid64(str(sid))
-            if not any(to_steamid64(str(p.get('steamid64',''))) == sid64_cmp for p in players):
+            if not any(p['steamid64'] == sid for p in players):
                 c.execute(f"""
                     SELECT steamid64, COUNT(DISTINCT matchid) AS matches,
                         ROUND(SUM(kills)/NULLIF(SUM(deaths),0),2) AS kd,
                         ROUND(SUM(damage)/NULLIF(COUNT(DISTINCT CONCAT(matchid,'_',mapnumber)),0)/30,1) AS adr
-                    FROM {MATCHZY_TABLES['players']} WHERE steamid64 = %s LIMIT 1
+                    FROM {MATCHZY_TABLES['players']} WHERE steamid64 = %s GROUP BY steamid64 LIMIT 1
                 """, (sid,))
                 row = c.fetchone()
                 if row:
@@ -1662,14 +1630,14 @@ async def handle_api_player_mapstats(request):
     try:
         conn = get_db()
         c = conn.cursor(dictionary=True)
-        # Resolve SID via edit map first (handles renamed players), then by any stored name
-        name_map = _edited_name_map()
-        sid = next((s for s, n in name_map.items() if n == name), None)
-        if not sid:
-            c.execute(f"SELECT steamid64 FROM {MATCHZY_TABLES['players']} WHERE name = %s AND steamid64 != '0' LIMIT 1", (name,))
-            row = c.fetchone()
-            if row:
-                sid = to_steamid64(str(row['steamid64']))
+        sid = None
+        c.execute(f"SELECT steamid64 FROM {MATCHZY_TABLES['players']} WHERE name = %s AND steamid64 != '0' LIMIT 1", (name,))
+        row = c.fetchone()
+        if row:
+            sid = str(row['steamid64'])
+        else:
+            name_map = _edited_name_map()
+            sid = next((s for s, n in name_map.items() if n == name), None)
         if not sid:
             return _json_response([])
         c.execute(f"""
@@ -1697,141 +1665,292 @@ async def handle_api_player_mapstats(request):
         return _json_response({"error": str(e)})
 
 
-# Player session store (any Steam user): {token: steamid64}
-_PLAYER_SESSIONS: dict = {}
+ADMIN_HTML_PATH = pathlib.Path(__file__).parent / "admin.html"
+# In-memory session store: {token: steamid64}
+_ADMIN_SESSIONS: dict = {}
 
-# ── Player Steam login (any Steam user) ──────────────────────────────────────
-
-async def handle_player_steam_login(request):
-    """GET /auth/steam/player — redirect to Steam OpenID (open to all players)."""
+def _get_steam_openid_url(return_to: str) -> str:
+    """Build Steam OpenID redirect URL."""
     import urllib.parse
-    scheme = request.headers.get("X-Forwarded-Proto", "https")
-    host   = request.headers.get("X-Forwarded-Host", request.host)
-    return_to = f"{scheme}://{host}/auth/steam/player/callback"
     params = {
         "openid.ns":         "http://specs.openid.net/auth/2.0",
         "openid.mode":       "checkid_setup",
         "openid.return_to":  return_to,
-        "openid.realm":      f"{scheme}://{host}/",
+        "openid.realm":      return_to.split("/auth/")[0] + "/",
         "openid.identity":   "http://specs.openid.net/auth/2.0/identifier_select",
         "openid.claimed_id": "http://specs.openid.net/auth/2.0/identifier_select",
     }
-    raise web.HTTPFound(location="https://steamcommunity.com/openid/login?" + urllib.parse.urlencode(params))
+    return "https://steamcommunity.com/openid/login?" + urllib.parse.urlencode(params)
 
-async def handle_player_steam_callback(request):
-    """GET /auth/steam/player/callback — verify Steam OpenID, set player session cookie."""
-    import secrets, urllib.parse, re as _re
+def _verify_steam_openid(params: dict, return_to: str) -> str | None:
+    """Verify Steam OpenID response. Returns steamid64 or None."""
+    import urllib.parse, re
+    check_params = dict(params)
+    check_params["openid.mode"] = "check_authentication"
+    body = urllib.parse.urlencode(check_params).encode()
+    try:
+        r = requests.post("https://steamcommunity.com/openid/login",
+                          data=body, timeout=10,
+                          headers={"Content-Type": "application/x-www-form-urlencoded"})
+        if "is_valid:true" not in r.text:
+            return None
+        identity = params.get("openid.claimed_id", "")
+        m = re.search(r"https://steamcommunity\.com/openid/id/(\d+)", identity)
+        return m.group(1) if m else None
+    except Exception:
+        return None
+
+async def handle_admin_page(request):
+    """GET /admin — serve admin.html"""
+    if ADMIN_HTML_PATH.exists():
+        return web.FileResponse(ADMIN_HTML_PATH)
+    return web.Response(text="Admin panel not found", status=404)
+
+async def handle_admin_steam_login(request):
+    """GET /auth/steam — redirect to Steam OpenID."""
     scheme = request.headers.get("X-Forwarded-Proto", "https")
     host   = request.headers.get("X-Forwarded-Host", request.host)
-    return_to = f"{scheme}://{host}/auth/steam/player/callback"
+    return_to = f"{scheme}://{host}/auth/steam/callback"
+    raise web.HTTPFound(location=_get_steam_openid_url(return_to))
+
+async def handle_admin_steam_callback(request):
+    """GET /auth/steam/callback — verify Steam OpenID, set session cookie."""
+    import secrets
+    scheme = request.headers.get("X-Forwarded-Proto", "https")
+    host   = request.headers.get("X-Forwarded-Host", request.host)
+    return_to = f"{scheme}://{host}/auth/steam/callback"
     params = dict(request.rel_url.query)
-
-    def _verify(params, return_to):
-        check_params = dict(params)
-        check_params["openid.mode"] = "check_authentication"
-        body = urllib.parse.urlencode(check_params).encode()
-        try:
-            r = requests.post("https://steamcommunity.com/openid/login",
-                              data=body, timeout=10,
-                              headers={"Content-Type": "application/x-www-form-urlencoded"})
-            if "is_valid:true" not in r.text:
-                return None
-            identity = params.get("openid.claimed_id", "")
-            m = _re.search(r"https://steamcommunity\.com/openid/id/(\d+)", identity)
-            return m.group(1) if m else None
-        except Exception:
-            return None
-
     steamid = await asyncio.get_running_loop().run_in_executor(
-        None, _verify, params, return_to
+        None, _verify_steam_openid, params, return_to
     )
     if not steamid:
-        raise web.HTTPFound(location="/?error=auth_failed")
+        raise web.HTTPFound(location="/admin?error=auth_failed")
+    if str(ADMIN_ID) and steamid != str(ADMIN_ID):
+        raise web.HTTPFound(location="/admin?error=not_admin")
     token = secrets.token_hex(32)
-    _PLAYER_SESSIONS[token] = steamid
-    response = web.HTTPFound(location="/")
-    response.set_cookie("rg_player", token, max_age=86400*30, httponly=True, samesite="Lax")
+    _ADMIN_SESSIONS[token] = steamid
+    response = web.HTTPFound(location="/admin")
+    response.set_cookie("rg_admin", token, max_age=86400*7, httponly=True, samesite="Lax")
     return response
 
-async def handle_player_steam_logout(request):
-    """POST /auth/steam/player/logout"""
-    token = request.cookies.get("rg_player", "")
-    _PLAYER_SESSIONS.pop(token, None)
-    response = web.HTTPFound(location="/")
-    response.del_cookie("rg_player")
+async def handle_admin_logout(request):
+    """POST /auth/steam/logout"""
+    token = request.cookies.get("rg_admin", "")
+    _ADMIN_SESSIONS.pop(token, None)
+    response = web.HTTPFound(location="/admin")
+    response.del_cookie("rg_admin")
     return response
 
-def _get_player_steamid(request) -> str | None:
-    """Return steamid64 if request has valid player session, else None."""
-    token = request.cookies.get("rg_player", "")
-    return _PLAYER_SESSIONS.get(token)
+def _get_admin_steamid(request) -> str | None:
+    """Return steamid64 if request has valid admin session, else None."""
+    token = request.cookies.get("rg_admin", "")
+    return _ADMIN_SESSIONS.get(token)
 
-async def handle_player_api_me(request):
-    """GET /api/auth/steam/me — return player session info (any logged-in Steam user)."""
-    sid = _get_player_steamid(request)
+async def handle_admin_api_me(request):
+    """GET /api/admin/me — return session info."""
+    sid = _get_admin_steamid(request)
     if not sid:
         return web.Response(text=json.dumps({"ok": False}), content_type="application/json", status=401)
     return _json_response({"ok": True, "steamid": sid})
 
+async def handle_admin_api_matches(request):
+    """GET /api/admin/matches — all matches for admin management."""
+    if not _get_admin_steamid(request):
+        return web.Response(text=json.dumps({"error": "Unauthorized"}), content_type="application/json", status=401)
+    try:
+        conn = get_db(); c = conn.cursor(dictionary=True)
+        c.execute("""
+            SELECT f.matchid, f.fetched_at,
+                   JSON_UNQUOTE(JSON_EXTRACT(f.raw_json, '$.map'))        AS map,
+                   JSON_UNQUOTE(JSON_EXTRACT(f.raw_json, '$.winner'))     AS winner,
+                   JSON_UNQUOTE(JSON_EXTRACT(f.raw_json, '$.team1.name')) AS team1,
+                   JSON_UNQUOTE(JSON_EXTRACT(f.raw_json, '$.team2.name')) AS team2,
+                   JSON_UNQUOTE(JSON_EXTRACT(f.raw_json, '$.team1.score')) AS score1,
+                   JSON_UNQUOTE(JSON_EXTRACT(f.raw_json, '$.team2.score')) AS score2,
+                   e.edited_at
+            FROM fshost_matches f
+            LEFT JOIN match_edits e ON e.matchid = f.matchid
+            ORDER BY f.fetched_at DESC
+        """)
+        rows = [dict(r) for r in c.fetchall()]
+        c.close(); conn.close()
+        return _json_response(rows)
+    except Exception as e:
+        return _json_response({"error": str(e)})
 
+async def handle_admin_api_delete_match(request):
+    """DELETE /api/admin/match/{matchid} — delete match entirely."""
+    if not _get_admin_steamid(request):
+        return web.Response(text=json.dumps({"error": "Unauthorized"}), content_type="application/json", status=401)
+    matchid = request.match_info.get("matchid", "")
+    try:
+        conn = get_db(); c = conn.cursor()
+        c.execute("DELETE FROM match_edits WHERE matchid = %s", (matchid,))
+        c.execute("DELETE FROM fshost_matches WHERE matchid = %s", (matchid,))
+        conn.commit(); c.close(); conn.close()
+        return _json_response({"ok": True})
+    except Exception as e:
+        return _json_response({"error": str(e)})
 
-async def handle_api_fshost_matches(request):
-    """
-    GET /api/fshost/matches
-    Returns all matches from fshost JSONs with demo links attached.
-    Demos are linked by matchid — each JSON contains match_id which is used
-    as the key in matchid_map, and each entry already carries the demo URL
-    matched via demo_filename in that same JSON.
-    No extra HTTP calls needed — build_matchid_to_demo_map() does it all.
-    """
+async def handle_admin_api_players(request):
+    """GET /api/admin/players — all players for management."""
+    if not _get_admin_steamid(request):
+        return web.Response(text=json.dumps({"error": "Unauthorized"}), content_type="application/json", status=401)
+    try:
+        conn = get_db(); c = conn.cursor(dictionary=True)
+        c.execute("""
+            SELECT steamid64, name,
+                   COUNT(*) AS matches,
+                   SUM(kills) AS kills, SUM(deaths) AS deaths
+            FROM matchzy_stats_players
+            GROUP BY steamid64, name
+            ORDER BY matches DESC
+        """)
+        rows = [dict(r) for r in c.fetchall()]
+        c.close(); conn.close()
+        return _json_response(rows)
+    except Exception as e:
+        return _json_response({"error": str(e)})
+
+async def handle_admin_api_rename_player(request):
+    """POST /api/admin/player/rename — rename player across all records."""
+    if not _get_admin_steamid(request):
+        return web.Response(text=json.dumps({"error": "Unauthorized"}), content_type="application/json", status=401)
+    try:
+        body = await request.json()
+        old_name = body.get("old_name", "").strip()
+        new_name = body.get("new_name", "").strip()
+        if not old_name or not new_name:
+            return _json_response({"error": "old_name and new_name required"})
+        conn = get_db(); c = conn.cursor()
+        c.execute("UPDATE matchzy_stats_players SET name = %s WHERE name = %s", (new_name, old_name))
+        affected = c.rowcount
+        conn.commit(); c.close(); conn.close()
+        return _json_response({"ok": True, "rows_updated": affected})
+    except Exception as e:
+        return _json_response({"error": str(e)})
+
+async def handle_admin_api_server(request):
+    """GET /api/admin/server — live server status + player list."""
+    if not _get_admin_steamid(request):
+        return web.Response(text=json.dumps({"error": "Unauthorized"}), content_type="application/json", status=401)
     try:
         loop = asyncio.get_running_loop()
-        matchid_map = await loop.run_in_executor(None, build_matchid_to_demo_map)
+        players = await loop.run_in_executor(None, rcon_list_players)
+        status_txt = await loop.run_in_executor(None, send_rcon, "status")
+        return _json_response({"ok": True, "players": players, "status": status_txt})
+    except Exception as e:
+        return _json_response({"error": str(e)})
 
-        results = []
-        for mid, entry in matchid_map.items():
-            meta = entry.get("metadata") or {}
-            if not meta:
-                continue
-
-            t1 = meta.get("team1", {})
-            t2 = meta.get("team2", {})
-
-            results.append({
-                "matchid":       str(meta.get("match_id") or mid),
-                "team1_name":    t1.get("name", "Team 1"),
-                "team2_name":    t2.get("name", "Team 2"),
-                "team1_score":   t1.get("score", 0),
-                "team2_score":   t2.get("score", 0),
-                "winner":        meta.get("winner", ""),
-                "mapname":       meta.get("map", "?"),
-                "date":          meta.get("date", ""),
-                "total_rounds":  meta.get("total_rounds"),
-                # Demo linked directly by matchid — no guessing, no filename parsing
-                "demo_url":      entry.get("download_url", ""),
-                "demo_size":     entry.get("size_formatted", ""),
-                "demo_filename": entry.get("name", meta.get("demo_filename", "")),
-                "has_demo":      bool(entry.get("download_url")),
-            })
-
-        results.sort(key=lambda r: str(r.get("date") or ""), reverse=True)
-
-        return _json_response({
-            "matches": results,
-            "total":   len(results),
-            "source":  "fshost",
-        })
+async def handle_admin_api_rcon(request):
+    """POST /api/admin/rcon — run RCON command."""
+    if not _get_admin_steamid(request):
+        return web.Response(text=json.dumps({"error": "Unauthorized"}), content_type="application/json", status=401)
+    try:
+        body = await request.json()
+        cmd = body.get("cmd", "").strip()
+        if not cmd:
+            return _json_response({"error": "cmd required"})
+        loop = asyncio.get_running_loop()
+        result = await loop.run_in_executor(None, send_rcon, cmd)
+        return _json_response({"ok": True, "result": result})
     except Exception as e:
         return _json_response({"error": str(e)})
 
 
+async def handle_admin_api_suggest_merges(request):
+    """GET /api/admin/players/suggest-merges — fuzzy duplicate detection."""
+    if not _get_admin_steamid(request):
+        return web.Response(text=json.dumps({"error": "Unauthorized"}), content_type="application/json", status=401)
+    try:
+        conn = get_db(); c = conn.cursor(dictionary=True)
+        c.execute("""
+            SELECT name, COUNT(*) AS matches, SUM(kills) AS kills
+            FROM matchzy_stats_players
+            GROUP BY name
+            ORDER BY matches DESC
+        """)
+        players = [dict(r) for r in c.fetchall()]
+        c.close(); conn.close()
+
+        # Fuzzy matching using simple edit distance
+        def edit_distance(a, b):
+            a, b = a.lower().strip(), b.lower().strip()
+            if a == b: return 0
+            if len(a) > len(b): a, b = b, a
+            distances = range(len(a) + 1)
+            for i2, c2 in enumerate(b):
+                new_distances = [i2 + 1]
+                for i1, c1 in enumerate(a):
+                    if c1 == c2:
+                        new_distances.append(distances[i1])
+                    else:
+                        new_distances.append(1 + min((distances[i1], distances[i1 + 1], new_distances[-1])))
+                distances = new_distances
+            return distances[-1]
+
+        names = [p["name"] for p in players]
+        name_map = {p["name"]: p for p in players}
+        suggestions = []
+        seen = set()
+
+        for i, n1 in enumerate(names):
+            for n2 in names[i+1:]:
+                key = tuple(sorted([n1, n2]))
+                if key in seen:
+                    continue
+                seen.add(key)
+                l1, l2 = len(n1), len(n2)
+                max_len = max(l1, l2)
+                if max_len == 0:
+                    continue
+                dist = edit_distance(n1, n2)
+                similarity = 1 - dist / max_len
+                # Also check if one starts with or contains the other
+                n1l, n2l = n1.lower(), n2.lower()
+                if n1l in n2l or n2l in n1l:
+                    similarity = max(similarity, 0.75)
+                if similarity >= 0.65:
+                    p1, p2 = name_map[n1], name_map[n2]
+                    suggestions.append({
+                        "name1": n1, "matches1": p1["matches"], "kills1": int(p1["kills"] or 0),
+                        "name2": n2, "matches2": p2["matches"], "kills2": int(p2["kills"] or 0),
+                        "similarity": round(similarity, 2),
+                    })
+
+        # Sort by similarity desc
+        suggestions.sort(key=lambda x: -x["similarity"])
+        return _json_response(suggestions[:30])
+    except Exception as e:
+        return _json_response({"error": str(e)})
+
+
+async def handle_admin_api_merge_players(request):
+    """POST /api/admin/players/merge — merge duplicate names into one."""
+    if not _get_admin_steamid(request):
+        return web.Response(text=json.dumps({"error": "Unauthorized"}), content_type="application/json", status=401)
+    try:
+        body = await request.json()
+        keep_name  = body.get("keep_name", "").strip()
+        merge_names = [n.strip() for n in body.get("merge_names", []) if n.strip()]
+        if not keep_name or not merge_names:
+            return _json_response({"error": "keep_name and merge_names[] required"})
+        conn = get_db(); c = conn.cursor()
+        total = 0
+        for name in merge_names:
+            if name == keep_name:
+                continue
+            c.execute("UPDATE matchzy_stats_players SET name = %s WHERE name = %s", (keep_name, name))
+            total += c.rowcount
+        conn.commit(); c.close(); conn.close()
+        return _json_response({"ok": True, "rows_updated": total, "keep_name": keep_name, "merged": merge_names})
+    except Exception as e:
+        return _json_response({"error": str(e)})
+
 async def start_http_server():
     app = web.Application()
-    app.router.add_get('/api/fshost/matches',          handle_api_fshost_matches)
     app.router.add_get('/api/specialists',             handle_api_specialists)
-    app.router.add_get('/api/player/sid/{steamid64}',         handle_api_player_by_sid)
-    app.router.add_get('/api/player/sid/{steamid64}/mapstats', handle_api_player_mapstats_by_sid)
-    app.router.add_get('/api/player/{name}',                   handle_api_player)
+    app.router.add_get('/api/player/{name}',           handle_api_player)
     app.router.add_get('/api/steam/{steamid64}',       handle_api_steam)
     app.router.add_get('/api/matches',                 handle_api_matches)
     app.router.add_get('/api/matches/full',            handle_api_matches_full)
@@ -1845,11 +1964,31 @@ async def start_http_server():
     app.router.add_get('/api/search',                  handle_api_search)
     app.router.add_get('/api/player/{name}/mapstats',  handle_api_player_mapstats)
     app.router.add_get('/api/status',                  handle_api_status)
-    # ── Player Steam login (open to any Steam user) ───────────────────────────
-    app.router.add_get('/auth/steam/player',            handle_player_steam_login)
-    app.router.add_get('/auth/steam/player/callback',   handle_player_steam_callback)
-    app.router.add_post('/auth/steam/player/logout',    handle_player_steam_logout)
-    app.router.add_get('/api/auth/steam/me',            handle_player_api_me)
+    # ── Edit endpoints ────────────────────────────────────────────────────────
+    app.router.add_post('/api/auth/edit',              handle_api_auth_edit)
+    app.router.add_post('/api/match/{matchid}/save',   handle_api_save_match)
+    app.router.add_get('/api/match/{matchid}/edits',   handle_api_get_edits)
+    app.router.add_route('PATCH',  '/api/match/{matchid}/edit', handle_api_patch_match)
+    app.router.add_route('DELETE', '/api/match/{matchid}/edit', handle_api_revert_match)
+    app.router.add_route('OPTIONS', '/api/auth/edit',             handle_options)
+    app.router.add_route('OPTIONS', '/api/match/{matchid}/save',  handle_options)
+    app.router.add_route('OPTIONS', '/api/match/{matchid}/edit',  handle_options)
+    app.router.add_route('OPTIONS', '/api/match/{matchid}/edits', handle_options)
+    # ── Static ────────────────────────────────────────────────────────────────
+    # ── Admin ─────────────────────────────────────────────────────────────────
+    app.router.add_get('/admin',                        handle_admin_page)
+    app.router.add_get('/auth/steam',                   handle_admin_steam_login)
+    app.router.add_get('/auth/steam/callback',          handle_admin_steam_callback)
+    app.router.add_post('/auth/steam/logout',           handle_admin_logout)
+    app.router.add_get('/api/admin/me',                 handle_admin_api_me)
+    app.router.add_get('/api/admin/matches',            handle_admin_api_matches)
+    app.router.add_route('DELETE', '/api/admin/match/{matchid}', handle_admin_api_delete_match)
+    app.router.add_get('/api/admin/players',            handle_admin_api_players)
+    app.router.add_post('/api/admin/player/rename',     handle_admin_api_rename_player)
+    app.router.add_get('/api/admin/players/suggest-merges', handle_admin_api_suggest_merges)
+    app.router.add_post('/api/admin/players/merge',     handle_admin_api_merge_players)
+    app.router.add_get('/api/admin/server',             handle_admin_api_server)
+    app.router.add_post('/api/admin/rcon',              handle_admin_api_rcon)
     app.router.add_get('/stats',   handle_stats_page)
     app.router.add_get('/',        handle_stats_page)
     app.router.add_get('/health',  handle_health_check)
@@ -1920,22 +2059,9 @@ def _mysql_cfg() -> dict:
 
 _DB_CFG = _mysql_cfg()
 
-# ── Connection pool: reuse connections instead of opening a new one per call ──
-_DB_POOL: pooling.MySQLConnectionPool | None = None
-
-def _get_pool() -> pooling.MySQLConnectionPool:
-    global _DB_POOL
-    if _DB_POOL is None:
-        pool_cfg = {**_DB_CFG, "pool_name": "cs2bot", "pool_size": 10}
-        _DB_POOL = pooling.MySQLConnectionPool(**pool_cfg)
-    return _DB_POOL
-
 def get_db():
-    """Return a pooled MySQL connection."""
-    try:
-        return _get_pool().get_connection()
-    except Exception:
-        return mysql.connector.connect(**_DB_CFG)
+    """Return a new MySQL connection."""
+    return mysql.connector.connect(**_DB_CFG)
 
 def init_database():
     conn = get_db()
@@ -2037,10 +2163,10 @@ def get_matchzy_player_stats(steamid64: str = None, player_name: str = None) -> 
 
         if steamid64:
             where = "steamid64 = %s"
-            param = (to_steamid64(str(steamid64)),)
+            param = steamid64
         elif player_name:
             where = "name = %s"
-            param = (player_name,)
+            param = player_name
         else:
             return None
 
@@ -2065,12 +2191,10 @@ def get_matchzy_player_stats(steamid64: str = None, player_name: str = None) -> 
                 )                                            AS hs_pct
             FROM {table}
             WHERE {where}
-        ''', param)
+            GROUP BY steamid64, name
+        ''', (param,))
 
         row = c.fetchone()
-        if row and steamid64:
-            row = dict(row)
-            row['steamid64'] = to_steamid64(str(row['steamid64']))
         c.close()
         return row
     except Exception as e:
@@ -2280,20 +2404,16 @@ def fetch_demos(offset=0, limit=5):
 # Demo filename format: YYYY-MM-DD_HH-MM-SS_<matchnum>_<mapname>_<team1>_vs_<team2>.dem
 DEMO_TS_RE = re.compile(r'^(\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2})')
 
-# Cache for match ID to demo mapping (refreshed every 30 min — matches sync interval)
+# Cache for match ID to demo mapping (refreshed every 5 minutes)
 _MATCHID_DEMO_CACHE = None
 _MATCHID_CACHE_TIME = None
-_CACHE_TTL_SECONDS = 1800  # 30 minutes
+_CACHE_TTL_SECONDS = 300  # 5 minutes
 
 def build_matchid_to_demo_map(force_refresh=False):
     """
-    Build a mapping of matchid -> match data.
-
-    Fast path (normal): reads ALL cached JSONs from fshost_matches DB in one
-    query (milliseconds), attaches demo URLs from the fshost file listing.
-
-    Slow path (new matches only): fetches .json files NOT yet in the DB in
-    parallel via ThreadPoolExecutor, then upserts them for next time.
+    Build a mapping of matchid -> match data from ALL fshost .json files.
+    Every .json is indexed by its match_id field — no .dem required.
+    Demo info (download_url, size) is attached if a matching .dem exists.
 
     Returns dict: {
       "26": {
@@ -2301,7 +2421,6 @@ def build_matchid_to_demo_map(force_refresh=False):
         "name":          "2026-02-21_21-18-57_26_de_mirage_...dem"  (or ""),
         "download_url":  "https://..."  (or ""),
         "size_formatted":"286.37MB"     (or ""),
-        "modified_at":   "",
       }
     }
     """
@@ -2311,125 +2430,57 @@ def build_matchid_to_demo_map(force_refresh=False):
         if (datetime.now() - _MATCHID_CACHE_TIME).total_seconds() < _CACHE_TTL_SECONDS:
             return _MATCHID_DEMO_CACHE
 
-    print("[Demo Map] Building matchid map (DB-first)...")
-    matchid_map = {}
-
-    # ── Step 1: Load everything already cached in fshost_matches (fast) ──────
-    try:
-        conn = get_db()
-        c = conn.cursor(dictionary=True)
-        c.execute("SELECT matchid, raw_json FROM fshost_matches")
-        for row in c.fetchall():
-            try:
-                metadata = json.loads(row["raw_json"])
-                matchid_map[str(row["matchid"])] = {
-                    "metadata":       metadata,
-                    "name":           metadata.get("demo_filename", ""),
-                    "download_url":   "",
-                    "size_formatted": "",
-                    "modified_at":    "",
-                }
-            except Exception:
-                pass
-        c.close(); conn.close()
-        print(f"[Demo Map] Loaded {len(matchid_map)} matches from DB cache")
-    except Exception as e:
-        print(f"[Demo Map] DB load error: {e}")
-
-    # ── Step 2: One HTTP call to get the fshost file listing ─────────────────
-    # Gives us demo download URLs + reveals any new matches not yet in DB.
+    print("[Demo Map] Building matchid map from all fshost .json files...")
     all_files = fetch_all_demos_raw()
 
-    # Index .dem files by base name for quick URL lookup
-    dem_by_base: dict = {}
+    # Index .dem files by base name for quick lookup
+    dem_by_base = {}
     for f in all_files:
         n = f.get("name", "")
         if n.endswith(".dem"):
-            dem_by_base[n[:-4]] = f
+            dem_by_base[n[:-4]] = f  # strip .dem
 
-    # Attach demo URLs to DB-loaded entries
-    for mid, entry in matchid_map.items():
-        demo_fn = entry["metadata"].get("demo_filename", "")
-        if demo_fn:
-            base = demo_fn[:-4] if demo_fn.endswith(".dem") else demo_fn
-            dem = dem_by_base.get(base, {})
-            if dem:
-                entry["name"]           = dem.get("name", demo_fn)
-                entry["download_url"]   = dem.get("download_url", "")
-                entry["size_formatted"] = dem.get("size_formatted", "")
-                entry["modified_at"]    = dem.get("modified_at", "")
-
-    # ── Step 3: Fetch any .json files NOT yet in DB, in parallel ─────────────
-    missing_json_files = [
-        f for f in all_files
-        if f.get("name", "").endswith(".json") and f.get("download_url")
-    ]
+    matchid_map = {}
     headers = {'User-Agent': 'Mozilla/5.0', 'Referer': 'https://fshost.me/'}
 
-    def _fetch_one(file_obj):
+    for file_obj in all_files:
         name = file_obj.get("name", "")
-        url  = file_obj.get("download_url", "")
+        if not name.endswith(".json"):
+            continue
+        url = file_obj.get("download_url", "")
+        if not url:
+            continue
         try:
             resp = requests.get(url, headers=headers, timeout=10)
             resp.raise_for_status()
-            return name, resp.json()
+            metadata = resp.json()
         except Exception as e:
             print(f"[Demo Map] ✗ {name}: {e}")
-            return name, None
+            continue
 
-    new_entries = {}
-    if missing_json_files:
-        from concurrent.futures import ThreadPoolExecutor, as_completed
-        print(f"[Demo Map] Fetching {len(missing_json_files)} .json files in parallel...")
-        with ThreadPoolExecutor(max_workers=10) as pool:
-            futures = {pool.submit(_fetch_one, f): f for f in missing_json_files}
-            for future in as_completed(futures):
-                name, metadata = future.result()
-                if metadata is None:
-                    continue
-                matchid = str(
-                    metadata.get("match_id") or metadata.get("matchid") or metadata.get("id") or ""
-                )
-                if not matchid:
-                    continue
-                base = name[:-5]  # strip .json
-                if base.endswith("_stats"):
-                    base = base[:-6]
-                dem = dem_by_base.get(base, {})
-                if matchid not in matchid_map:
-                    matchid_map[matchid] = {
-                        "metadata":       metadata,
-                        "name":           dem.get("name", ""),
-                        "download_url":   dem.get("download_url", ""),
-                        "size_formatted": dem.get("size_formatted", ""),
-                        "modified_at":    dem.get("modified_at", ""),
-                    }
-                    new_entries[matchid] = metadata
-                    print(f"[Demo Map] ✓ new match {matchid} ← {name}")
-                elif dem.get("download_url") and not matchid_map[matchid].get("download_url"):
-                    matchid_map[matchid].update({
-                        "name":           dem.get("name", ""),
-                        "download_url":   dem.get("download_url", ""),
-                        "size_formatted": dem.get("size_formatted", ""),
-                        "modified_at":    dem.get("modified_at", ""),
-                    })
+        matchid = str(metadata.get("match_id") or metadata.get("matchid") or metadata.get("id") or "")
+        if not matchid:
+            print(f"[Demo Map] ✗ {name}: no match_id field")
+            continue
 
-    # ── Step 4: Upsert newly discovered matches into DB ───────────────────────
-    if new_entries:
-        try:
-            conn = get_db(); c = conn.cursor()
-            for matchid, metadata in new_entries.items():
-                c.execute("""
-                    INSERT INTO fshost_matches (matchid, raw_json, fetched_at)
-                    VALUES (%s, %s, NOW())
-                    ON DUPLICATE KEY UPDATE raw_json = VALUES(raw_json), updated_at = NOW()
-                """, (str(matchid), json.dumps(metadata, default=str)))
-            conn.commit(); c.close(); conn.close()
-            print(f"[Demo Map] Upserted {len(new_entries)} new matches into DB")
-        except Exception as e:
-            print(f"[Demo Map] DB upsert error: {e}")
+        # Find matching .dem (same base name)
+        # fshost names JSON files as "<base>_stats.json", so strip "_stats" too
+        base = name[:-5]  # strip .json
+        if base.endswith("_stats"):
+            base = base[:-6]  # strip _stats
+        dem_entry = dem_by_base.get(base, {})
 
-    print(f"[Demo Map] Total: {len(matchid_map)} matches ready")
+        matchid_map[matchid] = {
+            "metadata":      metadata,
+            "name":          dem_entry.get("name", ""),
+            "download_url":  dem_entry.get("download_url", ""),
+            "size_formatted":dem_entry.get("size_formatted", ""),
+            "modified_at":   dem_entry.get("modified_at", ""),
+        }
+        print(f"[Demo Map] ✓ match {matchid} ← {name}" + (f" + {dem_entry.get('name')}" if dem_entry else " (no demo)"))
+
+    print(f"[Demo Map] Total: {len(matchid_map)} matches indexed from {sum(1 for f in all_files if f.get('name','').endswith('.json'))} JSONs")
+
     _MATCHID_DEMO_CACHE = matchid_map
     _MATCHID_CACHE_TIME = datetime.now()
     return matchid_map
@@ -2753,19 +2804,6 @@ async def on_ready():
     sync_fshost_to_db.start()
     print("✓ fshost → DB sync started (runs now + every 30 min)")
 
-    # ── Prime hot caches in the background so the first web request is instant ──
-    async def _prime_caches():
-        try:
-            loop = asyncio.get_running_loop()
-            # Warm the match map from DB (fast — no HTTP calls on cold start)
-            await loop.run_in_executor(None, build_matchid_to_demo_map)
-            # Warm the edits cache
-            await loop.run_in_executor(None, _get_all_edits)
-            print("✓ Hot caches primed (matchid map + edits)")
-        except Exception as e:
-            print(f"⚠️ Cache priming error: {e}")
-    asyncio.ensure_future(_prime_caches())
-
 @bot.event
 async def on_message(message):
     if message.author == bot.user:
@@ -3003,7 +3041,6 @@ async def demos_cmd(inter: discord.Interaction):
     await inter.followup.send(embed=embed, view=view, ephemeral=True)
 
 
-
 # ========== ADMIN COMMANDS ==========
 @bot.tree.command(name="csssay", description="Send center-screen message to all players")
 @owner_only()
@@ -3065,8 +3102,11 @@ async def debugdb_cmd(inter: discord.Interaction):
     try:
         conn = get_db()
         c = conn.cursor()
+        
+        # Check MatchZy
         has_mz = matchzy_tables_exist(conn)
         lines.append(f"**MatchZy tables:** {'✅ Found' if has_mz else '❌ Not found'}")
+        
         if has_mz:
             c.execute(f"SELECT COUNT(*) FROM {MATCHZY_TABLES['players']}")
             rows = c.fetchone()[0]
@@ -3074,10 +3114,13 @@ async def debugdb_cmd(inter: discord.Interaction):
             c.execute(f"SELECT COUNT(DISTINCT matchid) FROM {MATCHZY_TABLES['players']}")
             matches = c.fetchone()[0]
             lines.append(f"**MatchZy matches:** {matches}")
+        
+        
         c.close()
         conn.close()
     except Exception as e:
         lines.append(f"❌ DB Error: {e}")
+    
     await inter.followup.send("\n".join(lines), ephemeral=True)
 
 @bot.tree.command(name="debugmatch", description="Debug a specific match data")
@@ -3088,6 +3131,8 @@ async def debugmatch_cmd(inter: discord.Interaction, match_id: str):
     try:
         conn = get_db()
         c = conn.cursor(dictionary=True)
+        
+        # Get match data
         c.execute(f"SELECT * FROM {MATCHZY_TABLES['matches']} WHERE matchid=%s", (match_id,))
         match = c.fetchone()
         if match:
@@ -3098,20 +3143,27 @@ async def debugmatch_cmd(inter: discord.Interaction, match_id: str):
             lines.append(f"❌ Match not found")
             c.close(); conn.close()
             return await inter.followup.send("\n".join(lines), ephemeral=True)
+        
+        # Get player data
         c.execute(f"SELECT name, team, kills, deaths, mapnumber FROM {MATCHZY_TABLES['players']} WHERE matchid=%s", (match_id,))
         players = c.fetchall()
         lines.append(f"\n**Players ({len(players)} total):**")
         for p in players:
             lines.append(f"• {p['name']} | Team: `{p['team']}` | Map: {p['mapnumber']} | K/D: {p['kills']}/{p['deaths']}")
+        
+        # Get map data
         c.execute(f"SELECT * FROM {MATCHZY_TABLES['maps']} WHERE matchid=%s", (match_id,))
         maps = c.fetchall()
         lines.append(f"\n**Maps ({len(maps)} total):**")
         for m in maps:
             lines.append(f"• Map {m.get('mapnumber')}: {m.get('mapname')} ({m.get('team1_score')} : {m.get('team2_score')})")
+        
         c.close()
         conn.close()
     except Exception as e:
         lines.append(f"\n❌ Error: {e}")
+    
+    # Split into multiple messages if too long
     message = "\n".join(lines)
     if len(message) > 2000:
         chunks = [message[i:i+2000] for i in range(0, len(message), 2000)]
@@ -3123,29 +3175,50 @@ async def debugmatch_cmd(inter: discord.Interaction, match_id: str):
 @bot.tree.command(name="debugdemos", description="Show match ID to demo mapping from .json files")
 @owner_only()
 async def debugdemos_cmd(inter: discord.Interaction, refresh: bool = False):
+    """
+    Shows how .json files are mapped to match IDs.
+    
+    Args:
+        refresh: If True, clears the cache and rebuilds the mapping
+    """
     await inter.response.defer(ephemeral=True)
     lines = ["**Match ID → Demo Mapping** (from .json files)\n"]
+    
     try:
         if refresh:
             lines.append("🔄 Refreshing cache...\n")
+        
         matchid_map = build_matchid_to_demo_map(force_refresh=refresh)
+        
         if not matchid_map:
             lines.append("❌ No demos with .json metadata found")
+            lines.append("\nMake sure your demo files have corresponding .json files with 'matchid' field:")
+            lines.append("```json")
+            lines.append('{"matchid": "11", "team1_name": "...", ...}')
+            lines.append("```")
         else:
             lines.append(f"✅ Found {len(matchid_map)} matches with demos:\n")
+            
+            # Sort by match ID (numeric)
             sorted_matches = sorted(matchid_map.items(), key=lambda x: int(x[0]) if x[0].isdigit() else 0, reverse=True)
-            for matchid, demo in sorted_matches[:15]:
+            
+            for matchid, demo in sorted_matches[:15]:  # Show last 15
                 name = demo.get('name', '?')
                 size = demo.get('size_formatted', '?')
                 lines.append(f"**Match #{matchid}**")
                 lines.append(f"  └─ {name} ({size})")
+            
             if len(matchid_map) > 15:
                 lines.append(f"\n...and {len(matchid_map) - 15} more")
+            
+            # Show cache info
             if _MATCHID_CACHE_TIME:
                 age = (datetime.now() - _MATCHID_CACHE_TIME).total_seconds()
                 lines.append(f"\n📊 Cache age: {age:.0f}s (refreshes every {_CACHE_TTL_SECONDS}s)")
+    
     except Exception as e:
         lines.append(f"\n❌ Error: {e}")
+    
     message = "\n".join(lines)
     if len(message) > 2000:
         chunks = [message[i:i+2000] for i in range(0, len(message), 2000)]
@@ -3153,6 +3226,7 @@ async def debugdemos_cmd(inter: discord.Interaction, refresh: bool = False):
             await inter.followup.send(chunk, ephemeral=True)
     else:
         await inter.followup.send(message, ephemeral=True)
+
 
 @bot.tree.command(name="syncdemos", description="Force re-sync all fshost JSONs into the database now")
 @owner_only()
