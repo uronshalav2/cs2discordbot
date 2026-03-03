@@ -555,41 +555,16 @@ async def handle_api_matches_full(request):
 
 
 
-def _get_steamid_map_from_db(matchid: str) -> dict:
-    """
-    Query matchzy_stats_players for the given matchid and return a
-    dict mapping player name -> steamid64.  Used so _players_from_fshost
-    can resolve Steam IDs from the DB instead of relying on the fshost JSON.
-    Returns an empty dict on any error.
-    """
-    try:
-        conn = get_db()
-        c = conn.cursor(dictionary=True)
-        c.execute(
-            f"SELECT name, steamid64 FROM {MATCHZY_TABLES['players']} "
-            f"WHERE matchid = %s AND steamid64 != '0'",
-            (str(matchid),)
-        )
-        rows = c.fetchall()
-        c.close(); conn.close()
-        return {str(r['name']): str(r['steamid64']) for r in rows if r.get('name')}
-    except Exception as e:
-        print(f"[steamid map] DB lookup failed for match {matchid}: {e}")
-        return {}
-
-
 def _players_from_fshost(data: dict, matchid: str) -> list:
     """Flatten fshost team1/team2 players into a unified list with all available fields."""
     players = []
-    # Build a name -> steamid64 map from the DB for this match so we don't
-    # rely on the steam_id field embedded in the fshost JSON.
-    db_sid_map = _get_steamid_map_from_db(matchid)
     for team_key in ('team1', 'team2'):
         team_data = data.get(team_key, {})
         team_name = team_data.get('name', team_key)
         for fp in team_data.get('players', []):
             kills    = int(fp.get('kills', 0) or 0)
             deaths   = int(fp.get('deaths', 0) or 0)
+            assists  = int(fp.get('assists', 0) or 0)
             hs_kills = int(fp.get('headshot_kills', 0) or 0)
             hs_pct   = fp.get('hs_percent')
             if hs_pct is None:
@@ -597,23 +572,17 @@ def _players_from_fshost(data: dict, matchid: str) -> list:
             def cw(s):
                 try: return int(str(s).split('/')[0])
                 except: return 0
-            player_name = fp.get('name', '?')
-            # Prefer the steamid64 from matchzy_stats_players; fall back to
-            # whatever the fshost JSON provides, then '0' as last resort.
-            steamid64 = (
-                db_sid_map.get(player_name)
-                or str(fp.get('steam_id') or fp.get('steamid64') or '0')
-            )
+            steamid64 = str(fp.get('steam_id') or fp.get('steamid64') or '0')
             players.append({
                 'matchid':        matchid,
                 'mapnumber':      1,
                 'steamid64':      steamid64,
-                'name':           player_name,
+                'name':           fp.get('name', '?'),
                 'team':           team_key,
                 'team_name':      team_name,
                 'kills':          kills,
                 'deaths':         deaths,
-                'assists':        int(fp.get('assists', 0) or 0),
+                'assists':        assists,
                 'damage':         int(fp.get('damage', 0) or 0),
                 'head_shot_kills':hs_kills,
                 'hs_pct':         hs_pct,
