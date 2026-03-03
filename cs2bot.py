@@ -908,8 +908,14 @@ async def handle_api_specialists(request):
         return _json_response({"error": str(e)})
 
 def to_steamid64(raw: str) -> str:
-    """Pass through steamid64 as-is — IDs are always stored correctly in DB."""
-    return str(raw).strip()
+    """Normalize/validate SteamID64 (digits only). Returns '' if invalid."""
+    s = str(raw).strip()
+    if not s or s == '0':
+        return ''
+    # SteamID64 should be numeric and typically starts with 7656119
+    if not s.isdigit():
+        return ''
+    return s
 
 # ── Steam avatar server-side cache ──────────────────────────────────────────
 # In-memory cache: steamid64 -> {data, ts}  (TTL: 1 hour)
