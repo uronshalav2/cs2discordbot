@@ -1239,6 +1239,13 @@ function emptyState(type, title, sub) {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const esc = s=>String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+const escName = s => "'" + String(s||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'") + "'";
+// Decode unicode escapes like \u0027 that may be stored literally in the DB
+const decodeUnicode = s => String(s||'').replace(/\\u([0-9a-fA-F]{4})/g, (_, h) => String.fromCharCode(parseInt(h, 16)));
+// Normalize player name: decode literal \uXXXX sequences stored in DB
+const normalizeName = s => decodeUnicode(String(s||''));
+const normalizePlayer = p => { if(p && p.name) p.name = normalizeName(p.name); return p; };
+const normalizePlayers = arr => Array.isArray(arr) ? arr.map(normalizePlayer) : arr;
 const num = n=>n!=null?Number(n).toLocaleString():'-';
 const kdc = v=>{const f=parseFloat(v);return f>=1.3?'kd-g':f>=0.9?'kd-n':'kd-b'};
 const kdf = v=>{const f=parseFloat(v);return f>=1.3?'win':f>=0.9?'text':'loss'};
@@ -1354,7 +1361,7 @@ async function loadMatch(id) {
   window._currentMatchId = id;
   window._currentMatchData = d;
 
-  const meta=d.meta||{}, maps=d.maps||[], players=d.players||[], demo=d.demo||{};
+  const meta=d.meta||{}, maps=d.maps||[], players=normalizePlayers(d.players||[]), demo=d.demo||{};
 
   // ── Team split: players have team='team1' or 'team2' from fshost ──────────
   function splitTeams(arr) {
@@ -1400,7 +1407,7 @@ async function loadMatch(id) {
     <div class="mvp-card">
       ${playerAvatar(mvp, 64)}
       <div class="mvp-info">
-        <div class="mvp-name">${esc(mvp.name)}</div>
+        <div class="mvp-name">${esc(mvp._steam_name||mvp.name)}</div>
         <div class="mvp-stats">
           <div class="mvp-stat"><div class="mvp-val">${mvp.kills??0} / ${mvp.deaths??0} / ${mvp.assists??0}</div><div class="mvp-lbl">K / D / A</div></div>
           <div class="mvp-stat"><div class="mvp-val"><span data-count="${mvp.adr!=null?parseFloat(mvp.adr):0}" data-dec="1">${mvp.adr!=null?parseFloat(mvp.adr).toFixed(1):'—'}</span></div><div class="mvp-lbl">ADR</div></div>
@@ -1534,7 +1541,7 @@ function sbRows(arr, steamCache={}) {
       ? `<img src="${steamCache[p.steamid64]}" style="width:22px;height:22px;border-radius:50%;object-fit:cover;vertical-align:middle;margin-right:7px;border:1px solid var(--border2)" onerror="this.style.display='none'">`
       : `<span style="display:inline-block;width:22px;height:22px;border-radius:50%;background:var(--surface2);line-height:22px;text-align:center;font-size:9px;font-family:'Rajdhani',sans-serif;font-weight:700;color:var(--muted2);vertical-align:middle;margin-right:7px">${initials(p.name)}</span>`;
     return `<tr>
-      <td onclick="go('player',{name:'${esc(p.name)}',sid:'${esc(p.steamid64||'')}'},'match')" style="cursor:pointer"><div style="display:flex;align-items:center">${avatar}${esc(p.name)}</div></td>
+      <td onclick="go('player',{sid:${escName(p.steamid64)}},'match')" style="cursor:pointer"><div style="display:flex;align-items:center">${avatar}${esc(p.name)}</div></td>
       <td class="kda-cell">${p.kills??0}</td>
       <td class="kda-cell">${p.deaths??0}</td>
       <td class="kda-cell">${p.assists??0}</td>
@@ -1555,13 +1562,13 @@ function sbRows(arr, steamCache={}) {
 
 // ── Player Profile ────────────────────────────────────────────────────────────
 async function loadPlayer(name, sid) {
+  sid = sid || '';
   spin('p-player');
-  const url = sid && sid !== '0'
-    ? '/api/player/sid/'+encodeURIComponent(sid)
-    : '/api/player/'+encodeURIComponent(name);
   const [data, ] = await Promise.all([
-    fetch(url).then(r=>r.json()).catch(()=>({})),
+    fetch(sid ? '/api/player/sid/'+encodeURIComponent(sid) : '/api/player/'+encodeURIComponent(name)).then(r=>r.json()).catch(()=>({})),
   ]);
+  if (data && data.career) data.career.name = normalizeName(data.career.name || name);
+  if (data && Array.isArray(data.recent_matches)) data.recent_matches.forEach(m => { if(m.name) m.name = normalizeName(m.name); });
   if (data.error) {
     document.getElementById('p-player').innerHTML = `<div class="empty">${data.error}</div>`;
     return;
@@ -1589,6 +1596,24 @@ async function loadPlayer(name, sid) {
 
   const countryFlag = '';
 
+  // Collect old names (aliases) for this player from team cache
+  const playerAliases = [];
+  if (window._teamCache) {
+    for (const lu of window._teamCache) {
+      if (lu.playerAliases && lu.playerAliases[name]) {
+        [...lu.playerAliases[name]].filter(a => a !== name).forEach(a => {
+          if (!playerAliases.includes(a)) playerAliases.push(a);
+        });
+      }
+    }
+  }
+  const aliasSection = playerAliases.length
+    ? `<div style="margin-top:7px;display:flex;align-items:center;flex-wrap:wrap;gap:5px">
+        <span style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted2)">Previously known as</span>
+        ${playerAliases.map(a => `<span style="padding:1px 8px;border-radius:2px;background:var(--surface2);border:1px solid var(--border2);color:var(--text);font-family:'Rajdhani',sans-serif;font-size:12px;font-weight:600">${esc(a)}</span>`).join('')}
+      </div>`
+    : '';
+
   const statsGrid = [
     {label:'Kills',     raw: c.kills,         dec:0},
     {label:'Deaths',    raw: c.deaths,        dec:0},
@@ -1609,18 +1634,20 @@ async function loadPlayer(name, sid) {
     return `<div class="stat-box"><div class="stat-val">${valEl}</div><div class="stat-lbl">${s.label}</div></div>`;
   }).join('');
 
-  // ── Helper: render a match row ───────────────────────────────────────────
-  function renderMatchRow(m) {
+  const recentRows = recent.map(m => {
+    // Use server-computed player_won (most reliable — pure SQL from matches table)
     let won = false;
     if (m.player_won !== null && m.player_won !== undefined) {
       won = m.player_won === 1 || m.player_won === true;
     } else {
+      // Fallback: slot + map scores
       const slot = m.player_team || '';
       const s1 = parseInt(m.team1_score ?? 0);
       const s2 = parseInt(m.team2_score ?? 0);
       if (s1 !== s2 && (slot === 'team1' || slot === 'team2')) {
         won = slot === 'team1' ? s1 > s2 : s2 > s1;
       } else {
+        // Last resort: case-insensitive winner name
         const playerTeamName = slot === 'team1' ? (m.team1_name ?? '') : slot === 'team2' ? (m.team2_name ?? '') : (m.team ?? '');
         const winnerLc = (m.winner ?? '').toLowerCase().trim();
         const playerTeamLc = playerTeamName.toLowerCase().trim();
@@ -1639,10 +1666,7 @@ async function loadPlayer(name, sid) {
       <td>${num(m.damage)}</td>
       <td style="font-size:11px;color:var(--muted2)">${m.team1_name??'?'} vs ${m.team2_name??'?'}</td>
     </tr>`;
-  }
-
-  const PAGE_SIZE = 20;
-  const recentRows = recent.map(renderMatchRow).join('');
+  }).join('');
 
   document.getElementById('p-player').innerHTML = `
     <div class="back-btn" onclick="goBack('leaderboard')">← Back</div>
@@ -1652,6 +1676,7 @@ async function loadPlayer(name, sid) {
         <div class="p-name">${countryFlag}${esc(steam.name || name)}</div>
         <div class="p-sub">${steam.real_name ? esc(steam.real_name)+' • ' : ''}${c.matches??0} matches played</div>
         <div style="margin-top:6px">${profileLink}</div>
+        ${aliasSection}
       </div>
     </div>
     <div class="card" style="margin-bottom:12px">
@@ -1663,57 +1688,14 @@ async function loadPlayer(name, sid) {
         <thead><tr>
           <th>Match</th><th>Map</th><th>K/D/A</th><th>K/D</th><th>ADR</th><th>HS%</th><th>Dmg</th><th>Teams</th>
         </tr></thead>
-        <tbody id="recent-matches-tbody">${recentRows}</tbody>
+        <tbody>${recentRows}</tbody>
       </table>
-      ${(c.matches ?? 0) > PAGE_SIZE ? `
-      <div style="text-align:center;padding:14px 0 4px">
-        <button id="show-more-btn" onclick="loadMoreMatches()" style="background:rgba(var(--orange-rgb),.12);border:1px solid var(--orange);color:var(--orange);font-family:'Rajdhani',sans-serif;font-weight:700;font-size:12px;letter-spacing:1.5px;text-transform:uppercase;padding:8px 24px;border-radius:0;cursor:pointer;transition:all .2s">
-          Show More
-        </button>
-      </div>` : ''}
     </div>` : ''}
     <div id="player-mapstats-section" style="display:none"></div>`;
 
-  // Store state for pagination
-  window._playerMatchesOffset = PAGE_SIZE;
-  window._playerMatchesName = name;
-  window._playerMatchesSid = c.steamid64 || '';
-  window._playerTotalMatches = c.matches ?? 0;
-
-  // Load more matches function
-  window.loadMoreMatches = async function() {
-    const btn = document.getElementById('show-more-btn');
-    if (!btn) return;
-    btn.textContent = 'Loading...';
-    btn.disabled = true;
-    try {
-      const sid = window._playerMatchesSid;
-      const offset = window._playerMatchesOffset;
-      const url = sid && sid !== '0'
-        ? `/api/player/sid/${encodeURIComponent(sid)}?limit=${PAGE_SIZE}&offset=${offset}`
-        : `/api/player/${encodeURIComponent(window._playerMatchesName)}?limit=${PAGE_SIZE}&offset=${offset}`;
-      const res = await fetch(url).then(r => r.json()).catch(() => ({}));
-      const more = res.recent_matches || [];
-      if (more.length) {
-        const tbody = document.getElementById('recent-matches-tbody');
-        if (tbody) tbody.insertAdjacentHTML('beforeend', more.map(renderMatchRow).join(''));
-        window._playerMatchesOffset += more.length;
-      }
-      if (more.length < PAGE_SIZE || window._playerMatchesOffset >= window._playerTotalMatches) {
-        btn.remove();
-      } else {
-        btn.textContent = 'Show More';
-        btn.disabled = false;
-      }
-    } catch(e) {
-      btn.textContent = 'Show More';
-      btn.disabled = false;
-    }
-  };
-
   // Load map stats async after profile renders
   const mapStatsEl = document.getElementById('player-mapstats-section');
-  if (mapStatsEl) loadPlayerMapStats(name, mapStatsEl);
+  if (mapStatsEl) loadPlayerMapStats(name, mapStatsEl, sid);
 }
 
 // ── Map Stats ─────────────────────────────────────────────────────────────────
@@ -1839,6 +1821,7 @@ async function loadH2H() {
   el.innerHTML=`<div class="loading"><span class="spin" style="display:inline-flex;align-items:center;justify-content:center;color:var(--orange)">${_spinnerSvg}</span></div>`;
   if (!_h2hPlayers) {
     const data = await apiFetch('/api/leaderboard', 'leaderboard.json');
+  normalizePlayers(data);
     // Fetch Steam avatars for all
     await Promise.all(data.slice(0,30).map(async p => {
       if (p.steamid64 && p.steamid64 !== '0') {
@@ -1881,8 +1864,8 @@ function renderH2HPicker() {
   const canCompare = p1 && p2 && p1.name !== p2.name;
 
   const cards = players.map((p,i) => {
-    const isP1 = p1 && p1.name === p.name;
-    const isP2 = p2 && p2.name === p.name;
+    const isP1 = p1 && (p1.steamid64 ? p1.steamid64 === p.steamid64 : p1.name === p.name);
+    const isP2 = p2 && (p2.steamid64 ? p2.steamid64 === p.steamid64 : p2.name === p.name);
     const selected = isP1 || isP2;
     const av = p._steam_avatar
       ? `<img src="${p._steam_avatar}" style="width:38px;height:38px;border-radius:50%;object-fit:cover;flex-shrink:0">`
@@ -1921,8 +1904,8 @@ function renderH2HPicker() {
 
 function h2hSelect(idx) {
   const p = _h2hPlayers[idx];
-  if (_h2hSel[0] && _h2hSel[0].name === p.name) { _h2hSel[0] = null; }
-  else if (_h2hSel[1] && _h2hSel[1].name === p.name) { _h2hSel[1] = null; }
+  if (_h2hSel[0] && (_h2hSel[0].steamid64 ? _h2hSel[0].steamid64 === p.steamid64 : _h2hSel[0].name === p.name)) { _h2hSel[0] = null; }
+  else if (_h2hSel[1] && (_h2hSel[1].steamid64 ? _h2hSel[1].steamid64 === p.steamid64 : _h2hSel[1].name === p.name)) { _h2hSel[1] = null; }
   else if (!_h2hSel[0]) { _h2hSel[0] = p; }
   else if (!_h2hSel[1]) { _h2hSel[1] = p; }
   else { _h2hSel[0] = _h2hSel[1]; _h2hSel[1] = p; }
@@ -1986,12 +1969,12 @@ async function runH2H() {
   body.innerHTML = `
     <div style="border-top:1px solid rgba(var(--orange-rgb),.15);margin:0 -20px"></div>
     <div style="display:grid;grid-template-columns:1fr 60px 1fr;align-items:center;padding:20px 14px 14px">
-      <div style="display:flex;flex-direction:column;align-items:center;gap:8px;cursor:pointer" onclick="go('player',{name:'${esc(d1.name)}',sid:'${esc(d1.steamid64||'')}'},'h2h')">
+      <div style="display:flex;flex-direction:column;align-items:center;gap:8px;cursor:pointer" onclick="go('player',{sid:${escName(d1.steamid64)}},'h2h')">
         ${avatar(d1,st1)}
         <div style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:16px;color:var(--ct);text-align:center">${esc(st1.name||d1.name)}</div>
       </div>
       <div style="font-family:'Rajdhani',sans-serif;font-weight:800;font-size:20px;color:var(--muted);text-align:center">VS</div>
-      <div style="display:flex;flex-direction:column;align-items:center;gap:8px;cursor:pointer" onclick="go('player',{name:'${esc(d2.name)}',sid:'${esc(d2.steamid64||'')}'},'h2h')">
+      <div style="display:flex;flex-direction:column;align-items:center;gap:8px;cursor:pointer" onclick="go('player',{sid:${escName(d2.steamid64)}},'h2h')">
         ${avatar(d2,st2)}
         <div style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:16px;color:var(--t);text-align:center">${esc(st2.name||d2.name)}</div>
       </div>
@@ -2021,6 +2004,7 @@ async function loadLeaderboard() {
   const el = document.getElementById('p-leaderboard');
   el.innerHTML=`<div class="loading"><span class="spin" style="display:inline-flex;align-items:center;justify-content:center;color:var(--orange)">${_spinnerSvg}</span></div>`;
   const data = await apiFetch('/api/leaderboard', 'leaderboard.json');
+  normalizePlayers(data);
   if (!Array.isArray(data) || !data.length) {
     el.innerHTML = emptyState('leaderboard','No Player Data','Stats will appear after matches are completed');
     return;
@@ -2038,7 +2022,7 @@ async function loadLeaderboard() {
         const s1 = m.map_team1_score ?? m.team1_score ?? 0;
         const s2 = m.map_team2_score ?? m.team2_score ?? 0;
         ps.forEach(p => {
-          const name = p.name;
+          const name = p.name; const psid = p.steamid64||p.name;
           if (!name) return;
           const win = (String(p.team||'').toLowerCase()==='team1') ? s1>s2 : s2>s1;
           if (!playerResults[name]) playerResults[name] = [];
@@ -2047,7 +2031,7 @@ async function loadLeaderboard() {
       });
       // Compute current streak for each player
       data.forEach(p => {
-        const res = playerResults[p.name];
+        const res = playerResults[p.steamid64||p.name];
         if (!res || !res.length) return;
         const last = res[res.length-1];
         let count = 0;
@@ -2114,7 +2098,7 @@ function renderLeaderboard(data, sortKey) {
       const streakBadge = p._streak && p._streak.count >= 2
         ? `<span class="streak-badge ${p._streak.type==='W'?'streak-hot':'streak-cold'}">${p._streak.type}${p._streak.count}</span>`
         : '';
-      return `<tr class="${rankCls}" data-sid="${esc(p.steamid64||p.name)}" onclick="go('player',{name:'${esc(p.name)}',sid:'${esc(p.steamid64||'')}'},'leaderboard')">
+      return `<tr class="${rankCls}" data-sid="${esc(p.steamid64||p.name)}" onclick="go('player',{sid:${escName(p.steamid64)}},'leaderboard')">
         <td style="${rankStyle}">${rank}</td>
         <td>${avatarEl}<span class="pname">${esc(p._steam_name||p.name)}</span>${streakBadge}</td>
         <td>${p.kills??0}</td>
@@ -2144,7 +2128,7 @@ function renderLeaderboard(data, sortKey) {
       const avatarEl = p._steam_avatar
         ? `<img src="${p._steam_avatar}" style="width:56px;height:56px;border-radius:50%;object-fit:cover;border:2px solid ${c};margin-bottom:10px" alt="${esc(p.name)}">`
         : `<div style="width:56px;height:56px;border-radius:50%;background:var(--surface);border:2px solid ${c};display:flex;align-items:center;justify-content:center;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:20px;color:${c};margin:0 auto 10px">${initials(p.name)}</div>`;
-      return `<div class="podium-card" data-rank="${rank}" style="--card-color:${c};--glow:${glowColors[rank]};--bdr:${borderColors[rank]};flex:1;background:${glowColors[rank]};backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border:1px solid ${borderColors[rank]};border-top:2px solid ${c};border-radius:6px;padding:18px 14px;text-align:center;cursor:pointer;position:relative;overflow:hidden;" onclick="go('player',{name:'${esc(p.name)}',sid:'${esc(p.steamid64||'')}'},'leaderboard')">
+      return `<div class="podium-card" data-rank="${rank}" style="--card-color:${c};--glow:${glowColors[rank]};--bdr:${borderColors[rank]};flex:1;background:${glowColors[rank]};backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border:1px solid ${borderColors[rank]};border-top:2px solid ${c};border-radius:6px;padding:18px 14px;text-align:center;cursor:pointer;position:relative;overflow:hidden;" onclick="go('player',{sid:${escName(p.steamid64)}},'leaderboard')">
         <div class="podium-shine"></div>
         <div style="position:absolute;top:10px;left:14px;font-family:'Rajdhani',sans-serif;font-weight:800;font-size:11px;letter-spacing:2px;color:${c};opacity:.9">${rankLabels[rank]}</div>
         <div style="margin-top:6px;position:relative;z-index:1">${avatarEl}</div>
@@ -2357,10 +2341,10 @@ function renderSpecialists(data, tab) {
           const av = p._steam_avatar
             ? `<img src="${p._steam_avatar}" style="width:${avSize};height:${avSize};border-radius:50%;object-fit:cover;border:2px solid ${c.solid};box-shadow:0 0 16px ${c.glow}">`
             : `<div style="width:${avSize};height:${avSize};border-radius:50%;background:var(--surface2);border:2px solid ${c.solid};box-shadow:0 0 16px ${c.glow};display:flex;align-items:center;justify-content:center;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:${isFirst?'18px':'14px'};color:${c.solid}">${initials(p.name)}</div>`;
-          return `<div style="flex:1;max-width:155px;display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer" onclick="go('player',{name:'${esc(p.name)}',sid:'${esc(p.steamid64||'')}'},'specialists')">
+          return `<div style="flex:1;max-width:155px;display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer" onclick="go('player',{sid:${escName(p.steamid64)}},'specialists')">
             ${isFirst ? `<div>${crownSvg}</div>` : `<div style="height:20px"></div>`}
             ${av}
-            <div style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:${isFirst?'13px':'11px'};color:#fff;text-align:center;width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:0 4px;margin-top:2px">${esc(p.name)}</div>
+            <div style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:${isFirst?'13px':'11px'};color:#fff;text-align:center;width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:0 4px;margin-top:2px">${esc(p._steam_name||p.name)}</div>
             <div style="font-family:'Rajdhani',sans-serif;font-weight:900;font-size:${isFirst?'30px':'22px'};color:${c.solid};line-height:1">${primaryVal(p)}</div>
             <div style="font-size:9px;color:var(--muted2);letter-spacing:1px;text-transform:uppercase;margin-top:-2px">${primaryLabel}</div>
             <div style="font-size:10px;color:var(--muted2);font-family:'Rajdhani',sans-serif;margin-bottom:8px">${secondaryVal(p)}</div>
@@ -2378,12 +2362,12 @@ function renderSpecialists(data, tab) {
     const av = p._steam_avatar
       ? `<img src="${p._steam_avatar}" style="width:32px;height:32px;border-radius:50%;object-fit:cover;border:1px solid var(--border2)" alt="">`
       : `<div style="width:32px;height:32px;border-radius:50%;background:var(--surface2);display:flex;align-items:center;justify-content:center;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:11px;color:var(--muted2)">${initials(p.name)}</div>`;
-    return `<div onclick="go('player',{name:'${esc(p.name)}',sid:'${esc(p.steamid64||'')}'},'specialists')"
+    return `<div onclick="go('player',{sid:${escName(p.steamid64)}},'specialists')"
       style="display:flex;align-items:center;gap:12px;padding:10px 14px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .12s"
       onmouseover="this.style.background='rgba(var(--orange-rgb),.04)'" onmouseout="this.style.background=''">
       <span style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:13px;color:var(--muted2);width:22px;text-align:center;flex-shrink:0">${rank}</span>
       ${av}
-      <span style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:14px;color:var(--white);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(p.name)}</span>
+      <span style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:14px;color:var(--white);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(p._steam_name||p.name)}</span>
       <div style="text-align:right;flex-shrink:0">
         <div style="font-family:'Rajdhani',sans-serif;font-weight:800;font-size:17px;color:var(--orange)">${primaryVal(p)}</div>
         <div style="font-size:10px;color:var(--muted2)">${secondaryVal(p)}</div>
@@ -2577,6 +2561,7 @@ async function loadPredict() {
   el.innerHTML=`<div class="loading"><span class="spin" style="display:inline-flex;align-items:center;justify-content:center;color:var(--orange)">${_spinnerSvg}</span></div>`;
   if (!_predictPlayers) {
     const data = await apiFetch('/api/leaderboard', 'leaderboard.json');
+  normalizePlayers(data);
     await Promise.all(data.slice(0,40).map(async p => {
       if (p.steamid64 && p.steamid64 !== '0') {
         const s = await fetch('/api/steam/'+p.steamid64).then(r=>r.json()).catch(()=>({}));
@@ -2647,8 +2632,8 @@ function predictOpenPicker(teamIdx) {
   const listEl   = document.getElementById('predict-picker-list');
   if (!pickerEl || !listEl) return;
   const [t1, t2] = _predictTeams;
-  const allSelected = new Set([...t1, ...t2].map(p => p.name));
-  const available = (_predictPlayers || []).filter(p => !allSelected.has(p.name));
+  const allSelected = new Set([...t1, ...t2].map(p => p.steamid64||p.name));
+  const available = (_predictPlayers || []).filter(p => !allSelected.has(p.steamid64||p.name));
 
   const rows = available.length ? available.map(p => {
     const globalIdx = _predictPlayers.indexOf(p);
@@ -2685,7 +2670,7 @@ function predictOpenPicker(teamIdx) {
 function predictAdd(teamIdx, playerIdx) {
   const p = _predictPlayers[playerIdx];
   const team = _predictTeams[teamIdx];
-  if (team.length < 5 && !team.some(x=>x.name===p.name)) team.push(p);
+  if (team.length < 5 && !team.some(x=>(x.steamid64||x.name)===(p.steamid64||p.name))) team.push(p);
   document.getElementById('predict-picker').style.display = 'none';
   renderPredict();
 }
@@ -2840,6 +2825,7 @@ async function loadTeam() {
 
     const t1 = players.filter(p=>String(p.team||'').toLowerCase()==='team1');
     const t2 = players.filter(p=>String(p.team||'').toLowerCase()==='team2');
+    normalizePlayers(t1); normalizePlayers(t2);
 
     // Scores: prefer meta totals, fallback to first map
     const firstMap = mapsArr[0] || {};
@@ -2858,17 +2844,35 @@ async function loadTeam() {
       const key = teamName.toLowerCase();
       if (!lineupMap[key]) {
         lineupMap[key] = {teamName, aliases: new Set([teamName]), playerSet: new Set(),
-          playerSids: {}, matchRosters:[], names:[], wins:0, losses:0, draws:0,
+          playerSids: {}, sidToName: {}, playerAliases: {},
+          matchRosters:[], names:[], wins:0, losses:0, draws:0,
           maps:{}, roundsFor:0, roundsAgainst:0};
       }
       const lu = lineupMap[key];
       lu.teamName = teamName;
       lu.aliases.add(teamName);
       roster.forEach(p => {
-        if (p.name) {
-          lu.playerSet.add(p.name);
-          // Map name → steamid64 so we can load Steam avatars
-          if (p.steamid64 && p.steamid64 !== '0') lu.playerSids[p.name] = p.steamid64;
+        if (!p.name) return;
+        const sid = (p.steamid64 && p.steamid64 !== '0') ? p.steamid64 : null;
+        if (sid) {
+          if (!lu.sidToName[sid]) {
+            // First time we see this SID — register canonical name
+            lu.sidToName[sid] = p.name;
+            lu.playerSet.add(p.name);
+            lu.playerSids[p.name] = sid;
+            lu.playerAliases[p.name] = lu.playerAliases[p.name] || new Set([p.name]);
+          } else {
+            // Same SID, different name = renamed player — track as alias
+            const canonName = lu.sidToName[sid];
+            lu.playerAliases[canonName] = lu.playerAliases[canonName] || new Set([canonName]);
+            if (p.name !== canonName) lu.playerAliases[canonName].add(p.name);
+          }
+        } else {
+          // No SID: fall back to name-based deduplication
+          if (!lu.playerSet.has(p.name)) {
+            lu.playerSet.add(p.name);
+            lu.playerAliases[p.name] = lu.playerAliases[p.name] || new Set([p.name]);
+          }
         }
       });
       // Roster signature is SCOPED TO THIS MATCH (matchKey prefix).
@@ -2932,6 +2936,11 @@ async function loadTeam() {
         secondary.aliases.forEach(a => primary.aliases.add(a));
         secondary.playerSet.forEach(p => primary.playerSet.add(p));
         Object.assign(primary.playerSids, secondary.playerSids || {});
+        Object.assign(primary.sidToName, secondary.sidToName || {});
+        Object.entries(secondary.playerAliases || {}).forEach(([n, aliases]) => {
+          primary.playerAliases[n] = primary.playerAliases[n] || new Set([n]);
+          aliases.forEach(a => primary.playerAliases[n].add(a));
+        });
         Object.entries(secondary.maps).forEach(([map, {w,l}]) => {
           if (!primary.maps[map]) primary.maps[map] = {w:0, l:0};
           primary.maps[map].w += w;
@@ -3009,9 +3018,17 @@ function renderTeam(lineups) {
       const avatarHtml = cached
         ? `<img class="lineup-avatar" src="${cached}" alt="">`
         : `<div class="lineup-avatar-placeholder"${avatarId ? ` id="${avatarId}"` : ''}>${initials(n)}</div>`;
-      return `<div class="lineup-player" onclick="event.stopPropagation();go('player',{name:'${esc(n)}',sid:'${esc(sid||'')}'},'team')">
+      // Old names (aliases excluding current canonical name)
+      const allAliases = lu.playerAliases ? [...(lu.playerAliases[n] || [])].filter(a => a !== n) : [];
+      const aliasBadge = allAliases.length
+        ? `<span style="font-size:10px;color:var(--muted2);font-family:'Rajdhani',sans-serif;letter-spacing:.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="Also known as: ${allAliases.map(a=>esc(a)).join(', ')}">aka ${allAliases.map(a=>esc(a)).join(', ')}</span>`
+        : '';
+      return `<div class="lineup-player" onclick="event.stopPropagation();go('player',{sid:${escName(p.steamid64||n)}},'team')">
         ${avatarHtml}
-        <span style="font-family:'Rajdhani',sans-serif;font-weight:600;font-size:13px;color:var(--white)">${esc(n)}</span>
+        <div style="display:flex;flex-direction:column;min-width:0;overflow:hidden">
+          <span style="font-family:'Rajdhani',sans-serif;font-weight:600;font-size:13px;color:var(--white)">${esc(n)}</span>
+          ${aliasBadge}
+        </div>
       </div>`;
     }).join('');
 
@@ -3805,14 +3822,15 @@ async function runSearch(q) {
   res.innerHTML = '<div style="padding:12px 14px;color:var(--muted2);font-size:12px">Searching...</div>';
   try {
     const data = await fetch('/api/search?q=' + encodeURIComponent(q)).then(r => r.json());
+    if (data && Array.isArray(data.players)) normalizePlayers(data.players);
     let html = '';
     if (data.players && data.players.length) {
       html += '<div class="search-section-hd">Players</div>';
       html += data.players.map(p => `
-        <div class="search-row" onclick="closeSearchOverlay();go('player',{name:'${esc(p.name)}',sid:'${esc(p.steamid64||'')}'},'search')">
+        <div class="search-row" onclick="closeSearchOverlay();go('player',{sid:${escName(p.steamid64||p.name)}})">
           <div style="width:32px;height:32px;border-radius:50%;background:var(--surface2);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:11px;color:var(--muted2)">${initials(p.name)}</div>
           <div style="flex:1;min-width:0">
-            <div class="search-row-title">${esc(p.name)}</div>
+            <div class="search-row-title">${esc(p._steam_name||p.name)}</div>
             <div class="search-row-sub">${p.matches} matches · ${parseFloat(p.kd??0).toFixed(2)} K/D · ${parseFloat(p.adr??0).toFixed(0)} ADR</div>
           </div>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--muted2)" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
@@ -3976,8 +3994,9 @@ async function runTeamH2H() {
 }
 
 // ── PLAYER MAP STATS (appended to player profile) ─────────────────────────────
-async function loadPlayerMapStats(name, containerEl) {
-  const rows = await fetch('/api/player/' + encodeURIComponent(name) + '/mapstats').then(r => r.json()).catch(() => []);
+async function loadPlayerMapStats(name, containerEl, sid) {
+  sid = sid || '';
+  const rows = await fetch(sid ? '/api/player/sid/'+encodeURIComponent(sid)+'/mapstats' : '/api/player/'+encodeURIComponent(name)+'/mapstats').then(r => r.json()).catch(() => []);
   if (!Array.isArray(rows) || !rows.length) { containerEl.style.display = 'none'; return; }
 
   const best = rows.reduce((a, b) => parseFloat(a.kd??0) >= parseFloat(b.kd??0) ? a : b, rows[0]);
