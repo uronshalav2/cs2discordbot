@@ -1029,7 +1029,7 @@ function go(page, params, back) {
     if(page==='h2h')         loadH2H();
     if(page==='specialists') loadSpecialists();
     if(page==='demos')       loadDemos();
-    if(page==='player')      loadPlayer(params.name);
+    if(page==='player')      loadPlayer(params.name, params.sid);
     if(page==='match')       loadMatch(params.id);
     if(page==='predict')     loadPredict();
     if(page==='team')        loadTeam();
@@ -1534,7 +1534,7 @@ function sbRows(arr, steamCache={}) {
       ? `<img src="${steamCache[p.steamid64]}" style="width:22px;height:22px;border-radius:50%;object-fit:cover;vertical-align:middle;margin-right:7px;border:1px solid var(--border2)" onerror="this.style.display='none'">`
       : `<span style="display:inline-block;width:22px;height:22px;border-radius:50%;background:var(--surface2);line-height:22px;text-align:center;font-size:9px;font-family:'Rajdhani',sans-serif;font-weight:700;color:var(--muted2);vertical-align:middle;margin-right:7px">${initials(p.name)}</span>`;
     return `<tr>
-      <td onclick="go('player',{name:'${esc(p.name)}'},'match')" style="cursor:pointer"><div style="display:flex;align-items:center">${avatar}${esc(p.name)}</div></td>
+      <td onclick="go('player',{name:'${esc(p.name)}',sid:'${esc(p.steamid64||'')}'},'match')" style="cursor:pointer"><div style="display:flex;align-items:center">${avatar}${esc(p.name)}</div></td>
       <td class="kda-cell">${p.kills??0}</td>
       <td class="kda-cell">${p.deaths??0}</td>
       <td class="kda-cell">${p.assists??0}</td>
@@ -1554,10 +1554,13 @@ function sbRows(arr, steamCache={}) {
 }
 
 // ── Player Profile ────────────────────────────────────────────────────────────
-async function loadPlayer(name) {
+async function loadPlayer(name, sid) {
   spin('p-player');
+  const url = sid && sid !== '0'
+    ? '/api/player/sid/'+encodeURIComponent(sid)
+    : '/api/player/'+encodeURIComponent(name);
   const [data, ] = await Promise.all([
-    fetch('/api/player/'+encodeURIComponent(name)).then(r=>r.json()).catch(()=>({})),
+    fetch(url).then(r=>r.json()).catch(()=>({})),
   ]);
   if (data.error) {
     document.getElementById('p-player').innerHTML = `<div class="empty">${data.error}</div>`;
@@ -1983,12 +1986,12 @@ async function runH2H() {
   body.innerHTML = `
     <div style="border-top:1px solid rgba(var(--orange-rgb),.15);margin:0 -20px"></div>
     <div style="display:grid;grid-template-columns:1fr 60px 1fr;align-items:center;padding:20px 14px 14px">
-      <div style="display:flex;flex-direction:column;align-items:center;gap:8px;cursor:pointer" onclick="go('player',{name:'${esc(d1.name)}'},'h2h')">
+      <div style="display:flex;flex-direction:column;align-items:center;gap:8px;cursor:pointer" onclick="go('player',{name:'${esc(d1.name)}',sid:'${esc(d1.steamid64||'')}'},'h2h')">
         ${avatar(d1,st1)}
         <div style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:16px;color:var(--ct);text-align:center">${esc(st1.name||d1.name)}</div>
       </div>
       <div style="font-family:'Rajdhani',sans-serif;font-weight:800;font-size:20px;color:var(--muted);text-align:center">VS</div>
-      <div style="display:flex;flex-direction:column;align-items:center;gap:8px;cursor:pointer" onclick="go('player',{name:'${esc(d2.name)}'},'h2h')">
+      <div style="display:flex;flex-direction:column;align-items:center;gap:8px;cursor:pointer" onclick="go('player',{name:'${esc(d2.name)}',sid:'${esc(d2.steamid64||'')}'},'h2h')">
         ${avatar(d2,st2)}
         <div style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:16px;color:var(--t);text-align:center">${esc(st2.name||d2.name)}</div>
       </div>
@@ -2111,7 +2114,7 @@ function renderLeaderboard(data, sortKey) {
       const streakBadge = p._streak && p._streak.count >= 2
         ? `<span class="streak-badge ${p._streak.type==='W'?'streak-hot':'streak-cold'}">${p._streak.type}${p._streak.count}</span>`
         : '';
-      return `<tr class="${rankCls}" data-sid="${esc(p.steamid64||p.name)}" onclick="go('player',{name:'${esc(p.name)}'},'leaderboard')">
+      return `<tr class="${rankCls}" data-sid="${esc(p.steamid64||p.name)}" onclick="go('player',{name:'${esc(p.name)}',sid:'${esc(p.steamid64||'')}'},'leaderboard')">
         <td style="${rankStyle}">${rank}</td>
         <td>${avatarEl}<span class="pname">${esc(p._steam_name||p.name)}</span>${streakBadge}</td>
         <td>${p.kills??0}</td>
@@ -2141,7 +2144,7 @@ function renderLeaderboard(data, sortKey) {
       const avatarEl = p._steam_avatar
         ? `<img src="${p._steam_avatar}" style="width:56px;height:56px;border-radius:50%;object-fit:cover;border:2px solid ${c};margin-bottom:10px" alt="${esc(p.name)}">`
         : `<div style="width:56px;height:56px;border-radius:50%;background:var(--surface);border:2px solid ${c};display:flex;align-items:center;justify-content:center;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:20px;color:${c};margin:0 auto 10px">${initials(p.name)}</div>`;
-      return `<div class="podium-card" data-rank="${rank}" style="--card-color:${c};--glow:${glowColors[rank]};--bdr:${borderColors[rank]};flex:1;background:${glowColors[rank]};backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border:1px solid ${borderColors[rank]};border-top:2px solid ${c};border-radius:6px;padding:18px 14px;text-align:center;cursor:pointer;position:relative;overflow:hidden;" onclick="go('player',{name:'${esc(p.name)}'},'leaderboard')">
+      return `<div class="podium-card" data-rank="${rank}" style="--card-color:${c};--glow:${glowColors[rank]};--bdr:${borderColors[rank]};flex:1;background:${glowColors[rank]};backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border:1px solid ${borderColors[rank]};border-top:2px solid ${c};border-radius:6px;padding:18px 14px;text-align:center;cursor:pointer;position:relative;overflow:hidden;" onclick="go('player',{name:'${esc(p.name)}',sid:'${esc(p.steamid64||'')}'},'leaderboard')">
         <div class="podium-shine"></div>
         <div style="position:absolute;top:10px;left:14px;font-family:'Rajdhani',sans-serif;font-weight:800;font-size:11px;letter-spacing:2px;color:${c};opacity:.9">${rankLabels[rank]}</div>
         <div style="margin-top:6px;position:relative;z-index:1">${avatarEl}</div>
@@ -2354,7 +2357,7 @@ function renderSpecialists(data, tab) {
           const av = p._steam_avatar
             ? `<img src="${p._steam_avatar}" style="width:${avSize};height:${avSize};border-radius:50%;object-fit:cover;border:2px solid ${c.solid};box-shadow:0 0 16px ${c.glow}">`
             : `<div style="width:${avSize};height:${avSize};border-radius:50%;background:var(--surface2);border:2px solid ${c.solid};box-shadow:0 0 16px ${c.glow};display:flex;align-items:center;justify-content:center;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:${isFirst?'18px':'14px'};color:${c.solid}">${initials(p.name)}</div>`;
-          return `<div style="flex:1;max-width:155px;display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer" onclick="go('player',{name:'${esc(p.name)}'},'specialists')">
+          return `<div style="flex:1;max-width:155px;display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer" onclick="go('player',{name:'${esc(p.name)}',sid:'${esc(p.steamid64||'')}'},'specialists')">
             ${isFirst ? `<div>${crownSvg}</div>` : `<div style="height:20px"></div>`}
             ${av}
             <div style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:${isFirst?'13px':'11px'};color:#fff;text-align:center;width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:0 4px;margin-top:2px">${esc(p.name)}</div>
@@ -2375,7 +2378,7 @@ function renderSpecialists(data, tab) {
     const av = p._steam_avatar
       ? `<img src="${p._steam_avatar}" style="width:32px;height:32px;border-radius:50%;object-fit:cover;border:1px solid var(--border2)" alt="">`
       : `<div style="width:32px;height:32px;border-radius:50%;background:var(--surface2);display:flex;align-items:center;justify-content:center;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:11px;color:var(--muted2)">${initials(p.name)}</div>`;
-    return `<div onclick="go('player',{name:'${esc(p.name)}'},'specialists')"
+    return `<div onclick="go('player',{name:'${esc(p.name)}',sid:'${esc(p.steamid64||'')}'},'specialists')"
       style="display:flex;align-items:center;gap:12px;padding:10px 14px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .12s"
       onmouseover="this.style.background='rgba(var(--orange-rgb),.04)'" onmouseout="this.style.background=''">
       <span style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:13px;color:var(--muted2);width:22px;text-align:center;flex-shrink:0">${rank}</span>
@@ -3806,7 +3809,7 @@ async function runSearch(q) {
     if (data.players && data.players.length) {
       html += '<div class="search-section-hd">Players</div>';
       html += data.players.map(p => `
-        <div class="search-row" onclick="closeSearchOverlay();go('player',{name:'${esc(p.name)}'})">
+        <div class="search-row" onclick="closeSearchOverlay();go('player',{name:'${esc(p.name)}',sid:'${esc(p.steamid64||'')}'},'search')">
           <div style="width:32px;height:32px;border-radius:50%;background:var(--surface2);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:11px;color:var(--muted2)">${initials(p.name)}</div>
           <div style="flex:1;min-width:0">
             <div class="search-row-title">${esc(p.name)}</div>
