@@ -176,6 +176,8 @@ async def handle_api_player(request):
             FROM {MATCHZY_TABLES['players']}
             WHERE name = %s AND steamid64 != '0'
             GROUP BY steamid64, name
+            ORDER BY COUNT(DISTINCT matchid) DESC
+            LIMIT 1
         """, (name,))
         career = c.fetchone()
 
@@ -198,6 +200,8 @@ async def handle_api_player(request):
                     FROM {MATCHZY_TABLES['players']}
                     WHERE steamid64 = %s AND steamid64 != '0'
                     GROUP BY steamid64, name
+                    ORDER BY COUNT(DISTINCT matchid) DESC
+                    LIMIT 1
                 """, (sid_for_edited,))
                 career = c.fetchone()
 
@@ -244,6 +248,83 @@ async def handle_api_player(request):
     # ── Fallback to fshost ────────────────────────────────────────────────────
     if not career:
         career, recent = await loop.run_in_executor(None, _fshost_career_for, name)
+
+    if not career:
+        return _json_response({"error": "Player not found"})
+
+    return _json_response({"career": career, "recent_matches": recent})
+
+async def handle_api_player_by_sid(request):
+    """GET /api/player/sid/{steamid64} — same as handle_api_player but lookup by steamid64 directly."""
+    sid = request.match_info.get('steamid64', '')
+    if not sid or sid == '0':
+        return _json_response({"error": "Invalid steamid64"})
+
+    career = None
+    recent = []
+    try:
+        conn = get_db()
+        c = conn.cursor(dictionary=True)
+        c.execute(f"""
+            SELECT name, steamid64,
+                COUNT(DISTINCT matchid) AS matches,
+                SUM(kills) AS kills, SUM(deaths) AS deaths, SUM(assists) AS assists,
+                SUM(head_shot_kills) AS headshots, SUM(damage) AS total_damage,
+                SUM(enemies5k) AS aces, SUM(enemies4k) AS quads,
+                SUM(v1_wins) AS clutch_1v1, SUM(v2_wins) AS clutch_1v2,
+                SUM(entry_wins) AS entry_wins, SUM(entry_count) AS entry_attempts,
+                SUM(flash_successes) AS flashes_thrown,
+                ROUND(SUM(kills)/NULLIF(SUM(deaths),0),2) AS kd,
+                ROUND(SUM(head_shot_kills)/NULLIF(SUM(kills),0)*100,1) AS hs_pct,
+                ROUND(SUM(damage)/NULLIF(COUNT(DISTINCT CONCAT(matchid,mapnumber)),0)/30,1) AS adr
+            FROM {MATCHZY_TABLES['players']}
+            WHERE steamid64 = %s AND steamid64 != '0'
+            GROUP BY steamid64, name
+            ORDER BY COUNT(DISTINCT matchid) DESC
+            LIMIT 1
+        """, (sid,))
+        career = c.fetchone()
+
+        if career:
+            career = dict(career)
+            name_map = _edited_name_map()
+            if sid in name_map:
+                career['name'] = name_map[sid]
+            offset = int(request.rel_url.query.get('offset', 0))
+            page_limit = int(request.rel_url.query.get('limit', 20))
+            c.execute(f"""
+                SELECT p.matchid, p.mapnumber, p.team, p.steamid64,
+                    p.kills, p.deaths, p.assists, p.damage, p.head_shot_kills,
+                    p.enemies5k, p.v1_wins,
+                    m.mapname, m.team1_score, m.team2_score,
+                    mm.team1_name, mm.team2_name, mm.winner,
+                    ROUND(p.damage/30,1) AS adr,
+                    ROUND(p.head_shot_kills/NULLIF(p.kills,0)*100,1) AS hs_pct,
+                    CASE
+                        WHEN LOWER(p.team) = LOWER(mm.team1_name) THEN 'team1'
+                        WHEN LOWER(p.team) = LOWER(mm.team2_name) THEN 'team2'
+                        WHEN LOWER(p.team) IN ('team1','team_1','1') THEN 'team1'
+                        WHEN LOWER(p.team) IN ('team2','team_2','2') THEN 'team2'
+                        ELSE NULL
+                    END AS player_team,
+                    CASE
+                        WHEN LOWER(p.team) = LOWER(mm.team1_name) THEN
+                            CASE WHEN LOWER(mm.winner) = LOWER(mm.team1_name) THEN 1 ELSE 0 END
+                        WHEN LOWER(p.team) = LOWER(mm.team2_name) THEN
+                            CASE WHEN LOWER(mm.winner) = LOWER(mm.team2_name) THEN 1 ELSE 0 END
+                        ELSE NULL
+                    END AS player_won
+                FROM {MATCHZY_TABLES['players']} p
+                LEFT JOIN {MATCHZY_TABLES['maps']} m ON p.matchid=m.matchid AND p.mapnumber=m.mapnumber
+                LEFT JOIN {MATCHZY_TABLES['matches']} mm ON p.matchid=mm.matchid
+                WHERE p.steamid64 = %s AND p.steamid64 != '0'
+                ORDER BY p.matchid DESC, p.mapnumber DESC
+                LIMIT %s OFFSET %s
+            """, (sid, page_limit, offset))
+            recent = _patch_recent_matches(c.fetchall())
+        c.close(); conn.close()
+    except Exception:
+        pass
 
     if not career:
         return _json_response({"error": "Player not found"})
@@ -1950,6 +2031,7 @@ async def handle_admin_api_merge_players(request):
 async def start_http_server():
     app = web.Application()
     app.router.add_get('/api/specialists',             handle_api_specialists)
+    app.router.add_get('/api/player/sid/{steamid64}', handle_api_player_by_sid)
     app.router.add_get('/api/player/{name}',           handle_api_player)
     app.router.add_get('/api/steam/{steamid64}',       handle_api_steam)
     app.router.add_get('/api/matches',                 handle_api_matches)
