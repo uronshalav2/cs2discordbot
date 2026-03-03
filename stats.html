@@ -1576,19 +1576,21 @@ async function loadPlayer(name, sid) {
   const c = data.career || {};
   const recent = data.recent_matches || [];
 
-  // Fetch Steam profile if steamid64 available
+  // Fetch Steam profile for avatar + profile URL (name already resolved server-side)
   let steam = {};
   if (c.steamid64 && c.steamid64 !== '0') {
     steam = await fetch('/api/steam/'+c.steamid64).then(r=>r.json()).catch(()=>({}));
   }
+  // Always prefer the server-resolved name (real-time Steam name if available)
+  const displayName = c.name || name;
 
   const kd = parseFloat(c.kd ?? 0);
   const kdCls = kd>=1.3?'kd-g':kd>=0.9?'kd-n':'kd-b';
 
   // Avatar: Steam photo or initials fallback
   const avatarHtml = steam.avatar
-    ? `<img src="${steam.avatar}" style="width:68px;height:68px;border-radius:4px;object-fit:cover;border:2px solid var(--border2)" alt="${esc(name)}">`
-    : `<div class="p-avatar">${initials(name)}</div>`;
+    ? `<img src="${steam.avatar}" style="width:68px;height:68px;border-radius:4px;object-fit:cover;border:2px solid var(--border2)" alt="${esc(displayName)}">`
+    : `<div class="p-avatar">${initials(displayName)}</div>`;
 
   const profileLink = steam.profile_url
     ? `<a href="${steam.profile_url}" target="_blank" style="color:var(--orange);text-decoration:none;font-size:11px">View Steam Profile ↗</a>`
@@ -1596,21 +1598,14 @@ async function loadPlayer(name, sid) {
 
   const countryFlag = '';
 
-  // Collect old names (aliases) for this player from team cache
-  const playerAliases = [];
-  if (window._teamCache) {
-    for (const lu of window._teamCache) {
-      if (lu.playerAliases && lu.playerAliases[name]) {
-        [...lu.playerAliases[name]].filter(a => a !== name).forEach(a => {
-          if (!playerAliases.includes(a)) playerAliases.push(a);
-        });
-      }
-    }
-  }
-  const aliasSection = playerAliases.length
+  // Name history: server provides all distinct DB names; strip the current display name
+  const rawHistory = Array.isArray(c.name_history) ? c.name_history : [];
+  const nameHistory = rawHistory.filter(a => a && a !== displayName);
+
+  const aliasSection = nameHistory.length
     ? `<div style="margin-top:7px;display:flex;align-items:center;flex-wrap:wrap;gap:5px">
         <span style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted2)">Previously known as</span>
-        ${playerAliases.map(a => `<span style="padding:1px 8px;border-radius:2px;background:var(--surface2);border:1px solid var(--border2);color:var(--text);font-family:'Rajdhani',sans-serif;font-size:12px;font-weight:600">${esc(a)}</span>`).join('')}
+        ${nameHistory.map(a => `<span style="padding:1px 8px;border-radius:2px;background:var(--surface2);border:1px solid var(--border2);color:var(--text);font-family:'Rajdhani',sans-serif;font-size:12px;font-weight:600">${esc(a)}</span>`).join('')}
       </div>`
     : '';
 
@@ -1673,7 +1668,7 @@ async function loadPlayer(name, sid) {
     <div class="profile-top">
       ${avatarHtml}
       <div style="flex:1">
-        <div class="p-name">${countryFlag}${esc(steam.name || name)}</div>
+        <div class="p-name">${countryFlag}${esc(displayName)}</div>
         <div class="p-sub">${steam.real_name ? esc(steam.real_name)+' • ' : ''}${c.matches??0} matches played</div>
         <div style="margin-top:6px">${profileLink}</div>
         ${aliasSection}
@@ -1695,7 +1690,7 @@ async function loadPlayer(name, sid) {
 
   // Load map stats async after profile renders
   const mapStatsEl = document.getElementById('player-mapstats-section');
-  if (mapStatsEl) loadPlayerMapStats(name, mapStatsEl, sid);
+  if (mapStatsEl) loadPlayerMapStats(displayName, mapStatsEl, sid);
 }
 
 // ── Map Stats ─────────────────────────────────────────────────────────────────
@@ -3023,7 +3018,7 @@ function renderTeam(lineups) {
       const aliasBadge = allAliases.length
         ? `<span style="font-size:10px;color:var(--muted2);font-family:'Rajdhani',sans-serif;letter-spacing:.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="Also known as: ${allAliases.map(a=>esc(a)).join(', ')}">aka ${allAliases.map(a=>esc(a)).join(', ')}</span>`
         : '';
-      return `<div class="lineup-player" onclick="event.stopPropagation();go('player',{sid:${escName(sid||n)}},'team')">
+      return `<div class="lineup-player" onclick="event.stopPropagation();go('player',{sid:${escName(p.steamid64||n)}},'team')">
         ${avatarHtml}
         <div style="display:flex;flex-direction:column;min-width:0;overflow:hidden">
           <span style="font-family:'Rajdhani',sans-serif;font-weight:600;font-size:13px;color:var(--white)">${esc(n)}</span>
