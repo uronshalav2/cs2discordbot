@@ -1253,18 +1253,9 @@ async def handle_api_specialists(request):
     except Exception as e:
         return _json_response({"error": str(e)})
 
-STEAMID64_BASE = 76561197960265728
-
 def to_steamid64(raw: str) -> str:
-    """Convert SteamID32 or SteamID64 to SteamID64 string."""
-    try:
-        val = int(raw)
-        # SteamID32 values are < 2^32, SteamID64 values are much larger
-        if val < 0x100000000:
-            val += STEAMID64_BASE
-        return str(val)
-    except (ValueError, TypeError):
-        return raw
+    """Pass through steamid64 as-is — IDs are always stored correctly in DB."""
+    return str(raw).strip()
 
 # ── Steam avatar server-side cache ──────────────────────────────────────────
 # In-memory cache: steamid64 -> {data, ts}  (TTL: 1 hour)
