@@ -1011,40 +1011,72 @@ def _patch_aggregate_rows(rows: list) -> list:
 
 def _patch_recent_matches(rows: list) -> list:
     """
-    Patch recent-match rows (from handle_api_player / team stats) with edited
-    team names, scores, mapname, winner, and the requesting player's own stats.
+    Patch recent-match rows (from handle_api_player / team stats) with:
+    1. Real team names from fshost JSONs (overrides internal get5 names like "team_Nakai")
+    2. Edited team names/scores/map/winner from match_edits
+    3. Edited player stats
     """
     all_edits = _get_all_edits()
-    if not all_edits:
-        return rows
+
+    # Build a matchid -> fshost metadata lookup so we can replace internal
+    # get5 team names (e.g. "team_Nakai") with the real display names stored
+    # in the fshost JSON (e.g. "GJILANI", "GREECE").
+    try:
+        matchid_map = build_matchid_to_demo_map()
+        fshost_names = {}  # matchid -> {'team1_name': ..., 'team2_name': ..., 'winner': ...}
+        for mid, entry in matchid_map.items():
+            meta = entry.get('metadata') or {}
+            t1 = meta.get('team1', {})
+            t2 = meta.get('team2', {})
+            n1 = t1.get('name', '')
+            n2 = t2.get('name', '')
+            w  = meta.get('winner', '')
+            if n1 or n2:
+                # Index by both the dict key AND the match_id inside the JSON
+                # so it works regardless of how the key was built
+                real_mid = str(meta.get('match_id') or meta.get('matchid') or mid)
+                record = {'team1_name': n1, 'team2_name': n2, 'winner': w}
+                fshost_names[str(mid)]     = record
+                fshost_names[real_mid]     = record
+    except Exception:
+        fshost_names = {}
+
     out = []
     for row in rows:
-        mid   = str(row.get('matchid') or '')
+        mid  = str(row.get('matchid') or '')
+        row  = dict(row)
+
+        # Step 1 — replace MatchZy internal names with real fshost names
+        fs = fshost_names.get(mid, {})
+        if fs.get('team1_name'): row['team1_name'] = fs['team1_name']
+        if fs.get('team2_name'): row['team2_name'] = fs['team2_name']
+        if fs.get('winner'):     row['winner']     = fs['winner']
+
+        # Step 2 — apply manual edits on top (highest priority)
         edits = all_edits.get(mid, {})
-        if not edits:
-            out.append(row)
-            continue
-        row = dict(row)
-        t1e = edits.get('team1', {})
-        t2e = edits.get('team2', {})
-        if t1e.get('name'):  row['team1_name']  = t1e['name']
-        if t1e.get('score') is not None: row['team1_score'] = t1e['score']
-        if t2e.get('name'):  row['team2_name']  = t2e['name']
-        if t2e.get('score') is not None: row['team2_score'] = t2e['score']
-        if edits.get('map'):    row['mapname'] = edits['map']
-        if edits.get('winner'): row['winner']  = edits['winner']
-        # Patch this player's own stats if they were edited
-        sid = to_steamid64(str(row.get('steamid64') or ''))
-        pe  = edits.get('players', {}).get(sid, {})
-        if pe:
-            row.update(pe)
-            kills  = int(row.get('kills', 0) or 0)
-            deaths = int(row.get('deaths', 0) or 0)
-            hs     = int(row.get('head_shot_kills', 0) or 0)
-            dmg    = int(row.get('damage', 0) or 0)
-            row['kd']     = round(kills / deaths, 2) if deaths else float(kills)
-            row['hs_pct'] = round(hs / kills * 100, 1) if kills else 0.0
-            row['adr']    = round(dmg / 30, 1)
+        if edits:
+            t1e = edits.get('team1', {})
+            t2e = edits.get('team2', {})
+            if t1e.get('name'):              row['team1_name']  = t1e['name']
+            if t1e.get('score') is not None: row['team1_score'] = t1e['score']
+            if t2e.get('name'):              row['team2_name']  = t2e['name']
+            if t2e.get('score') is not None: row['team2_score'] = t2e['score']
+            if edits.get('map'):             row['mapname']     = edits['map']
+            if edits.get('winner'):          row['winner']      = edits['winner']
+
+            # Step 3 — patch this player's own edited stats
+            sid = to_steamid64(str(row.get('steamid64') or ''))
+            pe  = edits.get('players', {}).get(sid, {})
+            if pe:
+                row.update(pe)
+                kills  = int(row.get('kills', 0) or 0)
+                deaths = int(row.get('deaths', 0) or 0)
+                hs     = int(row.get('head_shot_kills', 0) or 0)
+                dmg    = int(row.get('damage', 0) or 0)
+                row['kd']     = round(kills / deaths, 2) if deaths else float(kills)
+                row['hs_pct'] = round(hs / kills * 100, 1) if kills else 0.0
+                row['adr']    = round(dmg / 30, 1)
+
         out.append(row)
     return out
 
@@ -1471,7 +1503,7 @@ async def handle_api_h2h(request):
                     psid = to_steamid64(str(r['steamid64']))
             if not psid:
                 return None
-            # Aggregate ALL rows for this SID regardless of name changes
+            # Aggregate ALL rows for this SID. GROUP BY required for ONLY_FULL_GROUP_BY.
             c.execute(f"""
                 SELECT
                     steamid64,
@@ -1492,6 +1524,7 @@ async def handle_api_h2h(request):
                         COUNT(DISTINCT CONCAT(matchid,'_',mapnumber)),0)/30,1)  AS adr
                 FROM {MATCHZY_TABLES['players']}
                 WHERE CAST(steamid64 AS UNSIGNED) IN (%s, %s) AND steamid64 != '0'
+                GROUP BY steamid64
             """, (int(sid_variants(psid)[0]), int(sid_variants(psid)[1])))
             row = c.fetchone()
             if row:
