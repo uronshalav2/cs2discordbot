@@ -3072,11 +3072,11 @@ function renderTeam(lineups) {
           <div style="flex:1;display:flex;flex-direction:column;overflow:hidden;border-bottom:1px solid var(--border)">
             ${mapPhotoRows || `<div style="padding:14px 16px;color:var(--muted2);font-size:12px">No map data</div>`}
           </div>
-          <div style="display:flex;flex-shrink:0;overflow:hidden">
-            <div class="team-stat-pill">${ring(lu.winRate,color)}<span class="team-stat-pill-lbl">Win Rate</span></div>
-            <div class="team-stat-pill"><span class="team-stat-pill-val">${lu.total}</span><span class="team-stat-pill-lbl">Matches</span></div>
-            <div class="team-stat-pill"><span class="team-stat-pill-val" style="color:var(--win)">${lu.wins}</span><span class="team-stat-pill-lbl">Wins</span></div>
-            <div class="team-stat-pill"><span class="team-stat-pill-val" style="color:var(--loss)">${lu.losses}</span><span class="team-stat-pill-lbl">Losses</span></div>
+          <div style="display:flex;flex-shrink:0;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch;min-width:0">
+            <div class="team-stat-pill" style="min-width:54px">${ring(lu.winRate,color)}<span class="team-stat-pill-lbl">Win Rate</span></div>
+            <div class="team-stat-pill" style="min-width:48px"><span class="team-stat-pill-val">${lu.total}</span><span class="team-stat-pill-lbl">Matches</span></div>
+            <div class="team-stat-pill" style="min-width:44px"><span class="team-stat-pill-val" style="color:var(--win)">${lu.wins}</span><span class="team-stat-pill-lbl">Wins</span></div>
+            <div class="team-stat-pill" style="min-width:44px;border-right:none"><span class="team-stat-pill-val" style="color:var(--loss)">${lu.losses}</span><span class="team-stat-pill-lbl">Losses</span></div>
           </div>
         </div>
       </div>
