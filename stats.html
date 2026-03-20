@@ -483,12 +483,7 @@ nav{
   mask-image:linear-gradient(90deg,rgba(0,0,0,.5) 0%,rgba(0,0,0,.5) 25%,rgba(0,0,0,1) 50%,rgba(0,0,0,.5) 75%,rgba(0,0,0,.5) 100%);
   -webkit-mask-size:300% 100%;mask-size:300% 100%;
   -webkit-mask-position:200% center;mask-position:200% center;
-  -webkit-animation:cs2-sweep 1.2s ease-in-out infinite;
   animation:cs2-sweep 1.2s ease-in-out infinite;
-}
-@-webkit-keyframes cs2-sweep{
-  0%  {-webkit-mask-position:200% center}
-  100%{-webkit-mask-position:-100% center}
 }
 @keyframes cs2-sweep{
   0%  {-webkit-mask-position:200% center;mask-position:200% center}
@@ -1270,7 +1265,7 @@ const fmtDate = s=>{
 };
 const initials = n=>(n||'?').split(/[ _]/).slice(0,2).map(w=>w[0]||'').join('').toUpperCase().slice(0,2)||'?';
 // ── Spinner: fetch SVG once, inline it so fill:var(--orange) works via CSS ────
-const _SPINNER_FALLBACK = `<svg viewBox="0 0 60 60" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%;-webkit-animation:_rg-spin 1s linear infinite;animation:_rg-spin 1s linear infinite"><style>@-webkit-keyframes _rg-spin{to{-webkit-transform:rotate(360deg);transform:rotate(360deg)}}@keyframes _rg-spin{to{-webkit-transform:rotate(360deg);transform:rotate(360deg)}}</style><circle cx="30" cy="30" r="24" fill="none" stroke="currentColor" stroke-width="4" stroke-dasharray="100 50" stroke-linecap="round"/></svg>`;
+const _SPINNER_FALLBACK = `<svg viewBox="0 0 60 60" xmlns="http://www.w3.org/2000/svg"><circle cx="30" cy="30" r="24" fill="none" stroke="inherit" stroke-width="4" stroke-dasharray="100 50" stroke-linecap="round"><animateTransform attributeName="transform" type="rotate" from="0 30 30" to="360 30 30" dur="1s" repeatCount="indefinite"/></circle></svg>`;
 let _spinnerSvg = _SPINNER_FALLBACK; // start with fallback so spin() works instantly
 const _SPINNER_URL = 'assets/spinner/cs2-logo.svg';
 
@@ -1284,9 +1279,6 @@ const _SPINNER_URL = 'assets/spinner/cs2-logo.svg';
       .replace(/<\?xml[^?]*\?>/g, '')
       .replace(/<!DOCTYPE[^>]*>/g, '')
       .replace(/\s(width|height)="[^"]*"/g, '')
-      // Strip SVG SMIL animation — broken in Safari via innerHTML
-      .replace(/<animateTransform[^>]*\/?>(<\/animateTransform>)?/gi, '')
-      .replace(/<animate[\s>][^>]*\/?>(<\/animate>)?/gi, '')
       .trim();
     svg = svg.replace(/fill="[^"]*"/g, 'fill="inherit"');
     _spinnerSvg = svg;
@@ -1402,33 +1394,14 @@ async function loadMatch(id) {
   const byDmg    = [...players].sort((a,b)=>parseInt(b.damage||0)-parseInt(a.damage||0));
   const byRating = [...players].filter(p=>p.rating!=null).sort((a,b)=>parseFloat(b.rating)-parseFloat(a.rating));
 
-  // Steam avatars: fire all fetches in parallel but only wait 400ms max.
-  // Cached responses (browser or server) will arrive within that window.
-  // Slow/uncached ones will be swapped in progressively after render.
+  // Fetch Steam avatars for all unique players in this match
   const steamCache = {};
-  const _uniquePlayers = [...new Map(players.map(p=>[p.steamid64,p])).values()]
-    .filter(p => p.steamid64 && p.steamid64 !== '0');
-  const _avatarFetches = _uniquePlayers.map(async p => {
-    const s = await fetch('/api/steam/'+p.steamid64).then(r=>r.json()).catch(()=>({}));
-    if (s.avatar) steamCache[p.steamid64] = s.avatar;
-    if (s.name)   p._steam_name = s.name;
-  });
-  // Wait at most 400ms — fast for cached, doesn't block for slow Steam API
-  await Promise.race([Promise.all(_avatarFetches), new Promise(r=>setTimeout(r,400))]);
-  // Any fetches still pending will resolve and we swap avatars in after render
-  Promise.all(_avatarFetches).then(() => {
-    _uniquePlayers.forEach(p => {
-      if (!steamCache[p.steamid64]) return;
-      document.querySelectorAll(`img[data-sid="${p.steamid64}"],span[data-sid="${p.steamid64}"]`).forEach(el => {
-        const img = document.createElement('img');
-        img.src = steamCache[p.steamid64];
-        img.dataset.sid = p.steamid64;
-        img.style.cssText = el.style.cssText;
-        img.onerror = () => img.style.display='none';
-        el.replaceWith(img);
-      });
-    });
-  }).catch(()=>{});
+  await Promise.all([...new Map(players.map(p=>[p.steamid64,p])).values()].map(async p => {
+    if (p.steamid64 && p.steamid64 !== '0') {
+      const s = await fetch('/api/steam/'+p.steamid64).then(r=>r.json()).catch(()=>({}));
+      if (s.avatar) steamCache[p.steamid64] = s.avatar;
+    }
+  }));
 
   function playerAvatar(p, size=40) {
     const img = steamCache[p?.steamid64];
@@ -1570,10 +1543,9 @@ function sbRows(arr, steamCache={}) {
     const fourK  = p.enemies4k??0;
     const threeK = p.enemies3k??0;
     const rSty   = p.rating!=null?(parseFloat(p.rating)>=1.15?'style="color:#a78bfa;font-weight:700"':parseFloat(p.rating)<0.85?'style="color:var(--loss)"':''):'';
-    const _avStyle = 'width:22px;height:22px;border-radius:50%;object-fit:cover;vertical-align:middle;margin-right:7px;border:1px solid var(--border2)';
     const avatar = steamCache[p.steamid64]
-      ? `<img src="${steamCache[p.steamid64]}" data-sid="${esc(p.steamid64)}" style="${_avStyle}" onerror="this.style.display='none'">`
-      : `<span data-sid="${esc(p.steamid64)}" style="display:inline-block;width:22px;height:22px;border-radius:50%;background:var(--surface2);line-height:22px;text-align:center;font-size:9px;font-family:'Rajdhani',sans-serif;font-weight:700;color:var(--muted2);vertical-align:middle;margin-right:7px">${initials(p._steam_name||p.name)}</span>`;
+      ? `<img src="${steamCache[p.steamid64]}" style="width:22px;height:22px;border-radius:50%;object-fit:cover;vertical-align:middle;margin-right:7px;border:1px solid var(--border2)" onerror="this.style.display='none'">`
+      : `<span style="display:inline-block;width:22px;height:22px;border-radius:50%;background:var(--surface2);line-height:22px;text-align:center;font-size:9px;font-family:'Rajdhani',sans-serif;font-weight:700;color:var(--muted2);vertical-align:middle;margin-right:7px">${initials(p._steam_name||p.name)}</span>`;
     return `<tr>
       <td onclick="go('player',{sid:${escName(p.steamid64)}},'match')" style="cursor:pointer"><div style="display:flex;align-items:center">${avatar}${esc(p.name)}</div></td>
       <td class="kda-cell">${p.kills??0}</td>
@@ -1611,15 +1583,12 @@ async function loadPlayer(name, sid) {
   const recent = data.recent_matches || [];
 
   // Fetch Steam profile for avatar + profile URL (name already resolved server-side)
-  // Always prefer the server-resolved name
-  const displayName = c.name || name;
   let steam = {};
-  // Render immediately with available data, then swap in Steam avatar/name
-  const _steamPromise = (c.steamid64 && c.steamid64 !== '0')
-    ? fetch('/api/steam/'+c.steamid64).then(r=>r.json()).catch(()=>({}))
-    : Promise.resolve({});
-  // Give Steam 300ms — usually cached/fast; if not, render without it first
-  steam = await Promise.race([_steamPromise, new Promise(r=>setTimeout(()=>r({}),300))]);
+  if (c.steamid64 && c.steamid64 !== '0') {
+    steam = await fetch('/api/steam/'+c.steamid64).then(r=>r.json()).catch(()=>({}));
+  }
+  // Always prefer the server-resolved name (real-time Steam name if available)
+  const displayName = c.name || name;
 
   const kd = parseFloat(c.kd ?? 0);
   const kdCls = kd>=1.3?'kd-g':kd>=0.9?'kd-n':'kd-b';
@@ -1854,18 +1823,15 @@ async function loadH2H() {
   if (!_h2hPlayers) {
     const data = await apiFetch('/api/leaderboard', 'leaderboard.json');
   normalizePlayers(data);
+    // Fetch Steam avatars for all
+    await Promise.all(data.slice(0,30).map(async p => {
+      if (p.steamid64 && p.steamid64 !== '0') {
+        const s = await fetch('/api/steam/'+p.steamid64).then(r=>r.json()).catch(()=>({}));
+        if (s.avatar) p._steam_avatar = s.avatar;
+        if (s.name)   p._steam_name   = s.name;
+      }
+    }));
     _h2hPlayers = data;
-    renderH2HPicker();
-    // Load avatars in background — re-render picker as each one arrives
-    data.slice(0,30).forEach(async p => {
-      if (!p.steamid64 || p.steamid64 === '0') return;
-      const s = await fetch('/api/steam/'+p.steamid64).then(r=>r.json()).catch(()=>({}));
-      if (!s.avatar && !s.name) return;
-      if (s.avatar) p._steam_avatar = s.avatar;
-      if (s.name)   p._steam_name   = s.name;
-      if (_curPage === 'h2h') renderH2HPicker();
-    });
-    return; // already rendered above
   }
   renderH2HPicker();
 }
@@ -2044,70 +2010,50 @@ async function loadLeaderboard() {
     el.innerHTML = emptyState('leaderboard','No Player Data','Stats will appear after matches are completed');
     return;
   }
-
-  // ── Render immediately with whatever data we have — no waiting for Steam ──
-  renderLeaderboard(data, _lbSort);
-
-  // ── Load streaks + avatars in background, swap in as they arrive ──────────
-  // Streak computation (uses cached match data — fast)
-  apiFetch('/api/matches?limit=50', 'matches.json').then(matches => {
-    if (!Array.isArray(matches) || !matches.length) return;
-    const sorted = [...matches].sort((a,b)=>new Date(a.end_time)-new Date(b.end_time));
-    const playerResults = {};
-    sorted.forEach(m => {
-      const ps = Array.isArray(m.players) ? m.players : [];
-      const s1 = m.map_team1_score ?? m.team1_score ?? 0;
-      const s2 = m.map_team2_score ?? m.team2_score ?? 0;
-      ps.forEach(p => {
-        if (!p.name) return;
-        const win = (String(p.team||'').toLowerCase()==='team1') ? s1>s2 : s2>s1;
-        if (!playerResults[p.name]) playerResults[p.name] = [];
-        playerResults[p.name].push(win ? 'W' : 'L');
+  // Compute win/loss streak per player from match history
+  try {
+    const matches = await apiFetch('/api/matches?limit=50', 'matches.json');
+    if (Array.isArray(matches) && matches.length) {
+      // Sort oldest→newest so we can walk forward
+      const sorted = [...matches].sort((a,b)=>new Date(a.end_time)-new Date(b.end_time));
+      // Build per-player result sequence
+      const playerResults = {};
+      sorted.forEach(m => {
+        const ps = Array.isArray(m.players) ? m.players : [];
+        const s1 = m.map_team1_score ?? m.team1_score ?? 0;
+        const s2 = m.map_team2_score ?? m.team2_score ?? 0;
+        ps.forEach(p => {
+          const name = p.name; const psid = p.steamid64||p.name;
+          if (!name) return;
+          const win = (String(p.team||'').toLowerCase()==='team1') ? s1>s2 : s2>s1;
+          if (!playerResults[name]) playerResults[name] = [];
+          playerResults[name].push(win ? 'W' : 'L');
+        });
       });
-    });
-    let changed = false;
-    data.forEach(p => {
-      const res = playerResults[p.steamid64||p.name];
-      if (!res || !res.length) return;
-      const last = res[res.length-1];
-      let count = 0;
-      for (let i = res.length-1; i>=0; i--) { if (res[i]===last) count++; else break; }
-      p._streak = {type: last, count};
-      changed = true;
-    });
-    if (changed) renderLeaderboard(data, _lbSort);
-  }).catch(()=>{});
-
-  // Steam avatar + name: fetch one at a time, swap each in as it arrives
-  data.slice(0, 20).forEach(async p => {
-    if (!p.steamid64 || p.steamid64 === '0') return;
-    try {
-      const s = await fetch('/api/steam/'+p.steamid64).then(r=>r.json()).catch(()=>({}));
-      if (!s.avatar && !s.name) return;
-      if (s.avatar) p._steam_avatar = s.avatar;
-      if (s.name)   p._steam_name   = s.name;
-      // Swap avatar in DOM directly without full re-render
-      const sid = p.steamid64;
-      const tr = document.querySelector(`#lb-tbody tr[data-sid="${CSS.escape(sid)}"]`);
-      if (tr) {
-        const nameCell = tr.querySelector('td:nth-child(2)');
-        if (nameCell && s.avatar) {
-          const oldAvatar = nameCell.querySelector('span,img');
-          if (oldAvatar) {
-            const img = document.createElement('img');
-            img.src = s.avatar;
-            img.style.cssText = 'width:24px;height:24px;border-radius:50%;object-fit:cover;vertical-align:middle;margin-right:8px;border:1px solid var(--border2)';
-            img.onerror = () => img.style.display='none';
-            oldAvatar.replaceWith(img);
-          }
+      // Compute current streak for each player
+      data.forEach(p => {
+        const res = playerResults[p.steamid64||p.name];
+        if (!res || !res.length) return;
+        const last = res[res.length-1];
+        let count = 0;
+        for (let i = res.length-1; i>=0; i--) {
+          if (res[i]===last) count++; else break;
         }
-        if (s.name) {
-          const nameEl = nameCell?.querySelector('.pname');
-          if (nameEl) nameEl.textContent = s.name;
-        }
-      }
-    } catch(_) {}
-  });
+        p._streak = {type: last, count};
+      });
+    }
+  } catch(_) {}
+  // Fetch Steam avatars in parallel (top 20 only to keep it fast)
+  await Promise.all(data.slice(0, 20).map(async p => {
+    if (p.steamid64 && p.steamid64 !== '0') {
+      try {
+        const s = await fetch('/api/steam/'+p.steamid64).then(r=>r.json()).catch(()=>({}));
+        if (s.avatar) p._steam_avatar = s.avatar;
+        if (s.name)   p._steam_name   = s.name;
+      } catch(_) {}
+    }
+  }));
+  renderLeaderboard(data, _lbSort);
 }
 
 function renderLeaderboard(data, sortKey) {
@@ -2303,20 +2249,18 @@ async function loadSpecialists() {
   if (!Array.isArray(data) || !data.length) {
     el.innerHTML = emptyState('specialists','No Specialist Data','Clutch kings, entry fraggers and more will appear here'); return;
   }
-  // Render immediately, then load avatars in background
+  // Fetch Steam avatars + real-time names for all players
+  await Promise.all(data.map(async p => {
+    if (p.steamid64 && p.steamid64 !== '0') {
+      try {
+        const s = await fetch('/api/steam/'+p.steamid64).then(r=>r.json()).catch(()=>({}));
+        if (s.avatar) p._steam_avatar = s.avatar;
+        if (s.name)   p._steam_name   = s.name;
+      } catch(_) {}
+    }
+  }));
   _specData = data;
   renderSpecialists(data, _specTab);
-  data.forEach(async p => {
-    if (!p.steamid64 || p.steamid64 === '0') return;
-    try {
-      const s = await fetch('/api/steam/'+p.steamid64).then(r=>r.json()).catch(()=>({}));
-      if (!s.avatar && !s.name) return;
-      if (s.avatar) p._steam_avatar = s.avatar;
-      if (s.name)   p._steam_name   = s.name;
-      // Re-render only if this tab is still visible
-      if (_curPage === 'specialists') renderSpecialists(data, _specTab);
-    } catch(_) {}
-  });
 }
 function renderSpecialists(data, tab) {
   _specTab = tab;
@@ -2620,18 +2564,14 @@ async function loadPredict() {
   if (!_predictPlayers) {
     const data = await apiFetch('/api/leaderboard', 'leaderboard.json');
   normalizePlayers(data);
+    await Promise.all(data.slice(0,40).map(async p => {
+      if (p.steamid64 && p.steamid64 !== '0') {
+        const s = await fetch('/api/steam/'+p.steamid64).then(r=>r.json()).catch(()=>({}));
+        if (s.avatar) p._steam_avatar = s.avatar;
+        if (s.name)   p._steam_name   = s.name;
+      }
+    }));
     _predictPlayers = data;
-    renderPredict();
-    // Load avatars progressively — re-render predict page as each arrives
-    data.slice(0,40).forEach(async p => {
-      if (!p.steamid64 || p.steamid64 === '0') return;
-      const s = await fetch('/api/steam/'+p.steamid64).then(r=>r.json()).catch(()=>({}));
-      if (!s.avatar && !s.name) return;
-      if (s.avatar) p._steam_avatar = s.avatar;
-      if (s.name)   p._steam_name   = s.name;
-      if (_curPage === 'predict') renderPredict();
-    });
-    return; // already rendered above
   }
   renderPredict();
 }
@@ -3132,11 +3072,11 @@ function renderTeam(lineups) {
           <div style="flex:1;display:flex;flex-direction:column;overflow:hidden;border-bottom:1px solid var(--border)">
             ${mapPhotoRows || `<div style="padding:14px 16px;color:var(--muted2);font-size:12px">No map data</div>`}
           </div>
-          <div style="display:flex;flex-shrink:0;overflow:hidden">
-            <div class="team-stat-pill">${ring(lu.winRate,color)}<span class="team-stat-pill-lbl">Win Rate</span></div>
-            <div class="team-stat-pill"><span class="team-stat-pill-val">${lu.total}</span><span class="team-stat-pill-lbl">Matches</span></div>
-            <div class="team-stat-pill"><span class="team-stat-pill-val" style="color:var(--win)">${lu.wins}</span><span class="team-stat-pill-lbl">Wins</span></div>
-            <div class="team-stat-pill"><span class="team-stat-pill-val" style="color:var(--loss)">${lu.losses}</span><span class="team-stat-pill-lbl">Losses</span></div>
+          <div style="display:flex;flex-shrink:0;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch;min-width:0">
+            <div class="team-stat-pill" style="min-width:54px">${ring(lu.winRate,color)}<span class="team-stat-pill-lbl">Win Rate</span></div>
+            <div class="team-stat-pill" style="min-width:48px"><span class="team-stat-pill-val">${lu.total}</span><span class="team-stat-pill-lbl">Matches</span></div>
+            <div class="team-stat-pill" style="min-width:44px"><span class="team-stat-pill-val" style="color:var(--win)">${lu.wins}</span><span class="team-stat-pill-lbl">Wins</span></div>
+            <div class="team-stat-pill" style="min-width:44px;border-right:none"><span class="team-stat-pill-val" style="color:var(--loss)">${lu.losses}</span><span class="team-stat-pill-lbl">Losses</span></div>
           </div>
         </div>
       </div>
